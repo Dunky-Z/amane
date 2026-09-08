@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
+    "@rolldown/binding-linux-x64-gnu": "^1.2.5",
     "@tanstack/router-cli": "^1.167.32",
     "@tanstack/router-vite-plugin": "^1.167.34",
     "@types/node": "^26.2.0",
