@@ -81,6 +81,9 @@ importers:
       '@hey-api/openapi-ts':
         specifier: ^0.99.0
         version: 0.99.0(typescript@6.0.3)
+      '@rolldown/binding-linux-x64-gnu':
+        specifier: ^1.2.5
+        version: 1.2.7
       '@tanstack/router-cli':
         specifier: ^1.167.32
         version: 1.167.32
@@ -751,6 +754,12 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@rolldown/binding-linux-x64-gnu@1.2.7':
+    resolution: {integrity: sha512-r8/z8n7GFaYRln3xmP1Cxy0HH/HLM0uBUPkEuSVEfKGDA89M0FsZRZJRSwe/tJjRx+fpH/gjorfhB8tmEbSFLA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
 
   '@rolldown/binding-linux-x64-musl@1.2.5':
     resolution: {integrity: sha512-mY8AP0/ichsbhAxGnLa3d3+MwV0EfgrPND2bplI3Ym8T6R2pJ0N87bvrKVwNXmdy3jnr6eQBecdqx/HMknBmpA==}
@@ -3018,6 +3027,8 @@ snapshots:
 
   '@rolldown/binding-linux-x64-gnu@1.2.5':
     optional: true
+
+  '@rolldown/binding-linux-x64-gnu@1.2.7': {}
 
   '@rolldown/binding-linux-x64-musl@1.2.5':
     optional: true
