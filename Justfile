@@ -3,7 +3,8 @@ default:
 
 CHECK_DIRS := "src/amane tests scripts"
 
-host := env("AMANE_HOST", "127.0.0.1")
+# 默认 0.0.0.0: NAS / 远程开发可从局域网访问; 仅本机可改 AMANE_HOST=127.0.0.1
+host := env("AMANE_HOST", "0.0.0.0")
 port := env("AMANE_PORT", "8000")
 
 # Sync Python + web deps; pull test fixtures; install prek hooks
