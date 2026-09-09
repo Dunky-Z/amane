@@ -1,9 +1,22 @@
 ---
 name: amane-dev
 description: >-
-  Starts Amane local API + Vite via `just dev`. Use when the user asks
-  to just dev, 启动开发服务器, 起前端, or start the dev servers.
+  Amane 本地开发: 遵守 docs/dev 约定, 经 `just dev` 启动 API + Vite.
+  Use when developing Amane, just dev, 启动开发服务器, 起前端,
+  or start the dev servers.
 ---
+
+# 开发约定
+
+凡本 skill 覆盖的 Amane 开发工作, 必须先读并遵守 `docs/dev/` 下现行约定.
+入口: `docs/dev/index.md`. 用语最高优先级: `docs/dev/writing.md`.
+
+1. **优先读文档**, 再按需读源码. 跨文件边界、顺序、契约、取舍以 `docs/dev/` 为准.
+2. 修改架构、API 或工作流后, **同步更新**对应 `docs/dev/` 文档.
+3. 注释、文档、提交说明、对话用语遵守 `writing.md`.
+
+按主题选读 `docs/dev/index.md` 中的链接 (architecture / frontend / testing / database 等).
+禁止凭习惯绕过文档中的禁止事项.
 
 # 开发服务器
 
