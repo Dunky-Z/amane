@@ -52,6 +52,7 @@
 `title` | `plot` | `actors` | `directors` | `tags` | `series` | `studio` | `publisher`.
 
 响应与请求同形: `{ "text": "…" }` 或 `{ "texts": ["…", …] }`.
+标量在无需翻译或返回 `None` 时回填原文 (字段内容不变).
 `texts` 与输入等长; 单项无需翻译、返回 `None` 或抛错时该位回填原文.
 
 | 条件 | 状态 |
