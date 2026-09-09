@@ -40,6 +40,7 @@ Tabs 同时挂载全部条目, 叶子 `id`/`htmlFor` 必须经由 `useFieldDomId
 `SchemaForm` 双模式: `patch` (dirty 门控, 只提交 diff) / `create` (完整值). dirty 保存条 (`UnsavedChangesBar`) : 设置页与影片/演员编辑弹窗均采用 `affix` (Portal 固定于视口底, 居中). Affix 默认 z-index 与 Modal 同为 200, 编辑弹窗里必须抬到 300 才能叠在弹窗之上. 不允许将 dirty 条放入 Modal 表单流 — Modal content 是滚动容器, 末尾的条必须滚到底才看见.
 
 `fieldLayout="grid"` 把连续短 scalar 排列为两列 (`sm+`); title/plot 类长文本与 array/dict 仍整行 — 仅 metadata 编辑开启.
+metadata 编辑字段可经 schema `x-translate` 显示翻译按钮: TextField 在可翻译字段上以翻译替代 nullable Clear; SimpleArrayField 在非空数组显示翻译按钮. 点击只写回表单值并触发 dirty, 落库仍经现有保存操作.
 
 表单空值编码经由 `schema-form/encode.ts` (`encodeFormBody` / `encodeEmptyValue`), 按 **Create / 列 schema** 判空: 可空 string 空串 → `null`, 非空 string 空串 → `""`, 非空 array 空 → `[]`. 不允许对着 PATCH partial schema 编码 — `create_partial_model` 会把非空列标成 `T|null`, 空 glob 会被编成 JSON `null`. 手写 Library / Feed 表单经同一编码器出 body (`libraryFormToCreateBody` / `libraryFormToUpdateBody` 分别用 Create 与 Response schema).
 

@@ -3168,6 +3168,42 @@ export type TaskWorkerResponse = {
 };
 
 /**
+ * TranslateRequest
+ */
+export type TranslateRequest = {
+    /**
+     * 元数据字段; 须为可译子集
+     */
+    field: MetadataField;
+    /**
+     * Text
+     *
+     * 标量原文; 与 texts 互斥
+     */
+    text?: string | null;
+    /**
+     * Texts
+     *
+     * 列表原文; 与 text 互斥
+     */
+    texts?: Array<string> | null;
+};
+
+/**
+ * TranslateResponse
+ */
+export type TranslateResponse = {
+    /**
+     * Text
+     */
+    text?: string | null;
+    /**
+     * Texts
+     */
+    texts?: Array<string> | null;
+};
+
+/**
  * UpscaleSubmission
  */
 export type UpscaleSubmission = {
@@ -4057,6 +4093,31 @@ export type MergeMetadataResponses = {
 };
 
 export type MergeMetadataResponse = MergeMetadataResponses[keyof MergeMetadataResponses];
+
+export type TranslateTextData = {
+    body: TranslateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/llm/translate';
+};
+
+export type TranslateTextErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TranslateTextError = TranslateTextErrors[keyof TranslateTextErrors];
+
+export type TranslateTextResponses = {
+    /**
+     * Successful Response
+     */
+    200: TranslateResponse;
+};
+
+export type TranslateTextResponse = TranslateTextResponses[keyof TranslateTextResponses];
 
 export type ListPluginsData = {
     body?: never;

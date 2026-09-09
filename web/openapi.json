@@ -1365,6 +1365,47 @@
         }
       }
     },
+    "/api/llm/translate": {
+      "post": {
+        "tags": [
+          "llm"
+        ],
+        "summary": "Translate Text",
+        "operationId": "translate_text",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranslateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins": {
       "get": {
         "tags": [
@@ -8730,7 +8771,8 @@
           "title": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -8744,7 +8786,8 @@
                 "items": {
                   "type": "string"
                 },
-                "type": "array"
+                "type": "array",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -8755,7 +8798,8 @@
           "studio": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -8766,7 +8810,8 @@
           "publisher": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -8806,7 +8851,8 @@
                 "items": {
                   "type": "string"
                 },
-                "type": "array"
+                "type": "array",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -8817,7 +8863,8 @@
           "series": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -8828,7 +8875,8 @@
           "plot": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -8842,7 +8890,8 @@
                 "items": {
                   "type": "string"
                 },
-                "type": "array"
+                "type": "array",
+                "x-translate": true
               },
               {
                 "type": "null"
@@ -11337,6 +11386,77 @@
           "paused"
         ],
         "title": "TaskWorkerResponse"
+      },
+      "TranslateRequest": {
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/MetadataField",
+            "description": "元数据字段; 须为可译子集"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "标量原文; 与 texts 互斥"
+          },
+          "texts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Texts",
+            "description": "列表原文; 与 text 互斥"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field"
+        ],
+        "title": "TranslateRequest"
+      },
+      "TranslateResponse": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "texts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Texts"
+          }
+        },
+        "type": "object",
+        "title": "TranslateResponse"
       },
       "UpscaleSubmission": {
         "properties": {
