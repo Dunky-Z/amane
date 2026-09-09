@@ -16,6 +16,21 @@
 
 翻译不使用 dspy. dspy 依赖 `dspy.configure` **全局状态**, 与 DI / `AppRuntime.rebuild` 冲突, 须用 `dspy.context` 逐调用绕开; 并引入 litellm / pandas / numpy, 对 Docker 部署偏重. 其价值在 prompt 优化 (MIPRO)、签名化结构抽取与带 metric 的编译式评估, 翻译用不到. 需要上述能力时再作为协议后端接入.
 
+## 手工即时翻译
+
+`POST /api/llm/translate` 供影片编辑页按字段触发翻译. 请求内 `await`, 不创建 Task, 不写库;
+译文由前端写入表单后经 metadata PATCH 落库.
+
+- 输入是调用方提供的当前文本 (表单值), 不是 `Metadata.raw`.
+- 目标语取自 `scraping.field_language[field]`; 未配置 → 422.
+- `translator is None` → 503 (显式失败, 与刮削机会主义降级不同).
+- 可译字段固定为 title/plot/actors/directors/tags/series/studio/publisher; 与刮削
+  `llm.translate_fields` 解耦 (刮削默认仍可只覆盖 title/plot).
+- 列表字段逐项翻译; 单项失败或返回 `None` 时该位回填原文. 标量同理回填原文;
+  标量路径上 translator 抛异常 → 503.
+- 复用同一 `Translator` / `TranslationCache` / `llm.rate_limit`; `AppRuntime.translator`
+  与 handlers 在 `build_handlers` 同次装配, 随 `rebuild()` 更新.
+
 ## 翻译嵌入点
 
 接入位置在 `ScrapeHandler.handle`: `aggregate()` 之后、`upsert_metadata()` 之前 (`src/amane/handlers/scrape.py`).
