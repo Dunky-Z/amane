@@ -32,6 +32,7 @@ from .libraries import (
     PathTemplateSchemaResponse,
     path_template_schema,
 )
+from .llm import TranslateRequest, TranslateResponse
 from .media import MediaFileResponse, MediaFileUpdateRequest, MediaListResponse
 from .metadata import (
     CropPosterRequest,
@@ -151,6 +152,8 @@ __all__ = [
     "TaskResponse",
     "TaskSubmission",
     "TaskWorkerResponse",
+    "TranslateRequest",
+    "TranslateResponse",
     "UpscaleSubmission",
     "UserTagResponse",
     "normalize_feed_group",

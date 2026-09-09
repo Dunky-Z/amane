@@ -24,6 +24,7 @@
 | `feeds` | `/feeds` | RSS/Atom 源 CRUD + 立即拉取 + 跨源/单源条目历史检索/批量操作/重刮削; 见 [feeds.md](feeds.md) |
 | `media` | `/media` | MediaFile |
 | `metadata` | `/metadata` | 番号条目 + merge / crop / facet 筛选 / user-tag / batch / schema |
+| `llm` | `/llm` | 同步字段翻译 (`POST /translate`); 不入队、不写库 |
 | `actors` | `/actors` | 演员浏览、人物 PATCH、刮削; 身份治理经由 facets |
 | `facets` | `/facets` | 分类目录与规则; `POST /user_tag` 创建用户标签 |
 | `comments` | `/comments` | 评论修改与删除; 新建经由 metadata; 列表随详情 |

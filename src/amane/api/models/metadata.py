@@ -70,6 +70,14 @@ PartialMetadata = create_partial_model(
                 "examples": ["2020-01-01"],
             }
         ),
+        "title": anyof_extras({"x-translate": True}),
+        "plot": anyof_extras({"x-translate": True}),
+        "actors": anyof_extras({"x-translate": True}),
+        "directors": anyof_extras({"x-translate": True}),
+        "tags": anyof_extras({"x-translate": True}),
+        "series": anyof_extras({"x-translate": True}),
+        "studio": anyof_extras({"x-translate": True}),
+        "publisher": anyof_extras({"x-translate": True}),
     },
 )
 
