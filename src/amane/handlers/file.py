@@ -21,6 +21,7 @@ from ..organize import (
     discover_subtitles,
     execute_organize,
     place_subtitles,
+    promote_subtitle_marker,
     render_strm_content,
     resolve_paths,
 )
@@ -67,6 +68,7 @@ async def execute_file_operations(
     safe_dirs: Sequence[Path] | None = (),
     watermark_dir: Path | None = None,
     actor_genders: dict[str, ActorGender] | None = None,
+    prediscovered_subtitles: Sequence[Path] | None = None,
 ) -> FileOperationsResult:
     source_path = await existing_disk_path(Path(media_file.path))
     if source_path is None:
@@ -90,10 +92,13 @@ async def execute_file_operations(
             watermark_dir=watermark_dir,
         )
 
-    # 发现字幕: 必须在视频移动前检查同目录.
-    subtitles: list[Path] = []
-    if library is not None:
-        subtitles = await discover_subtitles(source_path, library.subtitle_extensions, info)
+    # 发现字幕: 必须在视频移动前检查同目录; 调用方可预发现以免重复扫描.
+    if prediscovered_subtitles is not None:
+        subtitles = list(prediscovered_subtitles)
+    else:
+        subtitles = []
+        if library is not None:
+            subtitles = await discover_subtitles(source_path, library.subtitle_extensions, info)
 
     org_result = await execute_organize(
         source=source_path,
@@ -176,16 +181,21 @@ async def apply_file_operations(
     if library is None:
         return None
 
-    # 渲染路径后执行落盘.
+    # 渲染路径后执行落盘. 同目录已有配对字幕时提升中字相位, 使 ``{sub?}`` 写出 -C.
     ext = Path(media_file.path).suffix.lstrip(".")
     file_info = parse_file_info(media_file.path)
+    source_path = Path(media_file.path)
+    prediscovered: list[Path] = []
+    if await existing_disk_path(source_path) is not None:
+        prediscovered = await discover_subtitles(source_path, library.subtitle_extensions, file_info)
+        file_info = promote_subtitle_marker(file_info, found_subtitles=bool(prediscovered))
     actor_genders = {a.name: a.gender for a in await repo.get_actors_by_names(metadata.actors)}
     paths = resolve_paths(
         library,
         metadata,
         ext=ext,
         file_info=file_info,
-        source_path=Path(media_file.path),
+        source_path=source_path,
         safe_dirs=safe_dirs,
         actor_genders=actor_genders,
     )
@@ -205,6 +215,7 @@ async def apply_file_operations(
         safe_dirs=safe_dirs,
         watermark_dir=watermark_dir,
         actor_genders=actor_genders,
+        prediscovered_subtitles=prediscovered,
     )
 
 

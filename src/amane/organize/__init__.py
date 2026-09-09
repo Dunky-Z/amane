@@ -17,7 +17,7 @@ from .strm_content import (
     render_strm_content,
     validate_strm_content_template,
 )
-from .subtitles import discover_subtitles, place_subtitles
+from .subtitles import discover_subtitles, place_subtitles, promote_subtitle_marker
 
 __all__ = [
     "VIDEO_TEMPLATE_DEFAULT",
@@ -32,6 +32,7 @@ __all__ = [
     "normalize_link_template",
     "normalize_strm_content_template",
     "place_subtitles",
+    "promote_subtitle_marker",
     "render_path_template",
     "render_strm_content",
     "resolve_paths",
