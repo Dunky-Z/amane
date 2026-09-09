@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,17 @@ if TYPE_CHECKING:
     from ..db.models import Library, Metadata
 
 logger = structlog.get_logger()
+
+
+def promote_subtitle_marker(file_info: FileInfo, *, found_subtitles: bool) -> FileInfo:
+    """同目录已发现配对字幕时, 把中字相位升为真, 供路径模板与水印使用.
+
+    文件名尚无 ``-C`` 等标记时, 仅靠 sidecar 仍须写出 ``{sub?}`` 与中字水印;
+    整理落盘后的路径再投影到 ``MediaFile.has_subtitle``.
+    """
+    if found_subtitles and not file_info.has_subtitle:
+        return replace(file_info, has_subtitle=True)
+    return file_info
 
 
 @in_thread

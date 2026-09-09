@@ -532,7 +532,7 @@ async def test_organize_trashes_undersized_videos_keeps_sidecars(
     assert trailer.exists()
     assert (src_dir / "note.nfo").exists()
     dest_dir = lib_root / "Studio" / "NSFS-039"
-    assert (dest_dir / "NSFS-039.mp4").exists()
+    assert (dest_dir / "NSFS-039-C.mp4").exists()
     assert (dest_dir / "NSFS-039.srt").exists()
 
 
@@ -566,7 +566,7 @@ async def test_organize_moves_same_dir_subtitles(
     assert result.result.failed == 0
 
     dest_dir = lib_root / "Studio" / "NSFS-039"
-    assert (dest_dir / "NSFS-039.mp4").exists()
+    assert (dest_dir / "NSFS-039-C.mp4").exists()
     assert (dest_dir / "chs.srt").read_text() == "sub1"
     assert (dest_dir / "NSFS-039.zh.ass").read_text() == "sub2"
     assert (src_dir / "readme.txt").exists()
@@ -1027,6 +1027,51 @@ async def test_organize_placed_outside_library(
         assert src.exists()
         assert remaining is not None
         assert remaining.path == str(src)
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_organize_sidecar_promotes_subtitle_marker(
+    repo: Repository, resource_store: ResourceStore, tmp_path: Path
+) -> None:
+    """同目录有配对字幕但文件名无 -C 时, 整理写出 -C 并投影 has_subtitle."""
+    lib_root = tmp_path / "lib"
+    inbox = lib_root / "inbox"
+    inbox.mkdir(parents=True)
+    src = inbox / "MIDV-123.mp4"
+    src.write_bytes(b"video")
+    (inbox / "MIDV-123.zh.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nhi\n", encoding="utf-8")
+
+    lib = await repo.create_library(
+        name="t",
+        path=str(lib_root),
+        write_nfo=False,
+        copy_resources=[],
+        move_mode=MoveMode.MOVE,
+        video_template="library/{studio}/{number}/{number}[-CD{cd?}][-{sub?}].{ext}",
+        subtitle_template="{video_dir}/{raw_srt_name}.{ext}",
+    )
+    assert lib.id is not None
+    meta = await repo.upsert_metadata(number="MIDV-123", studio="StudioX")
+    assert meta.id is not None
+    media = await repo.create_media_file(
+        lib.id, path=str(src), number="MIDV-123", status=MediaFileStatus.SCRAPED, metadata_id=meta.id
+    )
+    assert media.id is not None
+    assert media.has_subtitle is False
+
+    org = OrganizeHandler(repo, HotSettings(), resource_store)
+    result = await org.handle(OrganizePayload(library_id=lib.id, path=str(inbox)))
+    assert result.success is True
+    assert result.result is not None
+    assert result.result.organized == 1
+
+    dest = lib_root / "library" / "StudioX" / "MIDV-123" / "MIDV-123-C.mp4"
+    assert dest.exists()
+    updated = await repo.get_media_file(media.id)
+    assert updated is not None
+    assert updated.path == str(dest)
+    assert updated.has_subtitle is True
+    assert (dest.parent / "MIDV-123.zh.srt").exists()
 
 
 @pytest.mark.asyncio(loop_scope="function")

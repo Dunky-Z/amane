@@ -7,7 +7,8 @@ import pytest
 
 from amane.library import DEFAULT_SUBTITLE_EXTENSIONS
 from amane.organize import discover_subtitles
-from amane.parsing import parse_file_info
+from amane.organize.subtitles import promote_subtitle_marker
+from amane.parsing import ContentType, FileInfo, parse_file_info
 
 
 def _touch(path: Path) -> Path:
@@ -224,3 +225,15 @@ def test_discover_subtitles(case: _Case, tmp_path: Path) -> None:
     video = folder / case.video
     found = discover_subtitles.sync(video, case.extensions, parse_file_info(video))
     assert [p.name for p in found] == list(case.expected)
+
+
+def test_promote_subtitle_marker_from_sidecar() -> None:
+    base = FileInfo(number="MIDV-123", content_type=ContentType.CENSORED, prefix="MIDV")
+    assert promote_subtitle_marker(base, found_subtitles=False) is base
+    promoted = promote_subtitle_marker(base, found_subtitles=True)
+    assert promoted.has_subtitle is True
+    assert promoted.number == "MIDV-123"
+    already = FileInfo(
+        number="MIDV-123", content_type=ContentType.CENSORED, prefix="MIDV", has_subtitle=True
+    )
+    assert promote_subtitle_marker(already, found_subtitles=True) is already
