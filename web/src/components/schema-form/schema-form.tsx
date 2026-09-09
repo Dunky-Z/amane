@@ -7,6 +7,7 @@ import { isRecord } from "@/lib/utils";
 import { encodeFormBody } from "./encode";
 import { FieldRouter } from "./fields";
 import type { JSONSchemaObject } from "./schema";
+import { SchemaFormTranslateProvider, type SchemaFormTranslate } from "./translate-context";
 import {
   createSchemaValidator,
   isArray,
@@ -145,6 +146,8 @@ interface SchemaFormProps {
   submitLabel?: string;
   /** Extra disable gate for the primary action (e.g. parent envelope fields incomplete). */
   submitDisabled?: boolean;
+  /** Optional field-level translate hook used by metadata editor. */
+  onTranslate?: SchemaFormTranslate;
   /**
    * Field arrangement.
    * - `stack` (default): one field per row.
@@ -164,6 +167,7 @@ export function SchemaForm({
   mode = "patch",
   submitLabel,
   submitDisabled = false,
+  onTranslate,
   fieldLayout = "stack",
 }: SchemaFormProps) {
   const { t } = useTranslation("common");
@@ -313,17 +317,19 @@ export function SchemaForm({
   });
 
   return (
-    <Stack
-      component="form"
-      id={formId}
-      gap="md"
-      onSubmit={(e) => {
-        e.preventDefault();
-        form.handleSubmit();
-      }}
-    >
-      <Stack gap={0}>{fieldBlocks}</Stack>
-      {actions}
-    </Stack>
+    <SchemaFormTranslateProvider onTranslate={onTranslate}>
+      <Stack
+        component="form"
+        id={formId}
+        gap="md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit();
+        }}
+      >
+        <Stack gap={0}>{fieldBlocks}</Stack>
+        {actions}
+      </Stack>
+    </SchemaFormTranslateProvider>
   );
 }

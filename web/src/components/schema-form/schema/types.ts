@@ -12,6 +12,8 @@ export interface AmaneBaseExtensions {
   "x-widget"?: AmaneWidget;
   "x-hidden"?: boolean;
   "x-readonly"?: boolean;
+  /** 字段支持手工即时翻译按钮 (由宿主注入 onTranslate). */
+  "x-translate"?: boolean;
   /**
    * 在 dict 上下文中, 仅当 key 匹配时显示此子字段
    * @example "x-visible-keys": ["title", "plot"] → 仅在这些 key 下渲染

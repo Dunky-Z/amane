@@ -1,9 +1,11 @@
-import { ActionIcon, Group, ScrollArea, Textarea, TextInput } from "@mantine/core";
+import { ActionIcon, Button, Group, ScrollArea, Stack, Textarea, TextInput } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import type { AnyFieldApi } from "@tanstack/react-form";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ArrayFieldProps, JSONSchemaObject } from "../schema";
 import { isOrdered } from "../schema";
+import { useSchemaFormTranslate } from "../translate-context";
 import { useFieldDomId } from "./dict-entry-form";
 import { DraggableChips } from "./draggable-chips";
 import { FieldChrome } from "./field-chrome";
@@ -16,9 +18,14 @@ export function SimpleArrayField({
   form,
   variant,
 }: ArrayFieldProps<JSONSchemaObject>) {
+  const { t } = useTranslation("common");
   const id = useFieldDomId(name);
   const ordered = isOrdered(schema);
   const long = schema["x-long"] === true;
+  const onTranslate = useSchemaFormTranslate();
+  const [translating, setTranslating] = useState(false);
+  const canTranslate = schema["x-translate"] === true && onTranslate != null;
+  const fieldName = name.split(".").pop() ?? name;
 
   return (
     <form.Field name={name}>
@@ -60,7 +67,33 @@ export function SimpleArrayField({
 
         return (
           <FieldChrome variant={variant} htmlFor={id} label={label} description={description}>
-            {control}
+            <Stack gap="xs">
+              {control}
+              {canTranslate && value.length > 0 ? (
+                <Group justify="flex-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="compact-sm"
+                    loading={translating}
+                    onClick={async () => {
+                      if (onTranslate == null) return;
+                      setTranslating(true);
+                      try {
+                        const result = await onTranslate({ field: fieldName, texts: value });
+                        if (Array.isArray(result?.texts) && result.texts.length === value.length) {
+                          field.handleChange(result.texts);
+                        }
+                      } finally {
+                        setTranslating(false);
+                      }
+                    }}
+                  >
+                    {t("actions.translate")}
+                  </Button>
+                </Group>
+              ) : null}
+            </Stack>
           </FieldChrome>
         );
       }}

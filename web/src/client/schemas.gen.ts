@@ -3773,7 +3773,8 @@ export const MetadataPartialSchema = {
         title: {
             anyOf: [
                 {
-                    type: 'string'
+                    type: 'string',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -3787,7 +3788,8 @@ export const MetadataPartialSchema = {
                     items: {
                         type: 'string'
                     },
-                    type: 'array'
+                    type: 'array',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -3798,7 +3800,8 @@ export const MetadataPartialSchema = {
         studio: {
             anyOf: [
                 {
-                    type: 'string'
+                    type: 'string',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -3809,7 +3812,8 @@ export const MetadataPartialSchema = {
         publisher: {
             anyOf: [
                 {
-                    type: 'string'
+                    type: 'string',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -3849,7 +3853,8 @@ export const MetadataPartialSchema = {
                     items: {
                         type: 'string'
                     },
-                    type: 'array'
+                    type: 'array',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -3860,7 +3865,8 @@ export const MetadataPartialSchema = {
         series: {
             anyOf: [
                 {
-                    type: 'string'
+                    type: 'string',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -3871,7 +3877,8 @@ export const MetadataPartialSchema = {
         plot: {
             anyOf: [
                 {
-                    type: 'string'
+                    type: 'string',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -3885,7 +3892,8 @@ export const MetadataPartialSchema = {
                     items: {
                         type: 'string'
                     },
-                    type: 'array'
+                    type: 'array',
+                    'x-translate': true
                 },
                 {
                     type: 'null'
@@ -6433,6 +6441,79 @@ export const TaskWorkerResponseSchema = {
         'paused'
     ],
     title: 'TaskWorkerResponse'
+} as const;
+
+export const TranslateRequestSchema = {
+    properties: {
+        field: {
+            $ref: '#/components/schemas/MetadataField',
+            description: '元数据字段; 须为可译子集'
+        },
+        text: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Text',
+            description: '标量原文; 与 texts 互斥'
+        },
+        texts: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Texts',
+            description: '列表原文; 与 text 互斥'
+        }
+    },
+    type: 'object',
+    required: [
+        'field'
+    ],
+    title: 'TranslateRequest'
+} as const;
+
+export const TranslateResponseSchema = {
+    properties: {
+        text: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Text'
+        },
+        texts: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Texts'
+        }
+    },
+    type: 'object',
+    title: 'TranslateResponse'
 } as const;
 
 export const UpscaleSubmissionSchema = {

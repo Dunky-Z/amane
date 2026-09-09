@@ -49,8 +49,8 @@ import {
   submitTaskMutation,
   updateMetadataMutation,
 } from "@/client/@tanstack/react-query.gen";
-import { getMetadataSchema } from "@/client/sdk.gen";
-import type { MetadataResponse } from "@/client/types.gen";
+import { getMetadataSchema, translateText } from "@/client/sdk.gen";
+import type { MetadataResponse, TranslateRequest } from "@/client/types.gen";
 import { FacetBadge } from "@/components/media/facet-badge";
 import { UserTagActions } from "@/components/media/user-tag-add";
 import { FanartLightbox, FanartStrip } from "@/components/media/fanart-lightbox";
@@ -66,6 +66,19 @@ import { proxyImageUrl } from "@/lib/utils";
 import { ProxyImage } from "@/components/media/proxy-image";
 
 export const Route = createFileRoute("/meta/$metadataId")({ component: TitleDetailPage });
+
+function isTranslateField(field: string): field is TranslateRequest["field"] {
+  return (
+    field === "title" ||
+    field === "plot" ||
+    field === "actors" ||
+    field === "directors" ||
+    field === "tags" ||
+    field === "series" ||
+    field === "studio" ||
+    field === "publisher"
+  );
+}
 
 function formatRuntime(minutes?: number | null): string | null {
   if (!minutes) return null;
@@ -751,6 +764,30 @@ function TitleDetailPage() {
             i18nPrefix="metadata"
             fieldLayout="grid"
             actionsPlacement="affix"
+            onTranslate={async (args) => {
+              if (!isTranslateField(args.field)) {
+                return null;
+              }
+              try {
+                const { data: translated, error } = await translateText({
+                  body: {
+                    field: args.field,
+                    text: args.text,
+                    texts: args.texts,
+                  },
+                });
+                if (error != null) {
+                  throw error;
+                }
+                return translated ?? null;
+              } catch (err) {
+                notifications.show({
+                  message: extractErrorMessage(err, t("common:toast.operationFailed")),
+                  color: "red",
+                });
+                return null;
+              }
+            }}
             values={(() => {
               const bag: Record<string, unknown> = { ...item };
               const out: Record<string, unknown> = {};
