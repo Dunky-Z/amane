@@ -25,7 +25,7 @@ from ..handlers import (
     ScrapeHandler,
     UpscaleHandler,
 )
-from ..llm import TranslationCache, build_translator
+from ..llm import LLMTranslator, TranslationCache, build_translator
 from ..media.watermarks import user_watermark_dir
 from ..net.http import RateLimiters, WebClient
 from ..plugins.manager import PluginManager
@@ -47,6 +47,14 @@ if TYPE_CHECKING:
     from .proxy_failure_cache import ProxyFailureCache
 
 logger = structlog.get_logger()
+
+
+@dataclass(frozen=True)
+class HandlerBundle:
+    """``build_handlers`` 一次构造: 任务处理器与同次装配的 translator."""
+
+    handlers: dict[TaskType, "TaskHandler[Any, Any]"]
+    translator: LLMTranslator | None
 
 
 @dataclass
@@ -143,6 +151,7 @@ class AppRuntime:
     safe_dirs: list[Path] | None = field(default_factory=list)
     api_token: str | None = None
     translation_cache: TranslationCache | None = None
+    translator: LLMTranslator | None = None
     r18_db: R18Database | None = None
     agent_service: AgentService | None = None
     plugin_manager: PluginManager | None = None
@@ -186,20 +195,22 @@ class AppRuntime:
         if self.feed_service is not None:
             self.feed_service.set_web_client(self.web_client)
 
-        # 使用新处理器与并发数重建 worker
+        # 使用新处理器与并发数重建 worker; translator 与 handlers 同源, 供即时翻译 API.
+        bundle = build_handlers(
+            self.repo,
+            self.factory,
+            self.web_client,
+            self.resource_store,
+            hot,
+            self.safe_dirs,
+            self.translation_cache,
+            self.config.cold.data_dir,
+            self.plugin_manager,
+        )
+        self.translator = bundle.translator
         self.worker = AsyncWorker(
             repo=self.repo,
-            handlers=build_handlers(
-                self.repo,
-                self.factory,
-                self.web_client,
-                self.resource_store,
-                hot,
-                self.safe_dirs,
-                self.translation_cache,
-                self.config.cold.data_dir,
-                self.plugin_manager,
-            ),
+            handlers=bundle.handlers,
             concurrency=hot.worker.concurrency,
             poll_interval=hot.worker.poll_interval,
             shutdown_timeout=hot.worker.shutdown_timeout,
@@ -295,8 +306,8 @@ def build_handlers(
     translation_cache: TranslationCache | None = None,
     state_dir: Path | None = None,
     plugin_manager: PluginManager | None = None,
-) -> dict[TaskType, TaskHandler[Any, Any]]:
-    # 未启用/缺密钥时 translator 为 None, ScrapeHandler 跳过翻译.
+) -> HandlerBundle:
+    # 未启用/缺密钥时 translator 为 None, ScrapeHandler 与翻译 API 均跳过/拒绝.
     # 经 rebuild() 热重载; 代理沿用 network.proxy.
     # 译文缓存是会话级, 热重载时复用同一实例.
     translator = build_translator(
@@ -337,4 +348,4 @@ def build_handlers(
     handlers[TaskType.R18_IMPORT] = R18ImportHandler(
         config=hot.r18, web_client=web_client, state_dir=state_dir if state_dir is not None else Path("./data")
     )
-    return handlers
+    return HandlerBundle(handlers=handlers, translator=translator)

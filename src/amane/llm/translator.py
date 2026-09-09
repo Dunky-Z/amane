@@ -30,6 +30,12 @@ _LANG_NAME: dict[Language, str] = {
 _FIELD_HINT: dict[MetadataField, str] = {
     MetadataField.TITLE: "这是一部影片的标题, 翻译应简洁自然, 保留专有名词与番号.",
     MetadataField.PLOT: "这是一部影片的简介, 完整通顺地翻译全部内容.",
+    MetadataField.ACTORS: "这是演员姓名, 按常用译名翻译, 不要意译成绰号, 保留原名中的拉丁字母.",
+    MetadataField.DIRECTORS: "这是导演姓名, 按常用译名翻译, 不要意译成绰号, 保留原名中的拉丁字母.",
+    MetadataField.TAGS: "这是影片标签或类型词, 译成目标语言中通行的短标签, 不要扩写成句子.",
+    MetadataField.SERIES: "这是系列名称, 翻译应简洁, 保留专有名词与番号式编号.",
+    MetadataField.STUDIO: "这是制作商名称, 优先使用业界通行译名, 无通行译名时可保留原文.",
+    MetadataField.PUBLISHER: "这是发行商名称, 优先使用业界通行译名, 无通行译名时可保留原文.",
 }
 
 
