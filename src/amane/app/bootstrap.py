@@ -157,7 +157,7 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
     if api_token is not None:
         logger.info("api token auth enabled", token=api_token)
 
-    handlers = build_handlers(
+    bundle = build_handlers(
         repo,
         factory,
         web_client,
@@ -171,7 +171,7 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
 
     worker = AsyncWorker(
         repo=repo,
-        handlers=handlers,
+        handlers=bundle.handlers,
         concurrency=hot.worker.concurrency,
         poll_interval=hot.worker.poll_interval,
         shutdown_timeout=hot.worker.shutdown_timeout,
@@ -221,6 +221,7 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
         safe_dirs=safe_dirs,
         api_token=api_token,
         translation_cache=translation_cache,
+        translator=bundle.translator,
         r18_db=r18_db,
         agent_service=agent_service,
         plugin_manager=plugin_manager,
