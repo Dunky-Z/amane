@@ -229,12 +229,23 @@ cd /root/sharedfolder/develop/amane
 git checkout main
 git fetch upstream
 git merge upstream/main
-# 解冲突 → 相关测试 → 完成 merge commit
+# 解冲突（见下）→ 相关测试 → 完成 merge commit
 git push origin main
 ```
 
+#### 冲突处理（强制）
+
+合入上游时若出现冲突，按是否影响**功能 / 特性行为**区分：
+
+| 类型 | 判定 | 做法 |
+| --- | --- | --- |
+| 非特性 | 纯生成物、锁文件、依赖版本钉扎、格式化、文档措辞、与行为无关的导入整理等 | Agent **自行合并**，不必请示 |
+| 特性相关 | 改动会改变 API、业务逻辑、配置语义、数据模型、用户可见行为，或双方实现同一能力的不同方案 | **立即停止自动取舍**；分别说明 HEAD（本 fork）与 upstream 各自在做什么、差异与风险；由用户决定保留哪一侧或如何拼合后再继续 |
+
+不确定是否影响行为时，按**特性相关**处理：先停下来说明，不要擅自选定一侧。
+
 冲突常见于双方都改过的文件，以及 `web/package.json` / 生成的 `web/src/client/*`。
-本机需保留 `@rolldown/binding-linux-x64-gnu` 时，与上游依赖升级一并手工合并；
+本机需保留 `@rolldown/binding-linux-x64-gnu` 时，与上游依赖升级一并手工合并（属非特性，可自行处理）；
 `openapi.json` 合好后可清空再生成 client：
 
 ```bash
@@ -243,6 +254,7 @@ rm -rf web/src/client && mkdir -p web/src/client && (cd web && pnpm gen-client)
 
 若双方都动 Alembic migration：合完后 `uv run alembic heads` 必须只剩一个 head；
 多 head 时按 amane-pr 约定改本侧最早 revision 的 `down_revision` 串成单链，禁止手写新 revision ID。
+migration 链如何接、以及 migration 内业务语义冲突，属特性相关，须先说明再等用户决定。
 
 冲突预期较大时，可先在旁路分支合入再并回 `main`：
 

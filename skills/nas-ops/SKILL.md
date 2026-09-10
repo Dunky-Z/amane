@@ -61,11 +61,12 @@ description: >-
 1. **先定位 compose**：主文件 vs 子目录独立编排，再 `docker compose`。
 2. **改挂载/环境后**：在对应目录 `up -d`；涉及镜像依赖则 `build` 再 recreate。
 3. **Amane API**：`TOKEN=$(docker exec amane cat /data/token)`，请求 `http://127.0.0.1:8800`（或局域网 8800），头 `Authorization: Bearer $TOKEN`。
-4. **任务队列卡住**：先查 `GET /api/tasks/worker`、`docker logs amane` 是否出现 `database is locked`；Watcher + 全库 `automation=scrape` 大目录搬迁极易锁死 SQLite。
-5. **不要对子目录 refresh 开 `scan: ["add","remove"]`**：`remove` 按「本次扫描未见」删全库索引，会误删 `library/` / `JAV_output/` 记录。子目录刷新只用 `scan: ["add"]`，或对 `/media` 全树谨慎操作。
-6. **批量刮削**：`refresh` 的 `path` 只限制扫描范围，**刮削 follow-up 仍会扫库内全部 pending**。要限量时：只把目标片放进 `inbox/`，再按 `media_id` 提交 scrape；或取消其它 pending 的刮削任务。
-7. **翻译 LLM 额度有限**：inbox 分批（例如每次约几十～100），不要一次刮完整 `JAV_output`。当前 LLM 提供商与 ChatAnywhere 回切参数见 [amane-media.md](amane-media.md)「LLM 提供商切换备忘」。
-8. **空目录**：Amane **无**刮削后自动删空目录选项；inbox 残留空目录需手动/`find … -empty -delete`（注意勿误删仍有用的父目录）。
+4. **合入上游冲突**：非特性冲突自行处理；影响功能/特性的冲突先分别说明双方行为，等用户决定后再继续。细则见 [amane-media.md](amane-media.md)「冲突处理」。
+5. **任务队列卡住**：先查 `GET /api/tasks/worker`、`docker logs amane` 是否出现 `database is locked`；Watcher + 全库 `automation=scrape` 大目录搬迁极易锁死 SQLite。
+6. **不要对子目录 refresh 开 `scan: ["add","remove"]`**：`remove` 按「本次扫描未见」删全库索引，会误删 `library/` / `JAV_output/` 记录。子目录刷新只用 `scan: ["add"]`，或对 `/media` 全树谨慎操作。
+7. **批量刮削**：`refresh` 的 `path` 只限制扫描范围，**刮削 follow-up 仍会扫库内全部 pending**。要限量时：只把目标片放进 `inbox/`，再按 `media_id` 提交 scrape；或取消其它 pending 的刮削任务。
+8. **翻译 LLM 额度有限**：inbox 分批（例如每次约几十～100），不要一次刮完整 `JAV_output`。当前 LLM 提供商与 ChatAnywhere 回切参数见 [amane-media.md](amane-media.md)「LLM 提供商切换备忘」。
+9. **空目录**：Amane **无**刮削后自动删空目录选项；inbox 残留空目录需手动/`find … -empty -delete`（注意勿误删仍有用的父目录）。
 
 ## 快速检查
 
