@@ -54,7 +54,7 @@ description: >-
 | `metatube` + `metatube-postgres` | 元数据相关，与 Amane 并存 |
 | `qbittorrent` / `syncthing` | 下载与同步 |
 
-生产 Amane 镜像一律从当前 fork 源码构建，不在 compose 目录叠 libgomp/vulkan 等临时层。缺依赖或超分问题须在 `develop/amane` 的 Dockerfile / 源码中修复后再构建。
+生产 Amane 镜像一律从当前 fork 源码构建，不在 compose 目录叠 libgomp/vulkan 等临时层。缺依赖或超分问题须在 `develop/amane` 的 Dockerfile / 源码中修复后再构建。构建须用国内包源 + `192.168.31.220:7890` 代理（见 [amane-media.md](amane-media.md)「构建加速」）。
 
 ## 运维操作原则
 

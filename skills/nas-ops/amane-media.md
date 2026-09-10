@@ -9,6 +9,14 @@ MDCx 已归档，继任为 **Amane**。
 构建约定：镜像问题在当前源码 / `Dockerfile` 中修复后再 `docker compose build`，
 禁止再写一层临时 hack Dockerfile。
 
+构建加速（本机强制）：
+
+1. `Dockerfile` 使用国内包源：apt=`mirrors.aliyun.com`，npm=`registry.npmmirror.com`，
+   uv=`pypi.tuna.tsinghua.edu.cn`。
+2. compose `build.args` 注入 `HTTP(S)_PROXY=http://192.168.31.220:7890`（勿用构建容器内的
+   `localhost`）；国内源域名放进 `NO_PROXY`。基础镜像拉取依赖 Docker daemon /
+   该代理。
+
 ## 路径与挂载
 
 宿主机：
@@ -340,5 +348,5 @@ curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
 - Amane 用户 `1000:1000`，`AMANE_SAFE_DIRS=/media,/subtitle-cache`，`AMANE_SUPERVISED=1`
 - 挂载：`netflav→/media`、字幕库→`/subtitle-cache`
 - 库路径：`jav=/media/jav`、`vr=/media/VR`
-- 构建：`cd /root/sharedfolder/docker-compose && docker compose build amane && docker compose up -d amane`（context=`../develop/amane`，镜像 `amane-local:latest`）
+- 构建：`cd /root/sharedfolder/docker-compose && docker compose build amane && docker compose up -d amane`（context=`../develop/amane`，镜像 `amane-local:latest`；国内包源 + `192.168.31.220:7890` 代理，见上文「构建加速」）
 - r18 库密码在主 compose 的 `amane-r18-postgres` 环境变量中；改密需同步 Amane 配置
