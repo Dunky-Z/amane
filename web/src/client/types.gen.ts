@@ -312,6 +312,10 @@ export type AgentConfig = {
     model?: string;
     thinking?: AgentThinkingMode | null;
     /**
+     * Max Tokens
+     */
+    max_tokens?: number;
+    /**
      * Rate Limit
      */
     rate_limit?: number;
@@ -497,6 +501,40 @@ export type CleanupSubmission = {
      * Type
      */
     type: 'cleanup';
+};
+
+/**
+ * CloudDriveChangeItem
+ */
+export type CloudDriveChangeItem = {
+    /**
+     * Action
+     */
+    action: 'create' | 'delete' | 'rename';
+    /**
+     * Is Dir
+     */
+    is_dir: boolean;
+    /**
+     * Source File
+     */
+    source_file: string;
+    /**
+     * Destination File
+     */
+    destination_file?: string;
+};
+
+/**
+ * CloudDriveNotifyRequest
+ *
+ * CloudDrive file_system_watcher 模板体. 未知字段忽略.
+ */
+export type CloudDriveNotifyRequest = {
+    /**
+     * Data
+     */
+    data?: Array<CloudDriveChangeItem>;
 };
 
 /**
@@ -1196,6 +1234,11 @@ export type LibraryCreateRequest = {
      */
     path: string;
     automation?: LibraryAutomation;
+    ingest?: LibraryIngest;
+    /**
+     * Cloud Path
+     */
+    cloud_path?: string | null;
     /**
      * Recursive
      */
@@ -1277,6 +1320,13 @@ export type LibraryCreateRequest = {
 };
 
 /**
+ * LibraryIngest
+ *
+ * 媒体库文件发现通道. automation=none 时两边都不收事件.
+ */
+export type LibraryIngest = 'native' | 'clouddrive';
+
+/**
  * LibraryListResponse
  */
 export type LibraryListResponse = {
@@ -1303,6 +1353,11 @@ export type LibraryResponse = {
      */
     path: string;
     automation: LibraryAutomation;
+    ingest: LibraryIngest;
+    /**
+     * Cloud Path
+     */
+    cloud_path?: string | null;
     /**
      * Recursive
      */
@@ -1392,6 +1447,11 @@ export type LibraryUpdateRequest = {
      */
     path?: string | null;
     automation?: LibraryAutomation | null;
+    ingest?: LibraryIngest | null;
+    /**
+     * Cloud Path
+     */
+    cloud_path?: string | null;
     /**
      * Recursive
      */
@@ -5876,6 +5936,31 @@ export type UpdateLibraryResponses = {
 };
 
 export type UpdateLibraryResponse = UpdateLibraryResponses[keyof UpdateLibraryResponses];
+
+export type ClouddriveNotifyData = {
+    body: CloudDriveNotifyRequest;
+    path?: never;
+    query?: never;
+    url: '/api/webhooks/clouddrive';
+};
+
+export type ClouddriveNotifyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ClouddriveNotifyError = ClouddriveNotifyErrors[keyof ClouddriveNotifyErrors];
+
+export type ClouddriveNotifyResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ClouddriveNotifyResponse = ClouddriveNotifyResponses[keyof ClouddriveNotifyResponses];
 
 export type ListAgentSessionsData = {
     body?: never;
