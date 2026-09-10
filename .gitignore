@@ -197,3 +197,13 @@ winapp/obj/
 
 # git worktrees created by tooling — never track
 .claude/worktrees/
+
+.cursor
+.cursorrules
+.claude
+.codex
+
+.cursor/
+.cursorrules
+.claude/
+.codex/
