@@ -1,8 +1,13 @@
 # Amane / JAV 媒体参考
 
-MDCx 已归档，继任为 **Amane**（`ghcr.io/sqzw-x/amane:latest`，本地 `amane-local:libgomp`）。
+MDCx 已归档，继任为 **Amane**。
 
-当前运行版本：**0.10.0**（2026-09-06 已 `docker pull` + rebuild 本地 libgomp 层；ghcr 无独立 `v0.10.0` tag，以 `latest` 为准）。
+生产镜像：由 fork 源码 `/root/sharedfolder/develop/amane` 的仓库根 `Dockerfile`
+构建为 `amane-local:latest`（不再基于 ghcr 叠加 libgomp/vulkan 临时层）。
+当前源码版本以 `pyproject.toml` 的 `version` 为准（现为 **0.11.0**，含本 fork 特性）。
+
+构建约定：镜像问题在当前源码 / `Dockerfile` 中修复后再 `docker compose build`，
+禁止再写一层临时 hack Dockerfile。
 
 ## 路径与挂载
 
@@ -157,7 +162,7 @@ curl -sS -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: applicatio
 | 局部 refresh 后 scraped 变 0 | `scan` 含 `remove` 且 `path` 仅为子目录 | 立刻 cancel；用全树或正确范围 `add` 重建；library 可能需重刮/重整理 |
 | 智能体起不来 | 配了 `all_proxy`/socks5 | 只留 http(s)_proxy；`NO_PROXY` 含 localhost 与 postgres 服务名 |
 | healthcheck 误杀 | 探活走代理 | health 用容器内 `127.0.0.1:8000`；`NO_PROXY` 含 localhost |
-| waifu2x 缺库 | 官方镜像无 libgomp/vulkan | 用 `docker-compose/amane/Dockerfile` 构建 `amane-local:libgomp` |
+| waifu2x 缺库 | 镜像缺系统依赖 | 在 `develop/amane/Dockerfile`（或依赖声明）中修复后重建 `amane-local:latest`；禁止再维护 ghcr+libgomp 临时层 |
 | 同时存在 `thumb.jpg` 与 `番号-thumb.jpg` | 改模板后旧文件未删 | organize 后可清无番号残留；剧照勿留 `*-extrafanart-*.jpg` 补丁产物 |
 
 ## Clash / 日本节点（刮削）
@@ -335,5 +340,5 @@ curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
 - Amane 用户 `1000:1000`，`AMANE_SAFE_DIRS=/media,/subtitle-cache`，`AMANE_SUPERVISED=1`
 - 挂载：`netflav→/media`、字幕库→`/subtitle-cache`
 - 库路径：`jav=/media/jav`、`vr=/media/VR`
-- 构建：`cd /root/sharedfolder/docker-compose && docker compose build amane && docker compose up -d amane`
+- 构建：`cd /root/sharedfolder/docker-compose && docker compose build amane && docker compose up -d amane`（context=`../develop/amane`，镜像 `amane-local:latest`）
 - r18 库密码在主 compose 的 `amane-r18-postgres` 环境变量中；改密需同步 Amane 配置
