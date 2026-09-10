@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Amane API",
-    "version": "0.10.0"
+    "version": "0.11.0"
   },
   "paths": {
     "/api/health": {
@@ -4384,6 +4384,41 @@
         }
       }
     },
+    "/api/webhooks/clouddrive": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Clouddrive Notify",
+        "description": "CloudDrive file_system_watcher 回调. 鉴权与其它 /api 相同 (Bearer).",
+        "operationId": "clouddrive_notify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudDriveNotifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions": {
       "get": {
         "tags": [
@@ -5661,6 +5696,12 @@
               }
             ]
           },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Max Tokens",
+            "default": 128000
+          },
           "rate_limit": {
             "type": "number",
             "maximum": 100.0,
@@ -5964,6 +6005,53 @@
           "type"
         ],
         "title": "CleanupSubmission"
+      },
+      "CloudDriveChangeItem": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "delete",
+              "rename"
+            ],
+            "title": "Action"
+          },
+          "is_dir": {
+            "type": "boolean",
+            "title": "Is Dir"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File"
+          },
+          "destination_file": {
+            "type": "string",
+            "title": "Destination File",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "is_dir",
+          "source_file"
+        ],
+        "title": "CloudDriveChangeItem"
+      },
+      "CloudDriveNotifyRequest": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CloudDriveChangeItem"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "title": "CloudDriveNotifyRequest",
+        "description": "CloudDrive file_system_watcher 模板体. 未知字段忽略."
       },
       "CommentCreateRequest": {
         "properties": {
@@ -7286,6 +7374,7 @@
               "api_type": "response",
               "base_url": "https://api.openai.com/v1",
               "model": "gpt-4o-mini",
+              "max_tokens": 128000,
               "rate_limit": 2.0,
               "sql_timeout_ms": 1000,
               "result_cache_ttl_s": 3600,
@@ -7499,6 +7588,21 @@
             "$ref": "#/components/schemas/LibraryAutomation",
             "default": "scrape"
           },
+          "ingest": {
+            "$ref": "#/components/schemas/LibraryIngest",
+            "default": "native"
+          },
+          "cloud_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Path"
+          },
           "recursive": {
             "type": "boolean",
             "title": "Recursive",
@@ -7673,6 +7777,15 @@
         ],
         "title": "LibraryCreateRequest"
       },
+      "LibraryIngest": {
+        "type": "string",
+        "enum": [
+          "native",
+          "clouddrive"
+        ],
+        "title": "LibraryIngest",
+        "description": "媒体库文件发现通道. automation=none 时两边都不收事件."
+      },
       "LibraryListResponse": {
         "properties": {
           "items": {
@@ -7705,6 +7818,20 @@
           },
           "automation": {
             "$ref": "#/components/schemas/LibraryAutomation"
+          },
+          "ingest": {
+            "$ref": "#/components/schemas/LibraryIngest"
+          },
+          "cloud_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Path"
           },
           "recursive": {
             "type": "boolean",
@@ -7867,6 +7994,7 @@
           "name",
           "path",
           "automation",
+          "ingest",
           "recursive",
           "move_mode",
           "video_template",
@@ -7913,6 +8041,27 @@
                 "type": "null"
               }
             ]
+          },
+          "ingest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LibraryIngest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cloud_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Path"
           },
           "recursive": {
             "anyOf": [

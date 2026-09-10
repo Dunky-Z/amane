@@ -6,6 +6,60 @@
 
 「媒体库 → 添加」
 
+## 文件监控
+
+每个库选择如何发现新文件. 自动化级别仍决定发现之后是否入库、是否刮削; 整理始终手动触发.
+
+- **本地文件** (默认): 使用操作系统文件事件. 适用于本机磁盘、以及能产生创建事件的挂载.
+- **CD2 webhook**: 接收 CloudDrive2 的文件通知 webhook, 不监听挂载路径. Webhook 需 CloudDrive2 会员; 性能好于监听挂载路径.
+
+CD2 webhook 库须同时填写:
+
+- **路径**: 本机可扫描的挂载目录 (如 `/Volumes/115/云下载`, 或 Docker bind 后的路径)
+- **CloudDrive 路径**: 库路径对应的 CloudDrive2 内路径 (如 `/115open/云下载`). 不是 `/Volumes/...` 或 Windows 盘符. 多库时按最长前缀匹配. 不允许两个 CD2 webhook 库使用相同或互为前缀的 CloudDrive 路径.
+
+`watcher.use_polling` 只作用于「本地文件」, 不能替代 CD2 webhook. 目录整树复制或离线完成往往只推送结果目录一条 `create`; Amane 会对该子树扫描. 未推送的变更仍可手动扫描.
+
+### CloudDrive2 webhook
+
+文件变更 webhook 是 CloudDrive2 的会员功能. Amane 与 CloudDrive2 无隶属、合作或担保关系; 下列菜单名与配置文件名以 CloudDrive2 当前版本为准.
+
+在 CloudDrive2 网页: **设置 → Webhook → 添加 Webhook**.
+
+也可编辑 CloudDrive2 配置目录中的 `webhook.toml` (或 `Configuration.toml` 里的 `[file_system_watcher]`). 对接 Amane 时必要字段:
+
+| 字段 | 值 |
+|------|----|
+| `url` | `http(s)://<Amane 主机>/api/webhooks/clouddrive` |
+| `method` | `POST` |
+| `enabled` | `true` |
+| `Authorization` | `Bearer <Amane API Token>` |
+| `body` | JSON, 含 `data` 数组; 每项含 `action`、`is_dir`、`source_file`, `rename` 时另有 `destination_file` |
+
+示例:
+
+```toml
+[file_system_watcher]
+url = "http://<Amane 主机>/api/webhooks/clouddrive"
+method = "POST"
+enabled = true
+body = '''
+{
+  "data": [
+    {
+      "action": "{action}",
+      "is_dir": "{is_dir}",
+      "source_file": "{source_file}",
+      "destination_file": "{destination_file}"
+    }
+  ]
+}
+'''
+
+[file_system_watcher.headers]
+Authorization = "Bearer <Amane API Token>"
+```
+
 ## 路径模板
 
 路径模板决定整理后文件的存储位置. 模板使用占位符变量:
@@ -15,6 +69,8 @@
 | 占位符 | 说明 | 示例值 |
 | -------- | ------ | -------- |
 | `{number}` | 番号 | `MIDV-123` |
+| `{prefix}` | 番号前缀 | `MIDV` |
+| `{suffix}` | 番号去掉前缀后的剩余段 | `123` |
 | `{title}` | 标题 | `Title Here` |
 | `{actor}` | 第一主演 | `Actor1` |
 | `{actors}` | 演员 (逗号分隔) | `Actor1,Actor2` |
@@ -39,9 +95,11 @@
 | `{link_name}` | 整理后链接文件名, 不含扩展名 | — |
 | `{raw_srt_name}` | 字幕原文件名, 不含扩展名 | `foo.zh.srt` → `foo.zh` |
 
-文件名 `-U` / `-UC` 解析为破解; `-UC` 同时识别为中字. 无码标记是 `无码` / `UNCENSORED`.
+文件名 `CRACKED` / `-U` / `-UC` 解析为破解; `-UC` 同时识别为中字. 无码标记是 `无码` / `UNCENSORED`.
 
 `{actress}` / `{actresses}` 排除已标为男性的演员; 女性与尚未识别性别的名字保留. 名单为空时输出 `Unknown`.
+
+`{prefix}` / `{suffix}` 从刮削所得 `{number}` 拆出, 不依据源文件名. `MIDV-123` → 前缀 `MIDV`、剩余段 `123`; `MKY-HS-001` → `MKY-HS` / `001`.
 
 未列出范围的占位符在各模板与 STRM 内容模板中均可使用. 下表所列占位符有范围限制; 写在不可用的模板中会得到 `Unknown`.
 
@@ -194,7 +252,7 @@ Amane 支持自动识别分集文件名, 目前支持以下几种常见标记:
 扫描是发现媒体文件并注册到数据库的过程:
 
 - 手动扫描: 在库页面点击「扫描」
-- 自动扫描: 文件监控检测到变化时自动触发
+- 自动扫描: 「本地文件」由操作系统事件触发; 「CD2 webhook」由 webhook 触发
 
 ### 刮削
 
