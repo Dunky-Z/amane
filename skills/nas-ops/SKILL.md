@@ -4,12 +4,13 @@ description: >-
   Operate this personal NAS (host LAN IP 192.168.31.220): Docker Compose
   fleets under /root/sharedfolder/docker-compose, appdata/media layout,
   Amane JAV scraping (MDCx successor), Jellyfin libraries, proxy/network
-  quirks, and batch media workflows. Use when the user mentions NAS, 这台
-  服务器, docker-compose, sharedfolder, amane, MDCx, Jellyfin, netflav,
-  JAV_output, inbox/library, 刮削, 整理, 番号命名, r18.dev postgres,
-  qbittorrent, syncthing, clash/yacd, metatube, or any service deployed on
-  this machine. Prefer acting with local docker/curl/fs tools over asking
-  the user to restate paths or history.
+  quirks, batch media workflows, and syncing the Dunky-Z/amane fork from
+  upstream sqzw-x/amane (merge, no upstream PR). Use when the user mentions
+  NAS, 这台 服务器, docker-compose, sharedfolder, amane, MDCx, Jellyfin,
+  netflav, JAV_output, inbox/library, 刮削, 整理, 番号命名, r18.dev postgres,
+  qbittorrent, syncthing, clash/yacd, metatube, 同步上游, sync upstream,
+  fork merge, or any service deployed on this machine. Prefer acting with
+  local docker/curl/fs tools over asking the user to restate paths or history.
 ---
 
 # NAS Ops
@@ -28,7 +29,7 @@ description: >-
 | `/root/sharedfolder/media/` | 媒体根；Jellyfin 挂载整棵 `/media` |
 | `/root/sharedfolder/media/netflav/jav/` | Amane JAV 媒体根（容器内 `/media/jav`） |
 | `/root/sharedfolder/media/netflav/VR/` | Amane VR 媒体根（容器内 `/media/VR`） |
-| `/root/sharedfolder/develop/amane/` | fork 二次开发源码（`Dunky-Z/amane`） |
+| `/root/sharedfolder/develop/amane/` | fork 二次开发源码（`origin=Dunky-Z/amane`，`upstream=sqzw-x/amane` 只 fetch） |
 | `/root/sharedfolder/appdata/amane-dev/` | 二次开发独立数据目录（勿与生产 `appdata/amane` 混用） |
 
 主 compose 之外，还有不少服务在独立子目录用自己的 compose 编排；改服务前先确认实际 compose 文件位置。

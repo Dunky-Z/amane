@@ -213,6 +213,56 @@ Amane 相关域名以高优先级 `DOMAIN-SUFFIX` 指向该组（优先于原 St
 
 源码：`/root/sharedfolder/develop/amane`（`git@github.com:Dunky-Z/amane.git`）。
 
+### 与上游同步（不向上游提 PR）
+
+| Remote | 仓库 | 用途 |
+| --- | --- | --- |
+| `origin` | `Dunky-Z/amane` | 本 fork；日常 push |
+| `upstream` | `sqzw-x/amane` | 只 fetch；push URL 设为 `DISABLE_PUSH` |
+
+长期个人 fork 用 **merge** 吃上游，不要反复 `rebase` 到 `upstream/main`（本地提交会越积越多，rebase 成本高且要 force push）。
+
+日常步骤：
+
+```bash
+cd /root/sharedfolder/develop/amane
+git checkout main
+git fetch upstream
+git merge upstream/main
+# 解冲突 → 相关测试 → 完成 merge commit
+git push origin main
+```
+
+冲突常见于双方都改过的文件，以及 `web/package.json` / 生成的 `web/src/client/*`。
+本机需保留 `@rolldown/binding-linux-x64-gnu` 时，与上游依赖升级一并手工合并；
+`openapi.json` 合好后可清空再生成 client：
+
+```bash
+rm -rf web/src/client && mkdir -p web/src/client && (cd web && pnpm gen-client)
+```
+
+若双方都动 Alembic migration：合完后 `uv run alembic heads` 必须只剩一个 head；
+多 head 时按 amane-pr 约定改本侧最早 revision 的 `down_revision` 串成单链，禁止手写新 revision ID。
+
+冲突预期较大时，可先在旁路分支合入再并回 `main`：
+
+```bash
+git fetch upstream
+git checkout -b sync/upstream-$(date +%Y%m%d)
+git merge upstream/main
+# 解冲突、跑测试
+git checkout main
+git merge sync/upstream-YYYYMMDD
+git push origin main
+```
+
+一次性准备（若尚未配置）：
+
+```bash
+git remote add upstream git@github.com:sqzw-x/amane.git
+git remote set-url --push upstream DISABLE_PUSH
+```
+
 与生产隔离：
 
 | 项 | 生产 | 二次开发 |
