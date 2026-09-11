@@ -10,6 +10,7 @@ from .images import (
     validate_crop_box,
 )
 from .nfo import write_nfo
+from .nfo_read import ParsedNfo, parse_nfo, read_nfo
 from .pipeline import MaterializedImages, manual_crop_poster, materialize_images
 from .resource_store import AcquireResult, ResourceStore, derived_locator
 
@@ -30,4 +31,7 @@ __all__ = [
     "should_crop_poster",
     "validate_crop_box",
     "write_nfo",
+    "ParsedNfo",
+    "parse_nfo",
+    "read_nfo",
 ]

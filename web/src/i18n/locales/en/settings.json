@@ -98,7 +98,8 @@
             "r18dev": "r18dev",
             "theporndb": "theporndb",
             "wikipedia": "wikipedia",
-            "xcity": "xcity"
+            "xcity": "xcity",
+            "local": "Local sidecar"
           },
           "$": {
             "options": {
@@ -127,7 +128,8 @@
               "r18dev": "r18dev",
               "theporndb": "theporndb",
               "wikipedia": "wikipedia",
-              "xcity": "xcity"
+              "xcity": "xcity",
+              "local": "Local sidecar"
             }
           }
         }
@@ -179,7 +181,8 @@
             "r18dev": "r18dev",
             "theporndb": "theporndb",
             "wikipedia": "wikipedia",
-            "xcity": "xcity"
+            "xcity": "xcity",
+            "local": "Local sidecar"
           },
           "$": {
             "options": {
@@ -208,7 +211,8 @@
               "r18dev": "r18dev",
               "theporndb": "theporndb",
               "wikipedia": "wikipedia",
-              "xcity": "xcity"
+              "xcity": "xcity",
+              "local": "Local sidecar"
             }
           }
         }
@@ -270,7 +274,8 @@
           "r18dev": "r18dev",
           "theporndb": "theporndb",
           "wikipedia": "wikipedia",
-          "xcity": "xcity"
+          "xcity": "xcity",
+          "local": "Local sidecar"
         },
         "$": {
           "base_url": {
@@ -375,7 +380,8 @@
             "r18dev": "r18dev",
             "theporndb": "theporndb",
             "wikipedia": "wikipedia",
-            "xcity": "xcity"
+            "xcity": "xcity",
+            "local": "Local sidecar"
           },
           "$": {
             "options": {
@@ -404,10 +410,15 @@
               "r18dev": "r18dev",
               "theporndb": "theporndb",
               "wikipedia": "wikipedia",
-              "xcity": "xcity"
+              "xcity": "xcity",
+              "local": "Local sidecar"
             }
           }
         }
+      },
+      "local_roots": {
+        "label": "Local scrape roots",
+        "description": "Roots with existing sidecar NFO/posters. Must be under safe dirs. Video sibling folder is preferred; enable source id local in content routes."
       }
     },
     "network": {

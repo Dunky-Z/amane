@@ -10,7 +10,7 @@
 | 任务 | 职责 | 排除范围 |
 | ------ | ------ | ------ |
 | `REFRESH` | 扫描增删、注册 MediaFile、fan-out SCRAPE (`use_cache` 原样转发) | 移动文件、写 NFO |
-| `SCRAPE` | 联网聚合 → DB → Resource; `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联 | 库内移动 / NFO |
+| `SCRAPE` | 聚合 → DB → Resource (路由含 `local` 时可读 sidecar NFO/图; 全量命中则本片不请求在线站); `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联 | 库内移动 / NFO |
 | `TRASH` | 扫描范围内的黑名单与过小视频, 移入 `.amane_trash` (物理移动, 不受 `move_mode`) | 整理正片、写 NFO、注册 MediaFile |
 | `ORGANIZE` | 范围内已有 Metadata 的 MediaFile 按路径模板落盘; Library.`move_mode` 与库级整理默认 (payload 可覆盖); 缺资源时 `acquire` 可出站 HTTP | 扫描磁盘、回收、运行爬虫、修改 Metadata、记录站点结果 |
 
@@ -60,7 +60,7 @@ REFRESH 仅在指定 library 下运行, 提交不接受裸 path. 不入库只刮
 
 ## 站点级复用
 
-SCRAPE **没有**「缓存命中即整体跳过爬取」的快速返回 — 完全不联网的纯整理由 ORGANIZE 任务承担. SCRAPE 总是进入聚合, 但**逐站复用**既有数据: 当 `CacheKind.metadata ∈ use_cache` 时, `ScrapeHandler` 取出 `Metadata.raw` 作为 `cache` 传入 `aggregate`. `_fetch_one` 在请求某站前先按 `cache_key` (`site` 或 `site:lang`) 查询快照 — 命中即还原、跳过爬虫调用, 仅缺失 / 失败站点真正发起请求.
+SCRAPE **没有**「缓存命中即整体跳过爬取」的快速返回 — 完全不联网的纯整理由 ORGANIZE 任务承担. 路由含 `local` 且 sidecar 全量命中时本片可短路不请求在线站; 否则进入聚合, 并**逐站复用**既有数据: 当 `CacheKind.metadata ∈ use_cache` 时, `ScrapeHandler` 取出 `Metadata.raw` 作为 `cache` 传入 `aggregate`. `_fetch_one` 在请求某站前先按 `cache_key` (`site` 或 `site:lang`) 查询快照 — 命中即还原、跳过爬虫调用, 仅缺失 / 失败站点真正发起请求.
 
 - `use_cache` 不含 `metadata` 时忽略既有 `raw`, 全部站点强制重爬.
 - `use_cache` 不含 `trans` 时跳过译文缓存读取 (仍写入), 强制重译. 详见 [llm.md](llm.md).

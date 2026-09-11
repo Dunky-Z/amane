@@ -6,6 +6,9 @@
 
 ## 原则
 
+内置来源 `local` (本地 sidecar) **不**纳入默认表; 用户迁入已刮削库时可加入对应类型路由. 见 [crawlers.md](crawlers.md)「本地来源」.
+
+
 - 类型专属源靠前, 综合索引垫后.
 - 厂牌站若对不匹配的番号仍发 HTTP, 不纳入默认表 (用户可按前缀自行加).
 - 未配置即立即返回 `None` 的源 (theporndb 无 token、r18dev 无 PG、official 前缀未命中) 可以垫后: `fetch` 立刻 `None`.

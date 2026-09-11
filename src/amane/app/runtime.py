@@ -117,6 +117,7 @@ def build_network_stack(
         gfriends_repo=hot.actor_scraping.gfriends_repo,
         plugin_manager=plugin_manager,
         plugin_configs=hot.plugins,
+        local_roots=hot.scraping.local_roots,
     )
 
     return NetworkStack(web_client=web_client, http_client=http_client, factory=factory)

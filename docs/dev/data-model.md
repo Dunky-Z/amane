@@ -4,7 +4,7 @@
 
 ## 数据所有权
 
-**SQLite 是唯一数据源**, NFO / 海报 / fanart 等磁盘文件都是从 DB 派生的副产物 (兼容 Emby / Jellyfin / Kodi). 重建顺序为 DB → 派生文件, 不反向. 不允许从 NFO 反推 Metadata.
+**SQLite 是唯一数据源**, NFO / 海报 / fanart 等磁盘文件都是从 DB 派生的副产物 (兼容 Emby / Jellyfin / Kodi). 重建顺序为 DB → 派生文件, 不反向. 不允许从 NFO 反推 Metadata. 例外: 当 `content_routes` 显式包含内置来源 `local` 时, SCRAPE 任务可读取视频旁路 / `scraping.local_roots` 下的 NFO 与 sidecar 图并写入 DB; 禁止静默发现旁路 NFO 就改库. 重建落盘顺序仍是 DB → 派生文件.
 
 实体边界:
 

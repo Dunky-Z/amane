@@ -7,6 +7,8 @@
 import asyncio
 import hashlib
 import mimetypes
+import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -249,6 +251,64 @@ class ResourceStore:
             session.add(record)
             await session.commit()
         return True
+
+
+    async def ingest_file(self, src: Path, *, locator: str | None = None) -> str | None:
+        """将本地文件硬链/复制入库, 返回内部 URL ``/api/resources/{hash}``.
+
+        ``locator`` 缺省为 ``localfile:{resolved}``. 同 locator 已存在且文件在则复用.
+        """
+        from .pipeline import RESOURCE_URL_PREFIX
+
+        src = src.expanduser().resolve()
+        if not src.is_file():
+            logger.warning("ingest_file source missing", path=str(src))
+            return None
+
+        url = locator or f"localfile:{src.as_posix()}"
+        cached = await self.resolve(url)
+        if cached is not None:
+            return f"{RESOURCE_URL_PREFIX}/{_url_hash(url)}"
+
+        ext = src.suffix.lower() if src.suffix else ".bin"
+        dest = self._compute_path(url, ext=ext)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        if not dest.exists():
+            try:
+                os.link(src, dest)
+            except OSError:
+                try:
+                    shutil.copy2(src, dest)
+                except OSError:
+                    logger.warning("ingest_file copy failed", src=str(src), dest=str(dest))
+                    return None
+
+        size = dest.stat().st_size if dest.exists() else None
+        mime = mimetypes.guess_type(str(dest))[0]
+        content_hash = self._hash_file(dest)
+
+        async with self._session() as session:
+            existing = (await session.exec(select(Resource).where(Resource.url == url))).first()
+            if existing is None:
+                session.add(
+                    Resource(
+                        url=url,
+                        file_path=self._relative_path(dest),
+                        content_hash=content_hash,
+                        size=size,
+                        mime_type=mime,
+                    )
+                )
+            else:
+                existing.file_path = self._relative_path(dest)
+                existing.content_hash = content_hash
+                existing.size = size
+                existing.mime_type = mime
+                session.add(existing)
+            await session.commit()
+
+        return f"{RESOURCE_URL_PREFIX}/{_url_hash(url)}"
 
     async def acquire_first(self, urls: list[str], client: WebClient) -> AcquireResult:
         if not urls:

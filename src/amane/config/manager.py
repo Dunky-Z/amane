@@ -247,6 +247,19 @@ class ScrapingConfig(BaseModel):
 
     jpeg_quality: int = Field(default=95, ge=50, le=100, json_schema_extra={"x-hidden": True})
 
+    local_roots: list[str] = Field(
+        default_factory=list,
+        description="本地刮削源根目录列表; 须存在且位于 AMANE_SAFE_DIRS 内. 视频旁路目录始终优先.",
+        json_schema_extra={
+            "x-ordered": True,
+            "items": {
+                "type": "string",
+                "x-widget": "PathPicker",
+                "x-path-type": "directory",
+            },
+        },
+    )
+
     content_routes: dict[ContentType, list[str]] = Field(
         default_factory=lambda: {ct: [str(site) for site in _DEFAULT_CONTENT_ROUTES.get(ct, [])] for ct in ContentType},
         json_schema_extra=kv(
@@ -325,6 +338,20 @@ class ScrapingConfig(BaseModel):
         for ct, sites in v.items():
             assert_sites_allowed(sites, allowed, field=f"content_routes.{ct}", allow_external=True)
         return v
+
+
+    @field_validator("local_roots")
+    @classmethod
+    def _validate_local_roots(cls, v: list[str]) -> list[str]:
+        out: list[str] = []
+        for raw in v:
+            if not isinstance(raw, str) or not raw.strip():
+                raise ValueError("local_roots entries must be non-empty paths")
+            p = Path(raw).expanduser()
+            if not p.is_dir():
+                raise ValueError(f"local_roots entry is not a directory: {raw}")
+            out.append(str(p.resolve()))
+        return out
 
     @model_validator(mode="before")
     @classmethod

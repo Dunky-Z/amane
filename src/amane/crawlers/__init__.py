@@ -31,6 +31,7 @@ from .sites import (
     JavDBCrawler,
     JavLibraryCrawler,
     Kin8Crawler,
+    LocalCrawler,
     MGStageCrawler,
     OfficialCrawler,
     PrestigeCrawler,
@@ -54,6 +55,7 @@ registry.register(DahliaCrawler)
 registry.register(FalenoCrawler)
 registry.register(GigaCrawler)
 registry.register(Kin8Crawler)
+registry.register(LocalCrawler)
 registry.register(FC2ClubCrawler)
 registry.register(FC2PPVDBCrawler)
 registry.register(GetchuCrawler)
@@ -91,6 +93,7 @@ __all__ = [
     "JavDBCrawler",
     "JavLibraryCrawler",
     "Kin8Crawler",
+    "LocalCrawler",
     "Language",
     "MGStageCrawler",
     "MediaMetadata",
@@ -108,3 +111,7 @@ __all__ = [
     "film_actors",
     "registry",
 ]
+
+from .site_roles import refresh_film_sites
+
+refresh_film_sites()
