@@ -2,21 +2,22 @@
 
 import asyncio
 import time
+from collections.abc import Callable, Mapping
 from contextlib import suppress
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import structlog
 from pydantic import BaseModel
 
 from ..config import HotSettings
+from ..db.models import TaskType
 from ..events import EventType
+from ..handlers._common import mark_media_file_failed
 from ..observability import Recorder
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
-    from pathlib import Path
-
-    from ..db.models import Task, TaskType
+    from ..db.models import Task
     from ..db.repository import Repository
     from ..events import EventBus
     from ..handlers.protocol import TaskHandler
@@ -57,6 +58,21 @@ class AsyncWorker:
         self._get_hot = get_hot
         self._active_recorders: dict[int, Recorder] = {}  # 未 finalize 的 Recorder, shutdown 时关闭
         self._paused = False
+
+    async def _mark_scrape_media_failed(self, task_type: TaskType, payload: Any) -> None:
+        """SCRAPE 失败兜底写 MediaFile.failed; 其它类型或无 media_file_id 时跳过."""
+        if task_type != TaskType.SCRAPE:
+            return
+        if isinstance(payload, dict):
+            media_file_id = payload.get("media_file_id")
+        else:
+            media_file_id = getattr(payload, "media_file_id", None)
+        if media_file_id is None:
+            return
+        try:
+            await mark_media_file_failed(self._repo, int(media_file_id))
+        except Exception:
+            logger.exception("mark media file failed after scrape failure", media_file_id=media_file_id)
 
     @property
     def is_running(self) -> bool:
@@ -214,6 +230,7 @@ class AsyncWorker:
                 except asyncio.CancelledError:
                     duration_s = round(time.monotonic() - start_time, 2)
                     logger.info("task cancelled", duration_s=duration_s)
+                    await self._mark_scrape_media_failed(task.type, typed_payload)
                     await self._repo.fail_task(task_id, error="Cancelled by user")
                     await _finalize_recorder(success=False, error="Cancelled by user")
                     if self._event_bus:
@@ -226,6 +243,7 @@ class AsyncWorker:
                 except Exception as e:
                     duration_s = round(time.monotonic() - start_time, 2)
                     logger.exception("task crashed", error=str(e), duration_s=duration_s)
+                    await self._mark_scrape_media_failed(task.type, typed_payload)
                     await self._repo.fail_task(task_id, error=str(e))
                     await _finalize_recorder(success=False, error=str(e))
                     if self._event_bus:
@@ -259,6 +277,7 @@ class AsyncWorker:
                 else:
                     duration_s = round(time.monotonic() - start_time, 2)
                     err = result.error or "Unknown error"
+                    await self._mark_scrape_media_failed(task.type, typed_payload)
                     await self._repo.fail_task(task_id, error=err)
                     logger.warning("task failed", error=result.error, duration_s=duration_s)
                     await _finalize_recorder(success=False, error=err)

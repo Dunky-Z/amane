@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from amane.db.models import TaskStatus, TaskType
+from amane.db.models import MediaFileStatus, TaskStatus, TaskType
 from amane.handlers.protocol import FollowupTask, TaskHandler, TaskResult
 from amane.scheduler.worker import AsyncWorker
 
@@ -316,3 +316,80 @@ async def test_worker_no_followups_on_failure(repo: Repository):
 
     assert await repo.list_task_links(parent_task_id=t.id) == []
     assert await repo.list_tasks_by_root(t.id) == []
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_scrape_failure_marks_media_failed(repo: Repository):
+    """SCRAPE success=False 时 Worker 兜底将 MediaFile 标为 failed."""
+    media = await repo.create_media_file(library_id=1, path="/media/MIDV-1.mp4")
+    assert media.id is not None
+
+    handlers = {TaskType.SCRAPE: FailHandler()}
+    worker = AsyncWorker(repo=repo, handlers=handlers, poll_interval=0.05)
+
+    t = await repo.create_task(TaskType.SCRAPE, payload={"media_file_id": media.id, "number": "MIDV-1"})
+    assert t.id is not None
+
+    worker.start()
+    await recv(worker, 1)
+    await worker.stop()
+
+    updated_task = await repo.get_task(t.id)
+    assert updated_task is not None
+    assert updated_task.status == TaskStatus.FAILED
+
+    updated_media = await repo.get_media_file(media.id)
+    assert updated_media is not None
+    assert updated_media.status == MediaFileStatus.FAILED
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_non_scrape_failure_skips_media_mark(repo: Repository):
+    """非 SCRAPE 任务失败即使 payload 带 media_file_id 也不改 MediaFile."""
+    media = await repo.create_media_file(library_id=1, path="/media/MIDV-2.mp4")
+    assert media.id is not None
+
+    handlers = {TaskType.REFRESH: FailHandler()}
+    worker = AsyncWorker(repo=repo, handlers=handlers, poll_interval=0.05)
+
+    t = await repo.create_task(TaskType.REFRESH, payload={"media_file_id": media.id, "library_id": 1})
+    assert t.id is not None
+
+    worker.start()
+    await recv(worker, 1)
+    await worker.stop()
+
+    updated_media = await repo.get_media_file(media.id)
+    assert updated_media is not None
+    assert updated_media.status == MediaFileStatus.PENDING
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_scrape_crash_marks_media_failed(repo: Repository):
+    """SCRAPE handler 抛异常时 Worker 兜底写 failed."""
+
+    class CrashHandler(TaskHandler):
+        payload_type = dict
+
+        def __init__(self):
+            pass
+
+        async def handle(self, payload: dict):
+            raise RuntimeError("crash")
+
+    media = await repo.create_media_file(library_id=1, path="/media/MIDV-3.mp4")
+    assert media.id is not None
+
+    handlers = {TaskType.SCRAPE: CrashHandler()}
+    worker = AsyncWorker(repo=repo, handlers=handlers, poll_interval=0.05)
+
+    t = await repo.create_task(TaskType.SCRAPE, payload={"media_file_id": media.id})
+    assert t.id is not None
+
+    worker.start()
+    await recv(worker, 1)
+    await worker.stop()
+
+    updated_media = await repo.get_media_file(media.id)
+    assert updated_media is not None
+    assert updated_media.status == MediaFileStatus.FAILED
