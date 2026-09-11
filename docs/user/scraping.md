@@ -125,9 +125,10 @@ r18.dev 是一个特殊的离线数据源, 提供 PostgreSQL dump:
 | ------ | ------ |
 | `REFRESH` | 扫描目录, 注册新文件, 可派生 SCRAPE |
 | `SCRAPE` | 联网聚合元数据 |
-| `ORGANIZE` | 按路径模板整理文件 |
+| `TRASH` | 黑名单与过小视频移入 `.amane_trash` |
+| `ORGANIZE` | 按路径模板整理已刮削文件 |
 | `ACTOR_SCRAPE` | 抓取演员元数据 |
-| `RESCRAPE` | 滚动补刮最久未更新的元数据 |
+| `RESCRAPE` | 滚动补刮最久未更新的影片或演员 |
 | `CLEANUP` | 清理悬空引用和失效文件 |
 | `UPSCALE` | 超分低清图片 |
 | `R18_IMPORT` | 导入 r18.dev dump |

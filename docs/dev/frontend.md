@@ -25,7 +25,7 @@
 
 ## 列表分页
 
-片库 / 演员 / 分类的 **list**、订阅源、`/libraries/$id` 文件表采用 `BrowsePageShell fill`: 标题/搜索不滚, 剩余高度交给 children. 视口高度是 `APP_SHELL_MAIN_HEIGHT` (header + 上下 padding), `/feeds` 阅读器、`/tasks` 与 `/logs` 共用, 不允许再手写一份 calc. `/tasks` 页头 (状态/类型筛选) 留在 ListToolbar 外, 表体才采用 ListToolbar; 阅读器虚滚自管, 不套 ListToolbar. 库详情的扫描/整理/配置/删除在 ListToolbar `trailing` (表体右上), 与左侧多选批处理相对. 文件表行上的刷新图标只带 `media_id`; 「指定番号刮削」打开对话框, 番号必填、内容类型可选, 与 `media_id` 一同提交.
+片库 / 演员 / 分类的 **list**、订阅源、`/libraries/$id` 文件表采用 `BrowsePageShell fill`: 标题/搜索不滚, 剩余高度交给 children. 视口高度是 `APP_SHELL_MAIN_HEIGHT` (header + 上下 padding), `/feeds` 阅读器、`/tasks` 与 `/logs` 共用, 不允许再手写一份 calc. `/tasks` 页头 (状态/类型筛选) 留在 ListToolbar 外, 表体才采用 ListToolbar; 阅读器虚滚自管, 不套 ListToolbar. 库详情的扫描/整理/配置/删除在 ListToolbar `trailing` (表体右上), 与左侧多选批处理相对. 整理按钮依次入队 TRASH、ORGANIZE (同库执行期共用一把锁; ORGANIZE 跳过黑名单 / 过小 / 回收站行, 入队先后不把垃圾落盘). 文件表多选「批量整理」提交一个 ORGANIZE, payload `media_file_ids` 为勾选的索引行 id (不是目录), 不拆任务、不回收. 路径列在 `task.completed` 时经 `listMedia` 失效刷新. 文件表行上的刷新图标只带 `media_id`; 「指定番号刮削」打开对话框, 番号必填、内容类型可选, 与 `media_id` 一同提交.
 
 `ListToolbar` 是表体壳: 顶栏 (多选 / 规则入口) 不滚, 表体内滚, **唯一**分页固定于视口底; 翻页把表体滚回顶部. `grid` / `cloud` 禁止 fill — 演员墙 `VirtuosoGrid` 用 `useWindowScroll`. ListToolbar 的 overflow 区要求父级有界高度; 非 fill 页将其作为壳时, `flex` + `minHeight: 0` 会把表高收缩为 0.
 
@@ -86,7 +86,7 @@ OpenAPI 字符串联合若需运行时迭代, 集中放置于 `lib/exhaustive-ma
 
 ## 图片
 
-外站图经由 `/api/resources/proxy` (`proxyImageUrl`). `<img>` 不能带 Authorization, 鉴权靠 cookie. 裁切基准是 `thumb_urls[0]` 对应的 **Resource 本地文件** (与后端 `acquire` 同一份), 只提交像素坐标, 不上传 blob. 片库海报 / 详情封面相位水印是 CSS overlay (`FilePhaseOverlay`), 读列表聚合 `file_phase`, 不修改 Resource 像素. 无码 = mosaic 标记或片种 uncensored. 四角: 左上马赛克 (无码/破解/流出), 右上评分, 左下中字+清晰度 (出演墙还叠当时年龄), 右下发行日. 表格/文件列表仍用彩色 `FilePhaseBadges`, 不采用 overlay.
+外站图经由 `/api/resources/proxy` (`proxyImageUrl`). `<img>` 不能带 Authorization, 鉴权靠 cookie. 裁切基准是 `thumb_urls[0]` 对应的 **Resource 本地文件** (与后端 `acquire` 同一份), 只提交像素坐标, 不上传 blob. 片库海报 / 详情封面相位水印是 CSS overlay (`FilePhaseOverlay`), 读列表聚合 `file_phase`, 不修改 Resource 像素. 无码 = mosaic 标记或内容类型 uncensored. 四角: 左上马赛克 (有码/无码/破解/流出), 右上评分, 左下中字+清晰度 (出演墙还叠当时年龄), 右下发行日. 表格/文件列表仍用彩色 `FilePhaseBadges`, 不采用 overlay.
 
 `FanartLightbox` 必须 `Portal` 到 `document.body`. Modal 打开态带 `transform` (`fade-down` 的 `translateY(0)`), 会把 `position: fixed` 的包含块变为弹窗本身, 大图被 content `overflow-y: auto` 裁切. Lightbox 拦截 mousedown/click 冒泡, 避免点预览被 Modal 当成 click-outside.
 

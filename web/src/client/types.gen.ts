@@ -2081,7 +2081,7 @@ export type MetadataSortField = 'number' | 'title' | 'studio' | 'release' | 'cre
 /**
  * Mosaic
  */
-export type Mosaic = 'uncensored' | 'cracked' | 'leaked';
+export type Mosaic = 'censored' | 'uncensored' | 'cracked' | 'leaked';
 
 /**
  * MoveMode
@@ -2185,18 +2185,6 @@ export type OrganizeSubmission = {
      */
     library_id: number;
     /**
-     * Recursive
-     *
-     * 覆盖 Library 的 recursive; None 沿用库设置
-     */
-    recursive?: boolean | null;
-    /**
-     * Patterns
-     *
-     * 覆盖 Library 的 patterns; None 沿用库设置
-     */
-    patterns?: Array<string> | null;
-    /**
      * Path
      *
      * 要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).
@@ -2214,6 +2202,12 @@ export type OrganizeSubmission = {
      * 覆盖 Library.copy_resources; None 沿用库设置
      */
     copy_resources?: Array<DownloadableResource> | null;
+    /**
+     * Media File Ids
+     *
+     * 勾选快照; 与 path 不能同时指定. None 表示 path 范围内的全部索引
+     */
+    media_file_ids?: Array<number> | null;
     /**
      * Type
      */
@@ -2405,6 +2399,12 @@ export type RefreshSubmission = {
      */
     library_id: number;
     /**
+     * Path
+     *
+     * 要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).
+     */
+    path?: string;
+    /**
      * Recursive
      *
      * 覆盖 Library 的 recursive; None 沿用库设置
@@ -2416,12 +2416,6 @@ export type RefreshSubmission = {
      * 覆盖 Library 的 patterns; None 沿用库设置
      */
     patterns?: Array<string> | null;
-    /**
-     * Path
-     *
-     * 要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).
-     */
-    path?: string;
     /**
      * Scan
      */
@@ -2469,7 +2463,7 @@ export type RescrapeSubmission = {
     /**
      * Limit
      *
-     * 单次最多补刮的元数据数 (避免长占 worker 队列)
+     * 每个已选目标单次最多补刮的条数 (避免长占 worker 队列)
      */
     limit?: number;
     /**
@@ -2479,10 +2473,23 @@ export type RescrapeSubmission = {
      */
     min_age_days?: number | null;
     /**
+     * Targets
+     *
+     * 补刮对象; 每个已选项各自选取 limit 条. 缺省仅影片, 兼容既有 Schedule.payload
+     */
+    targets?: Array<RescrapeTarget>;
+    /**
      * Type
      */
     type: 'rescrape';
 };
+
+/**
+ * RescrapeTarget
+ *
+ * 滚动补刮选取的实体种类. 每个已选项各自选取 limit 条.
+ */
+export type RescrapeTarget = 'metadata' | 'actor';
 
 /**
  * RoutineType
@@ -3215,7 +3222,7 @@ export type TaskStatus = 'queued' | 'running' | 'done' | 'failed';
 /**
  * TaskType
  */
-export type TaskType = 'scrape' | 'organize' | 'refresh' | 'cleanup' | 'upscale' | 'r18_import' | 'actor_scrape' | 'rescrape';
+export type TaskType = 'scrape' | 'organize' | 'trash' | 'refresh' | 'cleanup' | 'upscale' | 'r18_import' | 'actor_scrape' | 'rescrape';
 
 /**
  * TaskWorkerResponse
@@ -3261,6 +3268,40 @@ export type TranslateResponse = {
      * Texts
      */
     texts?: Array<string> | null;
+};
+
+/**
+ * TrashSubmission
+ */
+export type TrashSubmission = {
+    /**
+     * Library Id
+     *
+     * 所属 Library ID; 扫描/整理在该媒体库下进行
+     */
+    library_id: number;
+    /**
+     * Path
+     *
+     * 要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).
+     */
+    path?: string;
+    /**
+     * Recursive
+     *
+     * 覆盖 Library 的 recursive; None 沿用库设置
+     */
+    recursive?: boolean | null;
+    /**
+     * Patterns
+     *
+     * 覆盖 Library 的 patterns; None 沿用库设置
+     */
+    patterns?: Array<string> | null;
+    /**
+     * Type
+     */
+    type: 'trash';
 };
 
 /**
@@ -5539,7 +5580,7 @@ export type SubmitTaskData = {
     /**
      * Req
      */
-    body: RefreshSubmission | OrganizeSubmission | ScrapeSubmission | CleanupSubmission | UpscaleSubmission | R18ImportSubmission | ActorScrapeSubmission | RescrapeSubmission;
+    body: RefreshSubmission | OrganizeSubmission | TrashSubmission | ScrapeSubmission | CleanupSubmission | UpscaleSubmission | R18ImportSubmission | ActorScrapeSubmission | RescrapeSubmission;
     path?: never;
     query?: never;
     url: '/api/tasks';
