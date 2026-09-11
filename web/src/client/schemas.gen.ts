@@ -4408,6 +4408,7 @@ export const MetadataSortFieldSchema = {
 export const MosaicSchema = {
     type: 'string',
     enum: [
+        'censored',
         'uncensored',
         'cracked',
         'leaked'
@@ -4563,33 +4564,6 @@ export const OrganizeSubmissionSchema = {
             description: '所属 Library ID; 扫描/整理在该媒体库下进行',
             'x-widget': 'LibraryPicker'
         },
-        recursive: {
-            anyOf: [
-                {
-                    type: 'boolean'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Recursive',
-            description: '覆盖 Library 的 recursive; None 沿用库设置'
-        },
-        patterns: {
-            anyOf: [
-                {
-                    items: {
-                        type: 'string'
-                    },
-                    type: 'array'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Patterns',
-            description: '覆盖 Library 的 patterns; None 沿用库设置'
-        },
         path: {
             type: 'string',
             title: 'Path',
@@ -4624,6 +4598,21 @@ export const OrganizeSubmissionSchema = {
             ],
             title: 'Copy Resources',
             description: '覆盖 Library.copy_resources; None 沿用库设置'
+        },
+        media_file_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'integer'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Media File Ids',
+            description: '勾选快照; 与 path 不能同时指定. None 表示 path 范围内的全部索引'
         },
         type: {
             type: 'string',
@@ -4906,6 +4895,14 @@ export const RefreshSubmissionSchema = {
             description: '所属 Library ID; 扫描/整理在该媒体库下进行',
             'x-widget': 'LibraryPicker'
         },
+        path: {
+            type: 'string',
+            title: 'Path',
+            description: '要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).',
+            default: '',
+            'x-path-type': 'directory',
+            'x-widget': 'PathPicker'
+        },
         recursive: {
             anyOf: [
                 {
@@ -4932,14 +4929,6 @@ export const RefreshSubmissionSchema = {
             ],
             title: 'Patterns',
             description: '覆盖 Library 的 patterns; None 沿用库设置'
-        },
-        path: {
-            type: 'string',
-            title: 'Path',
-            description: '要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).',
-            default: '',
-            'x-path-type': 'directory',
-            'x-widget': 'PathPicker'
         },
         scan: {
             items: {
@@ -5039,7 +5028,7 @@ export const RescrapeSubmissionSchema = {
             maximum: 1000,
             minimum: 1,
             title: 'Limit',
-            description: '单次最多补刮的元数据数 (避免长占 worker 队列)',
+            description: '每个已选目标单次最多补刮的条数 (避免长占 worker 队列)',
             default: 100
         },
         min_age_days: {
@@ -5055,6 +5044,19 @@ export const RescrapeSubmissionSchema = {
             title: 'Min Age Days',
             description: '仅补刮 updated_at 距今超过该天数的条目; None 不设门槛'
         },
+        targets: {
+            items: {
+                $ref: '#/components/schemas/RescrapeTarget'
+            },
+            type: 'array',
+            minItems: 1,
+            uniqueItems: true,
+            title: 'Targets',
+            description: '补刮对象; 每个已选项各自选取 limit 条. 缺省仅影片, 兼容既有 Schedule.payload',
+            default: [
+                'metadata'
+            ]
+        },
         type: {
             type: 'string',
             const: 'rescrape',
@@ -5066,6 +5068,16 @@ export const RescrapeSubmissionSchema = {
         'type'
     ],
     title: 'RescrapeSubmission'
+} as const;
+
+export const RescrapeTargetSchema = {
+    type: 'string',
+    enum: [
+        'metadata',
+        'actor'
+    ],
+    title: 'RescrapeTarget',
+    description: '滚动补刮选取的实体种类. 每个已选项各自选取 limit 条.'
 } as const;
 
 export const RoutineTypeSchema = {
@@ -6536,6 +6548,7 @@ export const TaskTypeSchema = {
     enum: [
         'scrape',
         'organize',
+        'trash',
         'refresh',
         'cleanup',
         'upscale',
@@ -6631,6 +6644,63 @@ export const TranslateResponseSchema = {
     },
     type: 'object',
     title: 'TranslateResponse'
+} as const;
+
+export const TrashSubmissionSchema = {
+    properties: {
+        library_id: {
+            type: 'integer',
+            title: 'Library Id',
+            description: '所属 Library ID; 扫描/整理在该媒体库下进行',
+            'x-widget': 'LibraryPicker'
+        },
+        path: {
+            type: 'string',
+            title: 'Path',
+            description: '要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).',
+            default: '',
+            'x-path-type': 'directory',
+            'x-widget': 'PathPicker'
+        },
+        recursive: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Recursive',
+            description: '覆盖 Library 的 recursive; None 沿用库设置'
+        },
+        patterns: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Patterns',
+            description: '覆盖 Library 的 patterns; None 沿用库设置'
+        },
+        type: {
+            type: 'string',
+            const: 'trash',
+            title: 'Type'
+        }
+    },
+    type: 'object',
+    required: [
+        'library_id',
+        'type'
+    ],
+    title: 'TrashSubmission'
 } as const;
 
 export const UpscaleSubmissionSchema = {

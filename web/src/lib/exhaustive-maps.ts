@@ -22,6 +22,7 @@ import type {
   MetadataField,
   MetadataSortField,
   Mosaic,
+  RescrapeTarget,
   RoutineType,
   ScanMode,
   SiteOutcomeKind,
@@ -45,6 +46,8 @@ export const SCAN_MODES = exhaustiveTuple<ScanMode>()("add", "remove");
 
 export const CACHE_KINDS = exhaustiveTuple<CacheKind>()("metadata", "trans");
 
+export const RESCRAPE_TARGETS = exhaustiveTuple<RescrapeTarget>()("metadata", "actor");
+
 export const CONTENT_TYPES = exhaustiveTuple<ContentType>()(
   "censored",
   "uncensored",
@@ -55,7 +58,7 @@ export const CONTENT_TYPES = exhaustiveTuple<ContentType>()(
   "hentai",
 );
 
-export const MOSAICS = exhaustiveTuple<Mosaic>()("uncensored", "cracked", "leaked");
+export const MOSAICS = exhaustiveTuple<Mosaic>()("censored", "uncensored", "cracked", "leaked");
 
 /** 顺序即优先级 (高→低). 与后端 DEFINITION_VALUES 对齐. */
 export const FILE_DEFINITIONS = exhaustiveTuple<
@@ -67,6 +70,7 @@ export const TASK_STATUSES = exhaustiveTuple<TaskStatus>()("queued", "running", 
 export const TASK_TYPES = exhaustiveTuple<TaskType>()(
   "refresh",
   "organize",
+  "trash",
   "cleanup",
   "scrape",
   "upscale",
@@ -148,6 +152,7 @@ export const SUBMITTABLE_TASK_TYPES = exhaustiveTuple<SubmittableTaskType>()(
   "scrape",
   "refresh",
   "organize",
+  "trash",
   "cleanup",
   "upscale",
   "r18_import",

@@ -84,7 +84,8 @@ Authorization = "Bearer <Amane API Token>"
 | `{ext}` | 正在放置的文件扩展名 | `mp4` / `srt` |
 | `{cd?}` | CD/分集编号 | `1` / `2` / 空 |
 | `{sub?}` | 中字标记 | `C` / 空 |
-| `{mosaic?}` | 有无码标记 | `uncensored` / `cracked` / `leaked` / 空 |
+| `{content_type}` | 内容类型 | `censored` / `uncensored` / `chinese` / `western` / `fc2` / `amateur` / `hentai` |
+| `{mosaic?}` | 马赛克标记 | `censored` / `uncensored` / `cracked` / `leaked` / 空 |
 | `{def?}` | 分辨率标记 | `4K` / `1080p` / `HD` / 空 |
 | `{raw_name}` | 源视频文件名 | `A/B.mp4` → `B` |
 | `{raw_dir}` | 源文件父目录名 | `A/B/C.mp4` → `B` |
@@ -95,7 +96,7 @@ Authorization = "Bearer <Amane API Token>"
 | `{link_name}` | 整理后链接文件名, 不含扩展名 | — |
 | `{raw_srt_name}` | 字幕原文件名, 不含扩展名 | `foo.zh.srt` → `foo.zh` |
 
-文件名 `CRACKED` / `-U` / `-UC` 解析为破解; `-UC` 同时识别为中字. 无码标记是 `无码` / `UNCENSORED`.
+马赛克类型依据关键词与番号解析判定. 文件名 `CRACKED` / `-U` / `-UC` 为破解 (`-UC` 同时为中字); `无码` / `UNCENSORED` 为无码; `流出` / `LEAKED` 为流出. 目录名为整段 `uncensored` / `cracked` / `leaked` / `无码` / `破解` / `流出` 时同样判定. 番号解析为有码且无上述标记时为 `censored`; 解析为无码且无上述标记时为 `uncensored`. 国产 / FC2 / 欧美等无法判定时为空.
 
 `{actress}` / `{actresses}` 排除已标为男性的演员; 女性与尚未识别性别的名字保留. 名单为空时输出 `Unknown`.
 
@@ -125,7 +126,7 @@ NFO: {link_dir}/{number}.nfo
 可用 `[...]` 将模板中的一段包裹为组, 组内所有可空占位符全为空时整组省略. 这主要是为了处理分集、中字等可选属性, 例如:
 
 ```
-{number}[-CD{cd?}][-{mosaic?|cracked=U}{sub?}].{ext}
+{number}[-CD{cd?}][-{mosaic?|cracked=U,censored=}{sub?}].{ext}
 ```
 
 - 源文件 `MIDV-123-U-C-CD2.mp4` → `MIDV-123-CD2-UC.mp4`
@@ -147,18 +148,22 @@ NFO: {link_dir}/{number}.nfo
 占位符支持 `{name|原值=输出,另一值=输出}` 语法, 将规范值改写成自定义输出:
 
 ```
-{mosaic?|uncensored=无码,cracked=U,leaked=流出}
+{mosaic?|censored=有码,uncensored=无码,cracked=U,leaked=流出}
+{mosaic?|=未知}
+{content_type|censored=有码,uncensored=无码}
 {def?|4K=2160p,1080p=FHD}
 ```
 
-- 未列出的值保持原样 (如 `{mosaic?|cracked=U}`, uncensored / leaked 仍为规范值)
+- 未列出的值保持原样 (如 `{mosaic?|cracked=U}`, censored / uncensored / leaked 仍为规范值)
+- `{name|=缺省}` 将空值映成缺省 (无法判定马赛克时, 如国产)
 - 可以映射成空串 (配合可选组让某个值不出现在路径中)
 - 目录段和文件名段可以分别写映射, 比如目录用规范值便于管理, 文件名用短标记节省字符:
 
 ```
-{mosaic?}/{number}[-{mosaic?|uncensored=无码,cracked=U,leaked=流出}].{ext}
+{mosaic?}/{number}[-{mosaic?|censored=,uncensored=无码,cracked=U,leaked=流出}].{ext}
 ```
 
+源文件 `MIDV-123.mp4` → `censored/MIDV-123.mp4`
 源文件 `MIDV-123-無碼.mp4` → `uncensored/MIDV-123-无码.mp4`
 
 ## 链接模板与模式
@@ -196,6 +201,9 @@ https://example.com/{video_relpath} -> https://example.com/ABC-123/ABC-123.mp4
 4. 如果配置了链接模板, 在库外创建 strm 文件或软链接
 5. 按源文件标记添加封面 / 海报水印
 
+!!! warning
+    复制、硬链接、符号链接在目标路径仍位于本库内时, 整理前路径上的文件仍然保留. 索引改为指向目标路径之后, 再次扫描会把整理前的路径登记为另一条正片. 不推荐在库内使用这三种放置方式; 库内整理使用移动. 它们只适用于视频模板指向库外路径的一次性写出. 为播放器准备库外入口时使用链接模板.
+
 !!! note
     目前整理操作无自动触发途径, 需要手动执行.
 
@@ -232,14 +240,14 @@ Amane 支持自动识别分集文件名, 目前支持以下几种常见标记:
 
 ## 黑名单
 
-可配置一组正则规则, 对文件名 (含扩展名) 进行匹配, 命中文件不入库且整理时移入 `.amane_trash`,此目录在扫描与监控中始终忽略.
+可配置一组正则规则, 对文件名 (含扩展名) 进行匹配, 命中文件不入库且回收时移入 `.amane_trash`,此目录在扫描与监控中始终忽略.
 
 !!! note
     此功能主要用于处理广告文件, `.amane_trash` 类似于回收站. 为避免误删 amane 永远不会自动删除此目录, 用户需自行手动清理.
 
 ## 小文件过滤
 
-设置最小视频大小 (默认关闭). 小于此值的文件不会被当作正片入库, 整理时移入 `.amane_trash`:
+设置最小视频大小 (默认关闭). 小于此值的文件不会被当作正片入库, 回收时移入 `.amane_trash`:
 
 - 只作用于视频扩展名, 图片、NFO、字幕不受此阈值影响
 - `.strm` 被特别剔除, 不按大小过滤
@@ -263,9 +271,11 @@ Amane 支持自动识别分集文件名, 目前支持以下几种常见标记:
 
 ### 整理
 
-整理是将文件按路径模板放置到正确位置:
+整理是将已刮削文件按路径模板放置到正确位置:
 
 - 目前仅支持手动触发
+- 库页面的整理会依次入队回收任务 (黑名单与过小视频移入 `.amane_trash`) 与整理任务; 二者同库串行, 整理跳过规则命中行
+- 文件表勾选后的批量整理只整理所选的单条索引行, 不是以目录为单位, 也不回收
 - 整理时会自动下载缺失的资源 (如海报)
 
 ## 多库支持
