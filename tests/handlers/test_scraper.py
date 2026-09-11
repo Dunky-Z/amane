@@ -153,6 +153,23 @@ class TestScrapeHandler:
             ScrapePayload(media_file_id=media.id, number="TEST-001", content_type=ContentType.CENSORED)
         )
         assert result.success is False
+        updated = await repo.get_media_file(media.id)
+        assert updated is not None
+        assert updated.status == MediaFileStatus.FAILED
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_no_results_without_media_file_id_ok(self, repo: Repository, resource_store):
+        """by-number 无 media_file_id 时失败不写 MediaFile、不抛错."""
+        empty_factory = FakeFactory({"javdb": EmptySearchCrawler()})
+        h = ScrapeHandler(
+            repo=repo,
+            factory=empty_factory,
+            resource_store=resource_store,
+            pipeline_config=HotSettings(),
+        )
+        result = await h.handle(ScrapePayload(number="TEST-001", content_type=ContentType.CENSORED))
+        assert result.success is False
+        assert result.error is not None
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_materializes_cropped_poster(self, repo: Repository, resource_store):
@@ -264,6 +281,9 @@ class TestContentRoutesFiltering:
         assert result.success is False
         assert result.error is not None
         assert "No eligible crawlers" in result.error
+        updated = await repo.get_media_file(media.id)
+        assert updated is not None
+        assert updated.status == MediaFileStatus.FAILED
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_prefer_outside_route_not_requested(self, repo: Repository, resource_store):
@@ -691,3 +711,31 @@ class TestRefreshHandler:
         assert result.result.scrape == n
         scrapes = [f for f in (result.followups or []) if f.task_type == TaskType.SCRAPE]
         assert len(scrapes) == n
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_scrape_scope_pending_skips_failed(self, repo: Repository, tmp_path):
+        """刮削范围 pending 不扇出 failed; 勾选 failed 只扇出失败文件."""
+        pending = await repo.create_media_file(
+            library_id=1, path=str(tmp_path / "MIDV-001.mp4"), status=MediaFileStatus.PENDING
+        )
+        failed = await repo.create_media_file(
+            library_id=1, path=str(tmp_path / "MIDV-002.mp4"), status=MediaFileStatus.FAILED
+        )
+        assert pending.id is not None and failed.id is not None
+
+        handler = RefreshHandler(repo=repo)
+        only_pending = await handler.handle(
+            RefreshPayload(library_id=1, path=str(tmp_path), scan=set(), scrape={MediaFileStatus.PENDING})
+        )
+        assert only_pending.result is not None
+        assert only_pending.result.scrape == 1
+        pending_ids = {f.payload["media_file_id"] for f in (only_pending.followups or [])}
+        assert pending_ids == {pending.id}
+
+        only_failed = await handler.handle(
+            RefreshPayload(library_id=1, path=str(tmp_path), scan=set(), scrape={MediaFileStatus.FAILED})
+        )
+        assert only_failed.result is not None
+        assert only_failed.result.scrape == 1
+        failed_ids = {f.payload["media_file_id"] for f in (only_failed.followups or [])}
+        assert failed_ids == {failed.id}

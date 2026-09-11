@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from amane.db import MediaFileStatus
-from amane.handlers._common import ensure_oshash, finalize_media_file, scan_library
+from amane.handlers._common import ensure_oshash, finalize_media_file, mark_media_file_failed, scan_library
 from amane.library import LibraryFileKind, LibraryHit, LibraryScan
 
 if TYPE_CHECKING:
@@ -145,3 +145,21 @@ class TestFinalizeMediaFile:
         updated = await repo.get_media_file(media.id)
         assert updated is not None
         assert updated.status == MediaFileStatus.SCRAPED
+
+
+class TestMarkMediaFileFailed:
+    """标记 MediaFile 刮削失败."""
+
+    @pytest.mark.asyncio
+    async def test_updates_status(self, repo: Repository):
+        media = await repo.create_media_file(library_id=1, path="/m/ABC-789.mp4")
+        assert media.id is not None
+        await mark_media_file_failed(repo, media.id)
+
+        updated = await repo.get_media_file(media.id)
+        assert updated is not None
+        assert updated.status == MediaFileStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_none_media_file_id_is_noop(self, repo: Repository):
+        await mark_media_file_failed(repo, None)
