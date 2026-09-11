@@ -15,7 +15,10 @@ MDCx 已归档，继任为 **Amane**。
    uv=`pypi.tuna.tsinghua.edu.cn`。
 2. compose `build.args` 注入 `HTTP(S)_PROXY=http://192.168.31.220:7890`（勿用构建容器内的
    `localhost`）；国内源域名放进 `NO_PROXY`。基础镜像拉取依赖 Docker daemon
-   `registry-mirrors` 与**客户端**代理；推荐 `/root/sharedfolder/docker-compose/amane/build.sh`。
+   `registry-mirrors` 与**客户端**代理；一键脚本:
+   `/root/sharedfolder/develop/amane/scripts/build-docker.sh`
+   （可选 `--up` recreate 生产容器；旧路径
+   `/root/sharedfolder/docker-compose/amane/build.sh` 仍可用）。
 
 ## 路径与挂载
 
