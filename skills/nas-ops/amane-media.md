@@ -4,7 +4,7 @@ MDCx 已归档，继任为 **Amane**。
 
 生产镜像：由 fork 源码 `/root/sharedfolder/develop/amane` 的仓库根 `Dockerfile`
 构建为 `amane-local:latest`（不再基于 ghcr 叠加 libgomp/vulkan 临时层）。
-当前源码版本以 `pyproject.toml` 的 `version` 为准（现为 **0.11.0**，含本 fork 特性）。
+当前源码版本以 `pyproject.toml` 的 `version` 为准（现为 **0.12.0**，含本 fork 特性）。
 
 构建约定：镜像问题在当前源码 / `Dockerfile` 中修复后再 `docker compose build`，
 禁止再写一层临时 hack Dockerfile。
@@ -149,7 +149,10 @@ curl -sS -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: applicatio
 1. 按路径排序取下一批视频（例如 100），**只搬视频**（及同 stem 字幕）到 `inbox/<stem>/`，旧 MDCx 图/nfo 可留在原目录。
 2. 需要更新索引时：`refresh` 用 `scan: ["add"]`（或全树 add），**不要**对 `inbox` 单独 `add+remove`。
 3. 仅对 inbox 的 `media_id` 提交 `scrape`（可用 `use_cache: ["metadata","trans"]` 省翻译额度）。
-4. 刮削后再 `organize`；整理后 inbox 空目录可脚本删除。
+4. 刮削后再整理。上游 0.12 起回收与落盘拆分：库 UI「整理」会依次入队
+   `TRASH`（黑名单/过小进 `.amane_trash`）再 `ORGANIZE`（只处理范围内已有
+   Metadata 的 MediaFile）。API 手动提交时勿再指望 ORGANIZE 顺带回收。
+   整理后 inbox 空目录可脚本删除。
 
 ### 任务 API 要点
 

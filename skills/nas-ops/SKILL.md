@@ -64,9 +64,10 @@ description: >-
 4. **合入上游冲突**：非特性冲突自行处理；影响功能/特性的冲突先分别说明双方行为，等用户决定后再继续。细则见 [amane-media.md](amane-media.md)「冲突处理」。
 5. **任务队列卡住**：先查 `GET /api/tasks/worker`、`docker logs amane` 是否出现 `database is locked`；Watcher + 全库 `automation=scrape` 大目录搬迁极易锁死 SQLite。
 6. **不要对子目录 refresh 开 `scan: ["add","remove"]`**：`remove` 按「本次扫描未见」删全库索引，会误删 `library/` / `JAV_output/` 记录。子目录刷新只用 `scan: ["add"]`，或对 `/media` 全树谨慎操作。
-7. **批量刮削**：`refresh` 的 `path` 只限制扫描范围，**刮削 follow-up 仍会扫库内全部 pending**。要限量时：只把目标片放进 `inbox/`，再按 `media_id` 提交 scrape；或取消其它 pending 的刮削任务。
-8. **翻译 LLM 额度有限**：inbox 分批（例如每次约几十～100），不要一次刮完整 `JAV_output`。当前 LLM 提供商与 ChatAnywhere 回切参数见 [amane-media.md](amane-media.md)「LLM 提供商切换备忘」。
-9. **空目录**：Amane **无**刮削后自动删空目录选项；inbox 残留空目录需手动/`find … -empty -delete`（注意勿误删仍有用的父目录）。
+7. **批量刮削**：`refresh` 的 `path` 只限制扫描范围；勾选刮削范围 `pending` 时只扇出待处理（失败已标 `failed` 的不会再进）。要限量时：只把目标片放进 `inbox/`，再按 `media_id` 提交 scrape；或取消其它 pending 的刮削任务。重试失败片请勾选 `failed`。
+8. **整理 = TRASH + ORGANIZE**（上游 0.12）：UI 整理按钮会先回收再落盘；API 若只提 ORGANIZE，不会移动黑名单/过小文件。
+9. **翻译 LLM 额度有限**：inbox 分批（例如每次约几十～100），不要一次刮完整 `JAV_output`。当前 LLM 提供商与 ChatAnywhere 回切参数见 [amane-media.md](amane-media.md)「LLM 提供商切换备忘」。
+10. **空目录**：Amane **无**刮削后自动删空目录选项；inbox 残留空目录需手动/`find … -empty -delete`（注意勿误删仍有用的父目录）。
 
 ## 快速检查
 
