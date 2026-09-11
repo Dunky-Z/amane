@@ -47,7 +47,7 @@
 | `scrape` | 对指定 `MediaFileStatus` 派生 SCRAPE 任务 |
 | `use_cache` | `set[CacheKind]`: 含 `metadata` 复用 per-site raw; 含 `trans` 复用译文缓存; 空集 = 全强制刷新 |
 
-字段组合: `scan={"add"}, scrape=set()` → 仅注册不刮削; `scan={"add"}, scrape={"pending"}` → 注册 + 刮削; `scan={"remove"}` → 仅删除失效记录. 落盘另交 ORGANIZE.
+字段组合: `scan={"add"}, scrape=set()` → 仅注册不刮削; `scan={"add"}, scrape={"pending"}` → 注册 + 刮削待处理; `scan={"remove"}` → 仅删除失效记录. 落盘另交 ORGANIZE. SCRAPE 失败且存在 `media_file_id` 时, Handler 与 Worker 将 `MediaFile.status` 写为 `failed`; 勾选 `pending` 不会再扇出这些文件, 需显式勾选 `failed` 重试.
 
 扫描遍历经由 `scan_library` (`@in_thread` glob / stat, 一次分类为跳过 / 归档 / 媒体), 与库内索引的差集在 Python 计算 (`list_media_files` 一次全部读取). 不允许将整棵树的路径放入 SQL `IN` / `NOT IN`: `NOT IN` 按批拆分会把其它批里真实存在的文件误判为失效. 仅 `remove` 时对库内记录 `exists`, 不遍历磁盘树. fan-out 必须 `list_media_files(..., limit=None)`: 默认 50 是 `GET /media` 的列表分页, 不是批量任务上限. `MediaFile.path` 的写入、按路径查找、有效 / 失效集合差一律 NFC (`nfc_path`). 从库内路径打开、判断存在、落盘必须经 `existing_disk_path` (先试传入形式, 再试规范等价的 NFC / NFD). 扫描当次列出的原字符串可直接用于 I/O.
 
@@ -108,6 +108,7 @@ handler 之间复用的阶段逻辑, 不是一条可跳步的总管线:
 | `LibraryScan` | `library/scan.py` | REFRESH / ORGANIZE / watcher | 单路径分类 (跳过 / 归档 / 媒体); 规则常量与校验在 `library/rules.py`; watcher 只调用 `classify` |
 | `scan_library` | `handlers/_common.py` | REFRESH / ORGANIZE | 库目录遍历; `@in_thread` 包装 glob / stat |
 | `finalize_media_file` | `handlers/_common.py` | SCRAPE (缓存 / 主路径) | 标记 SCRAPED + 关联 Metadata |
+| `mark_media_file_failed` | `handlers/_common.py` | SCRAPE 显式失败; Worker SCRAPE 兜底 | 标记 FAILED; `media_file_id` 为空则跳过 |
 | `apply_file_operations` | `handlers/file.py` | ORGANIZE | 读取 MediaFile→读取 Library→渲染路径→执行 file ops; 库路径 I/O 经 `@in_thread` |
 
 库路径 (含 FUSE / NAS) 与用户浏览路径上的磁盘调用不允许在事件循环上执行, 见 [architecture.md](architecture.md). 整段同步 I/O 用 `@in_thread`, 调用方 `await fn(...)`; 已在工作线程内 (例如 `place_subtitles` 里再 `execute_organize`) 用 `.sync`, 不允许再次进入线程池. Watchdog 的 `stat` 在 observer 线程, 不经过事件循环. Resource / `data_dir` 由进程自己管理, 同步读写.
