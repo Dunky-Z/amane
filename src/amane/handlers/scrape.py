@@ -3,14 +3,26 @@ from typing import TYPE_CHECKING, Protocol
 
 from structlog.contextvars import bind_contextvars
 
-from ..aggregate import SCALAR_FIELDS, AggregatedMetadata, CrawlerLike, FieldLanguage, aggregate, compile_priority
+from ..aggregate import (
+    SCALAR_FIELDS,
+    AggregatedMetadata,
+    AggregateResult,
+    CrawlerLike,
+    FieldLanguage,
+    aggregate,
+    compile_priority,
+)
 from ..crawlers.base import Crawler
+from ..crawlers.local_aggregate import build_local_aggregate
+from ..crawlers.local_materialize import materialize_local_aggregate, materialize_local_metadata
+from ..crawlers.local_source import ProbeKind
+from ..crawlers.local_source import probe as local_probe
 from ..crawlers.models import SearchQuery
 from ..crawlers.site_roles import MULTI_LANGUAGE_SOURCE_IDS
 from ..db.models import TaskType
-from ..enums import ActorGender, MetadataField
+from ..enums import ActorGender, MetadataField, SiteName
 from ..media import materialize_images
-from ..observability import current
+from ..observability import SiteOutcomeKind, current
 from ._common import ensure_oshash, finalize_media_file, mark_media_file_failed
 from .models import ActorScrapePayload, CacheKind, ScrapePayload, ScrapeResult
 from .protocol import FollowupTask, TaskHandler, TaskResult
@@ -79,27 +91,9 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         rec.info("scraping started", content_type=str(content_type), crawlers=route)
         rec.update_summary(eligible_sites=[str(s) for s in route])
 
-        crawlers = await self._factory.get_crawlers(route)
-        if not crawlers:
-            current().warning("no crawlers available", requested=route)
-            await mark_media_file_failed(self._repo, payload.media_file_id)
-            return TaskResult(success=False, error=f"No crawlers available for {payload.number}")
-
         file = None
         if payload.media_file_id:
             file = await self._repo.get_media_file(media_id=payload.media_file_id)
-
-        # 仅当本次爬虫声明需要指纹时计算 oshash.
-        file_hash = file.oshash if file else None
-        if file is not None and file_hash is None and _crawlers_need_oshash(crawlers):
-            file_hash = await ensure_oshash(self._repo, file)
-
-        q = SearchQuery(
-            payload.number,
-            file.path if file else None,
-            file_hash,
-            payload.content_type,
-        )
 
         field_priority = compile_priority(
             route, self._config.scraping.field_priority, self._config.scraping.field_blacklist
@@ -108,23 +102,64 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
 
         await self.report_progress(0, progress_total, "fetch")
 
-        async def _on_fetch_progress(current: int, _total: int, message: str = "") -> None:
-            # aggregate 上报的 current 是已满足标量字段数; 分母由 handler 统一为含后续步骤的 total.
-            await self.report_progress(current, progress_total, message)
+        local_id = str(SiteName.LOCAL)
+        result: AggregateResult | None = None
 
-        # 出站: 按波次执行抓取图 (execute_graph); 按 use_cache 复用 raw 快照.
-        result = await aggregate(
-            q,
-            crawlers,
-            field_priority,
-            field_language,
-            db_data.raw if db_data else None,
-            on_progress=_on_fetch_progress,
-            multi_lang_sites=self._multi_language_sources,
-        )
+        # 路由含 local: 先 probe; full_hit 则短路, 不实例化其它站.
+        if local_id in [str(s) for s in route]:
+            probe_result = await local_probe(
+                payload.number,
+                file_path=file.path if file else None,
+                roots=self._config.scraping.local_roots,
+            )
+            for w in probe_result.warnings:
+                rec.warning("local probe warning", detail=w)
+            if probe_result.kind == ProbeKind.FULL_HIT and probe_result.metadata is not None:
+                meta_local = await materialize_local_metadata(probe_result.metadata, self._resource_store)
+                result = build_local_aggregate(payload.number, meta_local, probe_result)
+                rec.record_site_outcome(site=local_id, outcome=SiteOutcomeKind.OK)
+                rec.update_summary(sites_queried=[local_id])
+                rec.info(
+                    "local full hit short-circuit",
+                    directory=str(probe_result.sidecar.directory) if probe_result.sidecar else None,
+                )
 
-        # 站点结果已由引擎 _fetch_one 逐条上报到 summary.outcomes; 这里只记录调度顺序.
-        rec.update_summary(sites_queried=list(result.sites_queried))
+        if result is None:
+            crawlers = await self._factory.get_crawlers(route)
+            if not crawlers:
+                current().warning("no crawlers available", requested=route)
+                await mark_media_file_failed(self._repo, payload.media_file_id)
+                return TaskResult(success=False, error=f"No crawlers available for {payload.number}")
+
+            # 仅当本次爬虫声明需要指纹时计算 oshash.
+            file_hash = file.oshash if file else None
+            if file is not None and file_hash is None and _crawlers_need_oshash(crawlers):
+                file_hash = await ensure_oshash(self._repo, file)
+
+            q = SearchQuery(
+                payload.number,
+                file.path if file else None,
+                file_hash,
+                payload.content_type,
+            )
+
+            async def _on_fetch_progress(current: int, _total: int, message: str = "") -> None:
+                # aggregate 上报的 current 是已满足标量字段数; 分母由 handler 统一为含后续步骤的 total.
+                await self.report_progress(current, progress_total, message)
+
+            # 出站: 按波次执行抓取图 (execute_graph); 按 use_cache 复用 raw 快照.
+            result = await aggregate(
+                q,
+                crawlers,
+                field_priority,
+                field_language,
+                db_data.raw if db_data else None,
+                on_progress=_on_fetch_progress,
+                multi_lang_sites=self._multi_language_sources,
+            )
+
+            # 站点结果已由引擎 _fetch_one 逐条上报到 summary.outcomes; 这里只记录调度顺序.
+            rec.update_summary(sites_queried=list(result.sites_queried))
 
         if not result.field_sources:
             current().warning("no data found from any source", failed_sites=result.failed_sites)
@@ -138,11 +173,15 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         if self._translator is not None:
             await self._translate_metadata(result.metadata, field_language, CacheKind.trans in payload.use_cache)
 
-        # 物化到 Resource; 失败保留原始 URL.
+        # 聚合路径上 LocalCrawler 可能留下 localfile:; 先入库.
+        await materialize_local_aggregate(result.metadata, self._resource_store)
+
+        # 物化到 Resource; 失败保留原始 URL. 本地短路已 ingest, 跳过 HTTP 物化.
         poster_out = result.metadata.poster_urls
         thumb_out = result.metadata.thumb_urls
         trailer_out = result.metadata.trailer_urls
-        if self._web_client is not None:
+        already_local = result.sites_queried == [str(SiteName.LOCAL)]
+        if self._web_client is not None and not already_local:
             try:
                 materialized = await materialize_images(
                     result.metadata.poster_urls,

@@ -14,7 +14,7 @@ from ..plugins.models import PluginConfig
 from .actor import ActorFetcher, GFriendsActorCrawler, actor_registry
 from .base import Crawler
 from .registry import registry
-from .sites import R18DevCrawler
+from .sites import LocalCrawler, R18DevCrawler
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -59,6 +59,7 @@ class CrawlerFactory:
         gfriends_repo: str | None = None,
         plugin_manager: PluginManager | None = None,
         plugin_configs: dict[str, PluginConfig] | None = None,
+        local_roots: list[str] | None = None,
     ):
         self._http = http_client
         self._site_configs: dict[str, SiteConfig] = {str(k): v for k, v in (site_configs or {}).items()}
@@ -67,6 +68,7 @@ class CrawlerFactory:
         self._gfriends_repo = gfriends_repo
         self._plugin_manager = plugin_manager
         self._plugin_configs = plugin_configs or {}
+        self._local_roots = list(local_roots or [])
         self._instances: dict[str, Crawler] = {}
         self._plugin_instances: dict[str, _PluginProviderAdapter] = {}
         self._actor_instances: dict[str, ActorCrawler] = {}
@@ -83,9 +85,11 @@ class CrawlerFactory:
             return None
 
         site_config = self._site_configs.get(name)
-        # R18DevCrawler 额外注入只读 DB.
+        # R18DevCrawler 额外注入只读 DB; LocalCrawler 注入 local_roots.
         if cls is R18DevCrawler:
             instance: Crawler = R18DevCrawler(client=self._http, config=site_config, db=self._r18_db)
+        elif cls is LocalCrawler:
+            instance = LocalCrawler(client=self._http, config=site_config, roots=self._local_roots)
         else:
             instance = cls(client=self._http, config=site_config)
         self._instances[name] = instance

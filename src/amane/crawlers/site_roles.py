@@ -34,19 +34,37 @@ ACTOR_PROFILE_SITES: tuple[SiteName, ...] = _actor_sites(_ACTOR_PROFILE)
 ACTOR_IMAGE_SITES: tuple[SiteName, ...] = _actor_sites(_ACTOR_IMAGE)
 
 _ACTOR_SITE_SET = frozenset({*ACTOR_PROFILE_SITES, *ACTOR_IMAGE_SITES})
-_FILM_SITE_SET = frozenset(SiteName(s) for s in registry.sites())
 
-# 仅注册演员、未出现在影片 registry 的站. 双料站同时在两边, 不在此集合.
-ACTOR_ONLY_SITES: frozenset[SiteName] = _ACTOR_SITE_SET - _FILM_SITE_SET
+# 影片站集合在 registry.register 完成后由 refresh_film_sites() 刷新.
+# 使用可变 list / set 就地更新, 以便 ``from site_roles import FILM_METADATA_SITES`` 的持有者看到新值.
+_FILM_SITE_SET: set[SiteName] = set()
+ACTOR_ONLY_SITES: set[SiteName] = set()
+FILM_METADATA_SITES: list[SiteName] = []
+MULTI_LANGUAGE_SITES: set[SiteName] = set()
+MULTI_LANGUAGE_SOURCE_IDS: set[str] = set()
 
-# 成员序跟 SiteName 字母序, 保证 schema enum 稳定.
-FILM_METADATA_SITES: tuple[SiteName, ...] = tuple(s for s in SiteName if s in _FILM_SITE_SET)
 
-# 消费 FetchOptions.language 的影片站. 聚合引擎只对这些站展开 (site, lang) 节点.
-MULTI_LANGUAGE_SITES: frozenset[SiteName] = frozenset(
-    s for s in FILM_METADATA_SITES if (cls := registry.get(s)) is not None and cls.profile().multi_language
-)
-MULTI_LANGUAGE_SOURCE_IDS: frozenset[str] = frozenset(MULTI_LANGUAGE_SITES)
+def refresh_film_sites() -> None:
+    """按当前 ``registry`` 重算影片站资格. ``crawlers`` 注册完毕后必须调用."""
+    film = {SiteName(s) for s in registry.sites()}
+    _FILM_SITE_SET.clear()
+    _FILM_SITE_SET.update(film)
+
+    ACTOR_ONLY_SITES.clear()
+    ACTOR_ONLY_SITES.update(_ACTOR_SITE_SET - film)
+
+    FILM_METADATA_SITES.clear()
+    FILM_METADATA_SITES.extend(s for s in SiteName if s in film)
+
+    MULTI_LANGUAGE_SITES.clear()
+    MULTI_LANGUAGE_SITES.update(
+        s for s in FILM_METADATA_SITES if (cls := registry.get(s)) is not None and cls.profile().multi_language
+    )
+    MULTI_LANGUAGE_SOURCE_IDS.clear()
+    MULTI_LANGUAGE_SOURCE_IDS.update(str(s) for s in MULTI_LANGUAGE_SITES)
+
+
+refresh_film_sites()
 
 _ACTOR_PROFILE_SET = frozenset(ACTOR_PROFILE_SITES)
 _ACTOR_IMAGE_SET = frozenset(ACTOR_IMAGE_SITES)

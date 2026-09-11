@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from ...config import HotSettings
 from ...events import Event, EventType
 from ..deps import ConfigDep, PluginManagerDep, RuntimeDep
+from ..support.path_validation import validate_directory_path
 
 logger = structlog.get_logger()
 
@@ -26,6 +27,8 @@ async def update_config(req: dict[str, Any], config: ConfigDep, runtime: Runtime
 
     try:
         preview = config.preview(req)
+        for root in preview.scraping.local_roots:
+            await validate_directory_path(root, runtime.safe_dirs)
         if runtime.plugin_manager is not None:
             runtime.plugin_manager.validate_hot_settings(preview, require_available=False)
         config.update(req)

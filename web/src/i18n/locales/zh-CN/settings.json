@@ -51,6 +51,10 @@
         "label": "JPEG 质量",
         "description": "图片保存质量 (1-100), 越高文件越大"
       },
+      "local_roots": {
+        "label": "本地刮削源目录",
+        "description": "已刮削 sidecar 根目录 (NFO/海报等). 须在安全目录内. 刮削时视频旁路目录优先; 将 local 加入类型路由后生效."
+      },
       "field_priority": {
         "label": "字段优先级",
         "description": "单独设定特定字段的优先级，类型路由中的其他站点仍会请求",
@@ -98,7 +102,8 @@
             "r18dev": "r18dev",
             "theporndb": "theporndb",
             "wikipedia": "wikipedia",
-            "xcity": "xcity"
+            "xcity": "xcity",
+            "local": "本地 sidecar"
           },
           "$": {
             "options": {
@@ -127,7 +132,8 @@
               "r18dev": "r18dev",
               "theporndb": "theporndb",
               "wikipedia": "wikipedia",
-              "xcity": "xcity"
+              "xcity": "xcity",
+              "local": "本地 sidecar"
             }
           }
         }
@@ -179,7 +185,8 @@
             "r18dev": "r18dev",
             "theporndb": "theporndb",
             "wikipedia": "wikipedia",
-            "xcity": "xcity"
+            "xcity": "xcity",
+            "local": "本地 sidecar"
           },
           "$": {
             "options": {
@@ -208,7 +215,8 @@
               "r18dev": "r18dev",
               "theporndb": "theporndb",
               "wikipedia": "wikipedia",
-              "xcity": "xcity"
+              "xcity": "xcity",
+              "local": "本地 sidecar"
             }
           }
         }
@@ -270,7 +278,8 @@
           "r18dev": "r18dev",
           "theporndb": "theporndb",
           "wikipedia": "wikipedia",
-          "xcity": "xcity"
+          "xcity": "xcity",
+          "local": "本地 sidecar"
         },
         "$": {
           "base_url": {
@@ -375,7 +384,8 @@
             "r18dev": "r18dev",
             "theporndb": "theporndb",
             "wikipedia": "wikipedia",
-            "xcity": "xcity"
+            "xcity": "xcity",
+            "local": "本地 sidecar"
           },
           "$": {
             "options": {
@@ -404,7 +414,8 @@
               "r18dev": "r18dev",
               "theporndb": "theporndb",
               "wikipedia": "wikipedia",
-              "xcity": "xcity"
+              "xcity": "xcity",
+              "local": "本地 sidecar"
             }
           }
         }

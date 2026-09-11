@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from ..config import DownloadableResource
+from ..enums import DownloadableResource
 from ..sr import get_preset_meta, run_SR
 from .images import (
     crop_box,

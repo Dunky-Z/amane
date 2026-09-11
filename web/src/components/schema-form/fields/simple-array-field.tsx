@@ -4,7 +4,8 @@ import type { AnyFieldApi } from "@tanstack/react-form";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ArrayFieldProps, JSONSchemaObject } from "../schema";
-import { isOrdered } from "../schema";
+import { isOrdered, isPath } from "../schema";
+import { PathPicker } from "@/components/path-picker";
 import { useSchemaFormTranslate } from "../translate-context";
 import { useFieldDomId } from "./dict-entry-form";
 import { DraggableChips } from "./draggable-chips";
@@ -15,6 +16,7 @@ export function SimpleArrayField({
   label,
   description,
   schema,
+  itemSchema,
   form,
   variant,
 }: ArrayFieldProps<JSONSchemaObject>) {
@@ -32,8 +34,13 @@ export function SimpleArrayField({
       {(field: AnyFieldApi) => {
         const value = Array.isArray(field.state.value) ? (field.state.value as string[]) : [];
 
+        const pathItems = typeof itemSchema === "object" && itemSchema !== null && isPath(itemSchema);
+        const pathType =
+          pathItems && typeof itemSchema === "object" && itemSchema !== null
+            ? ((itemSchema["x-path-type"] as "directory" | "file" | undefined) ?? "directory")
+            : undefined;
         const control = ordered ? (
-          <OrderedArrayBody value={value} onChange={field.handleChange} long={long} />
+          <OrderedArrayBody value={value} onChange={field.handleChange} long={long} pathItems={pathItems} pathType={pathType} />
         ) : long ? (
           // x-long, unordered: taller textarea, one value per line
           <Textarea
@@ -106,10 +113,12 @@ interface OrderedArrayBodyProps {
   onChange: (v: string[]) => void;
   /** x-long: render the chip list inside a fixed-height scrollable container. */
   long?: boolean;
+  pathItems?: boolean;
+  pathType?: "directory" | "file";
 }
 
 /** x-ordered mode body: draggable chips + add input. Chrome handled by parent. */
-function OrderedArrayBody({ value, onChange, long }: OrderedArrayBodyProps) {
+function OrderedArrayBody({ value, onChange, long, pathItems, pathType }: OrderedArrayBodyProps) {
   const [newItem, setNewItem] = useState("");
 
   const handleAdd = () => {
@@ -139,29 +148,48 @@ function OrderedArrayBody({ value, onChange, long }: OrderedArrayBodyProps) {
       ) : (
         chips
       )}
-      <Group gap={6} mt={4} wrap="nowrap">
-        <TextInput
-          size="xs"
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleAdd();
-            }
-          }}
-          placeholder="Add item..."
-          style={{ flex: 1 }}
-        />
-        <ActionIcon
-          variant="default"
-          size="sm"
-          onClick={handleAdd}
-          disabled={!newItem.trim()}
-          aria-label="Add item"
-        >
-          <IconPlus size={14} />
-        </ActionIcon>
+      <Group gap={6} mt={4} wrap="nowrap" align="flex-start">
+        {pathItems ? (
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <PathPicker
+              value={newItem}
+              onChange={(v) => {
+                const trimmed = v.trim();
+                if (trimmed && !value.includes(trimmed)) {
+                  onChange([...value, trimmed]);
+                }
+                setNewItem("");
+              }}
+              pathType={pathType ?? "directory"}
+              placeholder="/path/to/directory"
+            />
+          </div>
+        ) : (
+          <>
+            <TextInput
+              size="xs"
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAdd();
+                }
+              }}
+              placeholder="Add item..."
+              style={{ flex: 1 }}
+            />
+            <ActionIcon
+              variant="default"
+              size="sm"
+              onClick={handleAdd}
+              disabled={!newItem.trim()}
+              aria-label="Add item"
+            >
+              <IconPlus size={14} />
+            </ActionIcon>
+          </>
+        )}
       </Group>
     </>
   );

@@ -22,6 +22,7 @@ class SiteName(StrEnum):
     JAVDB = "javdb"
     JAVLIBRARY = "javlibrary"
     KIN8 = "kin8"
+    LOCAL = "local"
     MGSTAGE = "mgstage"
     MINNANO = "minnano"
     OFFICIAL = "official"

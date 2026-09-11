@@ -36,6 +36,16 @@ CrawlerFactory (缓存实例)
 
 `profile()` 类方法给出内置来源 ID / `base_url` / 能力与性别 / 可选 cookies 与限速 URL. `__init__` 在 `profile()` 之后自动 `_resolve_config()`, 子类不得再次调用. 外部来源不要求继承 `Crawler`, 实现契约见 [plugins.md](plugins.md).
 
+## 本地来源 `local`
+
+内置单段 ID `local` (`SiteName.LOCAL`), 进入 `content_routes` / `field_priority` 资格集. **不**写入默认路由, 须用户显式加入.
+
+- 实现: `crawlers/sites/local.py` + `crawlers/local_source.py` (旁路优先, 再扫 `scraping.local_roots`, 深度上限 4).
+- 全量命中 (可解析 Kodi `<movie>` NFO 且有 poster 或 thumb): `ScrapeHandler` 短路, 本片不请求其它站.
+- 残缺: 作为普通爬虫参与 `aggregate`, 贡献 partial 字段与 `localfile:` 图 URL; 写库前 ingest 进 ResourceStore.
+- NFO 解析: `parsing/nfo_movie.py` (与 `media/nfo.py` 的 `write_nfo` 对称). 日常仍禁止静默读 NFO 改 DB, 见 [data-model.md](data-model.md).
+
+
 ## 番号入参
 
 `SearchQuery.number` 就是 `ScrapePayload.number` (`handlers/scrape.py`). Handler 不解析番号. 来源路径不同则字符串形态不同, 爬虫不能假设「一定已经带短横线、一定是大写」.

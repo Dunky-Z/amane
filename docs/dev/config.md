@@ -68,6 +68,9 @@ Cold 配置同样加到 `manager.py::ColdSettings`, 无需 UI — 只通过 `AMA
 
 ## `scraping` 影片路由 (Hot)
 
+`local_roots`: 本地刮削源根目录列表 (Hot). 须存在且落在 `AMANE_SAFE_DIRS` 内; 配置写入时经与媒体库路径相同的目录校验. 视频旁路目录始终优先于根目录查找. 内置来源 ID `local` 可写入 `content_routes` / `field_priority`; **不**在默认路由中. 行为见 [crawlers.md](crawlers.md)「本地来源」.
+
+
 `content_routes` 是按内容类型的**有序站点链**: 资格真值 + 该类型默认字段顺序. 该类型实际请求的站点 ⊆ 此表, 空表则该类型刮削直接失败. 关闭某类型刮削时须将该项设置为空列表; 不允许删除 key.
 
 `field_priority` 是稀疏字段例外: 只写需要提前尝试的站. 编译时与该类型路由求交后前置, 其余路由站点保序回退 (`aggregate.compile_priority`). 不在该类型路由中的站无效, 也不额外发请求.
