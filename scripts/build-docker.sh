@@ -18,7 +18,17 @@ DO_UP=0
 BUILD_ARGS=()
 
 usage() {
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+一键构建生产镜像 amane-local:latest（源码 context = 本仓库根 Dockerfile）
+
+用法:
+  ./scripts/build-docker.sh           # 仅构建
+  ./scripts/build-docker.sh --up      # 构建后 recreate 生产容器 amane
+  ./scripts/build-docker.sh --no-cache
+  ./scripts/build-docker.sh --up --no-cache
+
+代理默认 http://192.168.31.220:7890；可用环境变量覆盖 HTTP_PROXY / HTTPS_PROXY / NO_PROXY。
+EOF
   exit "${1:-0}"
 }
 
