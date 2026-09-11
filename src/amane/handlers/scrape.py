@@ -11,7 +11,7 @@ from ..db.models import TaskType
 from ..enums import ActorGender, MetadataField
 from ..media import materialize_images
 from ..observability import current
-from ._common import ensure_oshash, finalize_media_file
+from ._common import ensure_oshash, finalize_media_file, mark_media_file_failed
 from .models import ActorScrapePayload, CacheKind, ScrapePayload, ScrapeResult
 from .protocol import FollowupTask, TaskHandler, TaskResult
 
@@ -74,6 +74,7 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         route = self._config.scraping.content_routes.get(content_type)
         if not route:
             rec.warning("no eligible crawlers for content type", content_type=content_type)
+            await mark_media_file_failed(self._repo, payload.media_file_id)
             return TaskResult(success=False, error=f"No eligible crawlers for content type {content_type}")
         rec.info("scraping started", content_type=str(content_type), crawlers=route)
         rec.update_summary(eligible_sites=[str(s) for s in route])
@@ -81,6 +82,7 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         crawlers = await self._factory.get_crawlers(route)
         if not crawlers:
             current().warning("no crawlers available", requested=route)
+            await mark_media_file_failed(self._repo, payload.media_file_id)
             return TaskResult(success=False, error=f"No crawlers available for {payload.number}")
 
         file = None
@@ -126,6 +128,7 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
 
         if not result.field_sources:
             current().warning("no data found from any source", failed_sites=result.failed_sites)
+            await mark_media_file_failed(self._repo, payload.media_file_id)
             return TaskResult(success=False, error=f"No metadata found for {payload.number}")
 
         # 抓取结束: 进度分子对齐标量字段数, 其后为物化与持久化.

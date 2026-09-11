@@ -58,3 +58,10 @@ async def finalize_media_file(repo: Repository, media_file_id: int | None, metad
     if media_file_id is None:
         return
     await repo.update_media_file(media_file_id, status=MediaFileStatus.SCRAPED, metadata_id=metadata_id)
+
+
+async def mark_media_file_failed(repo: Repository, media_file_id: int | None) -> None:
+    """media_file_id 为 None 时静默跳过."""
+    if media_file_id is None:
+        return
+    await repo.update_media_file(media_file_id, status=MediaFileStatus.FAILED)
