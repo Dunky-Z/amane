@@ -49,7 +49,7 @@ description: >-
 | --- | --- |
 | `jellyfin` | `network_mode: host`；挂载 `/root/sharedfolder/media:/media`；NETFLAV 库指向 `/media/netflav/jav/library` |
 | `amane` | 生产容器；镜像 `amane-local:latest`，由 `/root/sharedfolder/develop/amane` 当前源码构建；Web `http://192.168.31.220:8800`（`8800→8000`）；数据 `/root/sharedfolder/appdata/amane`；统一挂载 `.../netflav:/media`；字幕库挂 `.../javadatabase/sub-202303/sub:/subtitle-cache`；插件 `nas.javsubs`；库 `jav`(id=1, path=`/media/jav`) / `vr`(id=2, path=`/media/VR`) |
-| `amane` 二次开发 | 源码 `/root/sharedfolder/develop/amane`；数据 `appdata/amane-dev`；API `:8000`；Vite `:5173`；与上游同步见 [amane-media.md](amane-media.md)「与上游同步」 |
+| `amane` 二次开发 | 源码 `/root/sharedfolder/develop/amane`；数据 `appdata/amane-dev`；API `:8000`；Vite `:8899`；与上游同步见 [amane-media.md](amane-media.md)「与上游同步」 |
 | `amane-r18-postgres` | r18.dev 离线库；宿主机端口 **5433**；`NO_PROXY` 须含 `amane-r18-postgres` |
 | `metatube` + `metatube-postgres` | 元数据相关，与 Amane 并存 |
 | `qbittorrent` / `syncthing` | 下载与同步 |

@@ -31,7 +31,7 @@ description: >-
 | API | `AMANE_HOST` (默认 `0.0.0.0`) | Justfile `_dev-uvicorn` |
 | Vite | 全部网卡 (`host: true`) | `web/vite.config.ts` |
 
-浏览器在 Windows 等远程机上应使用 **NAS 局域网 IP** (如 `http://192.168.x.x:5173/`), 不是仅在 NAS 本机有效的 `127.0.0.1`.
+浏览器在 Windows 等远程机上应使用 **NAS 局域网 IP** (如 `http://192.168.x.x:8899/`), 不是仅在 NAS 本机有效的 `127.0.0.1`.
 Vite 将 `/api` 代理到本机 uvicorn (`localhost:8000`), 前端经局域网打开时 API 请求仍走同源代理.
 
 仅本机访问时可 `AMANE_HOST=127.0.0.1 just dev`; Vite 仍可经 `host: true` 被局域网访问.
@@ -43,19 +43,19 @@ Vite 将 `/api` 代理到本机 uvicorn (`localhost:8000`), 前端经局域网�
 | 进程 | 就绪 |
 |------|------|
 | API | `GET http://localhost:${AMANE_PORT:-8000}/api/health` 返回 200; 日志 `amane service ready` 亦可 |
-| Web | `GET http://localhost:5173/` 返回 200 |
+| Web | `GET http://localhost:8899/` 返回 200 |
 
 已在监听则禁止再启动一份. 就绪后回显:
 
 ```
 API: http://localhost:8000
-Web: http://localhost:5173
+Web: http://localhost:8899
 ```
 
 若用户在远程机 (如 Windows 连 NAS) 打开页面, 额外给出局域网 URL (本机非 loopback IP + 实际端口), 例如:
 
 ```
-LAN Web: http://192.168.31.220:5173
+LAN Web: http://192.168.31.220:8899
 ```
 
 `AMANE_PORT` 或 Vite 占用顺延时, 按实际端口写.

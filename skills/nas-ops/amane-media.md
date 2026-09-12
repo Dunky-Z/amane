@@ -300,7 +300,7 @@ git remote set-url --push upstream DISABLE_PUSH
 | --- | --- | --- |
 | 进程 | Docker `amane` | 本机 `uvicorn` + Vite |
 | 数据目录 | `/root/sharedfolder/appdata/amane` | `/root/sharedfolder/appdata/amane-dev` |
-| Web | `http://192.168.31.220:8800` | `http://192.168.31.220:5173`（代理 API） |
+| Web | `http://192.168.31.220:8800` | `http://192.168.31.220:8899`（代理 API） |
 | API | `:8800` | `:8000` |
 | Token | `docker exec amane cat /data/token` | `cat …/amane-dev/token` |
 
@@ -323,7 +323,7 @@ just sync          # 或 just setup
 # 一键：scripts/dev-nas.sh
 # 或分别：
 uv run uvicorn amane.api.app:create_app --factory --reload --host 0.0.0.0 --port 8000
-(cd web && pnpm exec vite --host 0.0.0.0 --port 5173)
+(cd web && pnpm exec vite --host 0.0.0.0 --port 8899)
 ```
 
 本机 Debian 10 / 旧 glibc 下，pnpm 可能漏装 rolldown optional binding；`web/package.json` 已显式依赖 `@rolldown/binding-linux-x64-gnu`。Vite 可能提示需 Node ≥20.19，当前 20.13 可跑但建议后续升级。
