@@ -11,6 +11,8 @@ from ..aggregate import (
     FieldLanguage,
     aggregate,
     compile_priority,
+    film_fields_from_aggregate,
+    merge_film_rows_fill_empty,
 )
 from ..crawlers.base import Crawler
 from ..crawlers.local_aggregate import build_local_aggregate
@@ -76,11 +78,12 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         progress_total = len(SCALAR_FIELDS) + _PROGRESS_POST_STEPS
         rec = current()
 
-        # 启用 metadata 缓存时读取 raw 快照.
+        # 已有行始终读取: 写库填空合并; raw 缓存仅在 use_cache 含 metadata 时交给聚合.
         use_metadata_cache = CacheKind.metadata in payload.use_cache
-        db_data = await self._repo.get_metadata_by_number(payload.number) if use_metadata_cache else None
-        if db_data is not None and db_data.raw:
-            rec.write_raw_cache(db_data.raw)
+        existing = await self._repo.get_metadata_by_number(payload.number)
+        db_cache = existing.raw if (use_metadata_cache and existing is not None and existing.raw) else None
+        if db_cache:
+            rec.write_raw_cache(db_cache)
 
         # 校验 content_type 路由; 无资格站点则失败.
         route = self._config.scraping.content_routes.get(content_type)
@@ -153,7 +156,7 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
                 crawlers,
                 field_priority,
                 field_language,
-                db_data.raw if db_data else None,
+                db_cache,
                 on_progress=_on_fetch_progress,
                 multi_lang_sites=self._multi_language_sources,
             )
@@ -201,30 +204,49 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
 
         await self.report_progress(len(SCALAR_FIELDS) + 1, progress_total, "materialize")
 
-        # 写库并关联 MediaFile. Metadata.actors 仍是展示名; 性别写入 Actor 空位.
-        cast = result.metadata.actors
+        # 写库: 有已有行则填空 / 并集 (含强制刮削); Metadata.actors 仍是展示名; 性别写入 Actor 空位.
+        if existing is not None:
+            merged = merge_film_rows_fill_empty(
+                existing,
+                result.metadata,
+                poster_urls=poster_out,
+                thumb_urls=thumb_out,
+                trailer_urls=trailer_out,
+                raw=result.raw,
+                field_sources=result.field_sources,
+            )
+        else:
+            merged = film_fields_from_aggregate(
+                result.metadata,
+                poster_urls=poster_out,
+                thumb_urls=thumb_out,
+                trailer_urls=trailer_out,
+                raw=result.raw,
+                field_sources=result.field_sources,
+            )
+        cast = merged.actor_items
         meta = await self._repo.upsert_metadata(
             number=payload.number,
             actor_genders={item.name: item.gender for item in cast if item.gender != ActorGender.UNKNOWN},
-            title=result.metadata.title,
-            actors=[item.name for item in cast],
-            studio=result.metadata.studio,
-            publisher=result.metadata.publisher,
-            release=result.metadata.release,
-            runtime=result.metadata.runtime,
-            tags=result.metadata.tags,
-            series=result.metadata.series,
-            plot=result.metadata.plot,
-            directors=result.metadata.directors,
-            poster_urls=poster_out,
-            thumb_urls=thumb_out,
-            trailer_urls=trailer_out,
-            extrafanart_urls=result.metadata.extrafanart_urls,
-            scores={s.site: s.score for s in result.metadata.scores},
-            external_ids=result.metadata.external_ids,
-            source_urls=result.metadata.source_urls,
-            field_sources=result.field_sources,
-            raw=result.raw,
+            title=merged.title,
+            actors=merged.actors,
+            studio=merged.studio,
+            publisher=merged.publisher,
+            release=merged.release,
+            runtime=merged.runtime,
+            tags=merged.tags,
+            series=merged.series,
+            plot=merged.plot,
+            directors=merged.directors,
+            poster_urls=merged.poster_urls,
+            thumb_urls=merged.thumb_urls,
+            trailer_urls=merged.trailer_urls,
+            extrafanart_urls=merged.extrafanart_urls,
+            scores=merged.scores,
+            external_ids=merged.external_ids,
+            source_urls=merged.source_urls,
+            field_sources=merged.field_sources,
+            raw=merged.raw,
         )
 
         await finalize_media_file(self._repo, payload.media_file_id, meta.id)
@@ -237,8 +259,8 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         current().info(
             "scrape completed",
             metadata_id=meta.id,
-            sites_used=len(set(result.field_sources.values())),
-            fields_resolved=len(result.field_sources),
+            sites_used=len(set(merged.field_sources.values())),
+            fields_resolved=len(merged.field_sources),
             failed_sites=result.failed_sites,
             actor_followups=len(actor_followups),
         )
@@ -247,7 +269,7 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         return TaskResult(
             success=True,
             result=ScrapeResult(
-                metadata_id=meta.id, field_sources=result.field_sources, failed_sites=result.failed_sites
+                metadata_id=meta.id, field_sources=merged.field_sources, failed_sites=result.failed_sites
             ),
             followups=actor_followups,
         )

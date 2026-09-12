@@ -10,7 +10,7 @@
 | 任务 | 职责 | 排除范围 |
 | ------ | ------ | ------ |
 | `REFRESH` | 扫描增删、注册 MediaFile、fan-out SCRAPE (`use_cache` 原样转发) | 移动文件、写 NFO |
-| `SCRAPE` | 聚合 → DB → Resource (路由含 `local` 时可读 sidecar NFO/图; 全量命中则本片不请求在线站); `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联 | 库内移动 / NFO |
+| `SCRAPE` | 聚合 → 物化 → 相对已有 Metadata 填空合并 → DB / Resource (路由含 `local` 时可读 sidecar NFO/图; 全量命中则本片不请求在线站); `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联 | 库内移动 / NFO |
 | `TRASH` | 扫描范围内的黑名单与过小视频, 移入 `.amane_trash` (物理移动, 不受 `move_mode`) | 整理正片、写 NFO、注册 MediaFile |
 | `ORGANIZE` | 范围内已有 Metadata 的 MediaFile 按路径模板落盘; Library.`move_mode` 与库级整理默认 (payload 可覆盖); 缺资源时 `acquire` 可出站 HTTP | 扫描磁盘、回收、运行爬虫、修改 Metadata、记录站点结果 |
 
@@ -65,6 +65,18 @@ SCRAPE **没有**「缓存命中即整体跳过爬取」的快速返回 — 完�
 - `use_cache` 不含 `metadata` 时忽略既有 `raw`, 全部站点强制重爬.
 - `use_cache` 不含 `trans` 时跳过译文缓存读取 (仍写入), 强制重译. 详见 [llm.md](llm.md).
 - 复用与新结果统一写入 `fetched`, 输出 `raw` 为两者合并. 快照含非法字段时降级为正常 fetch (见 `_fetch_one`).
+
+### 写库填空合并
+
+物化之后、`upsert_metadata` 之前: 若该番号已有 Metadata 行, 经 `merge_film_rows_fill_empty` 相对已有行合并后再写入 (与演员 `merge_actor_rows_fill_empty` 同构). **强制刮削** (`use_cache` 空或不含 `metadata`) 只表示忽略 raw 缓存并出站重爬, **不**整份覆盖已有非空字段.
+
+- 标量 / 列表 (actors / tags / directors): 已有非空保留, 空则用新值.
+- poster / thumb / trailer URL: 保序并集; 新列表空时保留旧列表.
+- `extrafanart_urls` / `raw`: 按站点 key 并集 — 本次成功站覆盖该 key, 失败或未返回站保留旧值.
+- `scores` / `external_ids` / `source_urls`: setdefault; `field_sources` 仅在实际填空的字段上补来源.
+- 无已有行、或整任务无任何 `field_sources` (失败不写库): 与今日相同.
+- `local` 全量短路写库同样合并, 避免残缺本地 NFO 冲掉更完整的 DB.
+- 库路径旁路图仍只由 ORGANIZE 派生; 本合并不自动整理.
 
 ## 字段级多源聚合
 
