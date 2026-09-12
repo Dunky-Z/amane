@@ -55,7 +55,11 @@ ORGANIZE 复制到库路径的 poster / thumb 在 `watermark.enabled` 时按**�
 
 ### `field_sources`
 
-`{field_name: site_name}` 仅记录**标量字段**的来源. 聚合类字段 (URL / extrafanart / scores) 自带来源结构, 不写入. 用途: 调试多源不一致 + 前端展示来源. 不参与业务逻辑, 重新刮削后被覆盖.
+`{field_name: site_name}` 仅记录**标量字段**的来源. 聚合类字段 (URL / extrafanart / scores) 自带来源结构, 不写入. 用途: 调试多源不一致 + 前端展示来源. 不参与业务逻辑.
+
+### 重刮与已有行
+
+SCRAPE 成功写库时若番号已有 Metadata, 经 `merge_film_rows_fill_empty` 相对已有行填空 / 并集 (见 [task-system.md](task-system.md)「写库填空合并」): 非空标量与列表不被空结果覆盖; URL 保序并集; `extrafanart_urls` 与 `raw` 按站点保留失败站旧值. 强制刮削只忽略 raw 缓存出站, 写库仍走该合并. 仅在实际填空的标量上补写 `field_sources`. 与手动 `merge_metadata` API (用户点选 raw 字段来源) 正交.
 
 `raw` 的字段名 / 类型必须与当前 `MediaMetadata` 一致 — 它会被站点级复用直接反序列化. 模型更改名称或类型时, 结果列与 raw 是两份数据, 需单独的 data migration (见 [database.md](database.md) Autogenerate 盲区).
 
