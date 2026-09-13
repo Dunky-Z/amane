@@ -198,12 +198,12 @@ class TestResolvePathsBasic:
 
 
 class TestOptionalGroups:
-    """路径解析边界: 可选组不改附属默认; 结构错误在写入时拒绝."""
+    """路径解析边界: 可选组经 `{video_name}` 进入 NFO 默认; 结构错误在写入时拒绝."""
 
-    def test_group_does_not_affect_nfo(self, media: Path):
+    def test_group_reaches_nfo_via_video_name(self, media: Path):
         wp = Library(name="t", path=str(media), video_template="{number}/{number}[-CD{cd?}].{ext}")
         result = resolve_paths(wp, _meta(), ext="mp4", cd=1)
-        assert result.nfo == media / "ABC-123" / "ABC-123.nfo"
+        assert result.nfo == media / "ABC-123" / "ABC-123-CD1.nfo"
 
     def test_unclosed_group_rejected(self):
         with pytest.raises(ValueError, match="unclosed optional group"):
