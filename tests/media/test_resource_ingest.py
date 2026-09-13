@@ -30,3 +30,40 @@ async def test_ingest_file_returns_internal_url(resource_store: ResourceStore, t
 @pytest.mark.asyncio
 async def test_ingest_file_missing_returns_none(resource_store: ResourceStore, tmp_path: Path):
     assert await resource_store.ingest_file(tmp_path / "nope.jpg") is None
+
+
+@pytest.mark.asyncio
+async def test_ingest_file_concurrent_same_locator(resource_store: ResourceStore, tmp_path: Path):
+    """同 locator 并发入库不得因 resources.url UNIQUE 失败; 只保留一行.
+
+    在 resolve 缓存未命中后短暂让出事件循环, 放大 TOCTOU 窗口以稳定复现竞态.
+    """
+    import asyncio
+
+    from sqlmodel import col, select
+
+    from amane.db.models import Resource
+
+    src = tmp_path / "shared-poster.jpg"
+    src.write_bytes(b"shared-image")
+    locator = f"localfile:{src.resolve().as_posix()}"
+
+    orig_resolve = resource_store.resolve
+
+    async def delayed_resolve(url: str):
+        hit = await orig_resolve(url)
+        if hit is None:
+            await asyncio.sleep(0.05)
+        return hit
+
+    resource_store.resolve = delayed_resolve  # type: ignore[method-assign]
+
+    urls = await asyncio.gather(
+        *[resource_store.ingest_file(src, locator=locator) for _ in range(8)]
+    )
+    assert all(u is not None for u in urls)
+    assert len(set(urls)) == 1
+
+    async with resource_store._session() as session:
+        rows = list((await session.exec(select(Resource).where(col(Resource.url) == locator))).all())
+    assert len(rows) == 1

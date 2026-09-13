@@ -483,6 +483,22 @@ class TestMetadataRepo:
         assert items[0].number == "abc-001"
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_upsert_concurrent_same_number(self, repo: Repository):
+        """同番号并发 upsert 不得因 metadata.number UNIQUE 失败; 只保留一行."""
+        results = await asyncio.gather(
+            repo.upsert_metadata(number="FC2-3482842", title="A"),
+            repo.upsert_metadata(number="FC2-3482842", title="B"),
+            repo.upsert_metadata(number="fc2-3482842", title="C"),
+        )
+        ids = {m.id for m in results}
+        assert None not in ids
+        assert len(ids) == 1
+        items, total = await repo.list_metadata()
+        assert total == 1
+        # 保留率先写入方的原始大小写
+        assert items[0].number.casefold() == "fc2-3482842"
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_list_metadata_empty(self, repo: Repository):
         items, total = await repo.list_metadata()
         assert items == []

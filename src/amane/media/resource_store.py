@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -118,17 +119,30 @@ class ResourceStore:
         mime = mimetypes.guess_type(str(dest))[0]
         content_hash = self._hash_file(dest)
 
-        # 写入记录.
+        # 写入记录. 并发同 URL 插入时 UNIQUE 视为命中缓存.
         async with self._session() as session:
-            record = Resource(
-                url=url,
-                file_path=self._relative_path(dest),
-                content_hash=content_hash,
-                size=size,
-                mime_type=mime,
-            )
-            session.add(record)
-            await session.commit()
+            existing = (await session.exec(select(Resource).where(Resource.url == url))).first()
+            if existing is None:
+                session.add(
+                    Resource(
+                        url=url,
+                        file_path=self._relative_path(dest),
+                        content_hash=content_hash,
+                        size=size,
+                        mime_type=mime,
+                    )
+                )
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+            else:
+                existing.file_path = self._relative_path(dest)
+                existing.content_hash = content_hash
+                existing.size = size
+                existing.mime_type = mime
+                session.add(existing)
+                await session.commit()
 
         return dest
 
@@ -205,7 +219,14 @@ class ResourceStore:
                 meta=meta,
             )
             session.add(record)
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                raced = (await session.exec(select(Resource).where(Resource.url == locator))).first()
+                if raced is None:
+                    raise
+                return raced
             return record
 
     async def upscale_in_place(
@@ -300,13 +321,18 @@ class ResourceStore:
                         mime_type=mime,
                     )
                 )
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    # 并发同 locator 已插入; 视为缓存命中.
+                    await session.rollback()
             else:
                 existing.file_path = self._relative_path(dest)
                 existing.content_hash = content_hash
                 existing.size = size
                 existing.mime_type = mime
                 session.add(existing)
-            await session.commit()
+                await session.commit()
 
         return f"{RESOURCE_URL_PREFIX}/{_url_hash(url)}"
 
