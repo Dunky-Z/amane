@@ -575,6 +575,32 @@
             "score": "Score"
           }
         }
+      },
+      "system_prompt": {
+        "label": "System Prompt"
+      },
+      "field_prompts": {
+        "label": "Field Prompts",
+        "$": {
+          "label": "Prompt"
+        },
+        "options": {
+          "title": "Title",
+          "actors": "Actors",
+          "tags": "Tags",
+          "release": "Release Date",
+          "runtime": "Runtime",
+          "directors": "Directors",
+          "series": "Series",
+          "studio": "Studio",
+          "publisher": "Publisher",
+          "plot": "Plot",
+          "poster_urls": "Poster",
+          "thumb_urls": "Cover",
+          "trailer_urls": "Trailer",
+          "extrafanart": "Stills",
+          "score": "Score"
+        }
       }
     },
     "agent": {
