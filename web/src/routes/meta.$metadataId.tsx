@@ -9,9 +9,9 @@ import {
   Loader,
   Menu,
   Modal,
+  SimpleGrid,
   Stack,
   Text,
-  Textarea,
   Title,
   Tooltip,
 } from "@mantine/core";
@@ -26,7 +26,6 @@ import {
   IconPhotoOff,
   IconPlayerPlay,
   IconRefresh,
-  IconSend,
   IconStar,
   IconTrash,
   IconX,
@@ -39,9 +38,7 @@ import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import {
   attachUserTagMutation,
-  createCommentMutation,
   createUserTagMutation,
-  deleteCommentMutation,
   deleteMetadataMutation,
   detachUserTagMutation,
   getMetadataOptions,
@@ -67,7 +64,7 @@ import { confirm } from "@/lib/confirm";
 import { USER_TAG_FACET_LIST } from "@/lib/facets";
 import { proxyImageUrl } from "@/lib/utils";
 import { ProxyImage } from "@/components/media/proxy-image";
-import { CommentBody } from "@/components/media/comment-body";
+import { CommentSection } from "@/components/media/comment-section";
 import { PlaybackPanel } from "@/components/media/playback-panel";
 import type { SeekRequest } from "@/components/media/playback-player";
 
@@ -114,7 +111,6 @@ function TitleDetailPage() {
   const [playingTrailer, setPlayingTrailer] = useState(false);
   const [thumbBroken, setThumbBroken] = useState(false);
   const [posterBroken, setPosterBroken] = useState(false);
-  const [newComment, setNewComment] = useState("");
   // 评论时间戳的跳转: 本地请求负责即时响应 (同一秒连点也要重新触发), 地址栏的 `t` 负责分享与刷新定位.
   const [seekRequest, setSeekRequest] = useState<SeekRequest | null>(null);
   const [canSeek, setCanSeek] = useState(false);
@@ -234,21 +230,6 @@ function TitleDetailPage() {
   const createTagMutation = useMutation(createUserTagMutation());
   const attachTagMutation = useMutation(attachUserTagMutation());
   const detachTagMutation = useMutation(detachUserTagMutation());
-  const createCommentMut = useMutation({
-    ...createCommentMutation(),
-    onSuccess: () => {
-      notifications.show({ message: t("common:toast.commentCreated"), color: "blue" });
-      setNewComment("");
-      invalidateDetail();
-    },
-  });
-  const deleteCommentMut = useMutation({
-    ...deleteCommentMutation(),
-    onSuccess: () => {
-      notifications.show({ message: t("common:toast.commentDeleted"), color: "blue" });
-      invalidateDetail();
-    },
-  });
 
   async function handleAddTags(names: string[]) {
     const unique = [...new Set(names.map((name) => name.trim()).filter((name) => name.length > 0))];
@@ -359,7 +340,8 @@ function TitleDetailPage() {
   ) : null;
 
   return (
-    <Stack gap="md">
+    // 下沿留出的空白比其余三边大得多: 滚到底时末尾的卡片不贴视口底边, 还能再滚一截.
+    <Stack gap="md" pb="10dvh">
       <Group align="flex-start" wrap="wrap" gap="lg" style={{ flexDirection: "row-reverse" }}>
         <Stack gap="xs" style={{ flex: "3 1 360px", minWidth: 280 }}>
           <div
@@ -716,81 +698,42 @@ function TitleDetailPage() {
         onCanSeekChange={setCanSeek}
       />
 
-      <Card withBorder radius="md" p="md">
-        <Title order={5} mb="sm">
-          {t("detail.connections")}
-        </Title>
-        {data.files.length === 0 ? (
-          <Text size="sm" c="dimmed">
-            {t("detail.noFiles")}
-          </Text>
-        ) : (
-          <Stack gap={6}>
-            {data.files.map((f) => (
-              <Group key={f.id} justify="space-between" gap="xs" wrap="nowrap">
-                <Stack gap={4} style={{ minWidth: 0, flex: 1 }}>
-                  <Text size="sm" truncate="end" ff="monospace">
-                    {f.path}
-                  </Text>
-                  <FilePhaseBadges phase={f} />
-                </Stack>
-                <Badge size="sm" variant="light">
-                  {f.status}
-                </Badge>
-              </Group>
-            ))}
-          </Stack>
-        )}
-      </Card>
+      {/* 宽屏下并排, 窄屏落回上下叠放; 各自保持自然高度, 拉平会把空白挪进较短的一栏. */}
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" style={{ alignItems: "start" }}>
+        <Card withBorder radius="md" p="md">
+          <Title order={5} mb="sm">
+            {t("detail.connections")}
+          </Title>
+          {data.files.length === 0 ? (
+            <Text size="sm" c="dimmed">
+              {t("detail.noFiles")}
+            </Text>
+          ) : (
+            <Stack gap={6}>
+              {data.files.map((f) => (
+                <Group key={f.id} justify="space-between" gap="xs" wrap="nowrap">
+                  <Stack gap={4} style={{ minWidth: 0, flex: 1 }}>
+                    <Text size="sm" truncate="end" ff="monospace">
+                      {f.path}
+                    </Text>
+                    <FilePhaseBadges phase={f} />
+                  </Stack>
+                  <Badge size="sm" variant="light">
+                    {f.status}
+                  </Badge>
+                </Group>
+              ))}
+            </Stack>
+          )}
+        </Card>
 
-      <Card withBorder radius="md" p="md">
-        <Title order={5} mb="sm">
-          {t("detail.comments")}
-        </Title>
-        {(data.comments ?? []).length === 0 ? (
-          <Text size="sm" c="dimmed" mb="sm">
-            {t("detail.noComments")}
-          </Text>
-        ) : (
-          <Stack gap="xs" mb="sm">
-            {(data.comments ?? []).map((c) => (
-              <Group key={c.id} justify="space-between" align="flex-start" wrap="nowrap">
-                <CommentBody body={c.body} canSeek={canSeek} onSeek={requestSeek} />
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="red"
-                  onClick={() => deleteCommentMut.mutate({ path: { comment_id: c.id } })}
-                >
-                  <IconTrash size={14} />
-                </ActionIcon>
-              </Group>
-            ))}
-          </Stack>
-        )}
-        <Group gap="xs" align="flex-end">
-          <Textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.currentTarget.value)}
-            placeholder={t("detail.commentPlaceholder")}
-            style={{ flex: 1 }}
-            rows={2}
-          />
-          <Button
-            size="xs"
-            leftSection={<IconSend size={14} />}
-            disabled={!newComment.trim()}
-            onClick={() =>
-              createCommentMut.mutate({
-                path: { metadata_id: id },
-                body: { body: newComment.trim() },
-              })
-            }
-          >
-            {t("detail.addComment")}
-          </Button>
-        </Group>
-      </Card>
+        <CommentSection
+          metadataId={id}
+          comments={data.comments ?? []}
+          canSeek={canSeek}
+          onSeek={requestSeek}
+        />
+      </SimpleGrid>
 
       <Modal
         opened={editOpen}

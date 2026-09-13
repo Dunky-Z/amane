@@ -19,7 +19,7 @@
 |----|---------|------|
 | `/` | `routes/index.tsx` | `components/agent/` (`agent-home.tsx` 为对话主体), `lib/agent/` |
 | `/meta` | `routes/meta.tsx` + `meta.index.tsx` | `components/media/` (`poster-grid` / `meta-table` / `facet-filter-controls`) |
-| `/meta/$metadataId` | `routes/meta.$metadataId.tsx` | `components/media/playback-panel.tsx` → `playback-player.tsx`, `comment-body.tsx`, `lib/media/comment-timestamps.ts` |
+| `/meta/$metadataId` | `routes/meta.$metadataId.tsx` | `components/media/playback-panel.tsx` → `playback-player.tsx`, `comment-section.tsx` → `comment-body.tsx`, `lib/media/comment-timestamps.ts` |
 | `/actors` | `routes/actors.tsx` + `actors.index.tsx` | `components/media/actor-grid.tsx` / `actor-table.tsx`, `lib/actors/browse.ts` |
 | `/actors/$actorId` | `routes/actors.$actorId.tsx` | `components/media/actor-card.tsx` / `actor-edit-dialog.tsx`, `hooks/use-facet-identity-actions.ts` |
 | `/catalog/...` | `routes/catalog.tsx` + `catalog.index.tsx` + `catalog.$kind.tsx` + `catalog.$kind_.$facetId.tsx` | `components/media/catalog-facet-table.tsx`, `facet-rules-panel.tsx` |
@@ -39,6 +39,8 @@
 片库 / 演员 / 分类无独立「管理」路由, list 视图才有多选与破坏性操作; Feed 相反, 阅读器与源表不共用布局. 侧栏「全部 / 未分组」不经深链进入. `/feeds` 的选中态必须 `activeOptions.exact` 且忽略 search, 否则打开 `/feeds/sources` 时「订阅」也会亮.
 
 **入口分流**: 非演员实体进 `/catalog/$kind/$facetId`, 演员进 `/actors/$actorId`, 演员不进入 `/catalog`. `FacetBadge` 默认深链分类, 筛选深链 `/meta`. 结果筛选在 `/meta` (`q` + 各 `*_id`; `saved_query_id` 与其它筛选项 AND, 见 [agent.md](agent.md)).
+
+**评论**: 排序与编辑态只在组件内, 不写地址栏; 楼号按创建顺序固定, 不随排序翻转或编辑变化. 正文用 `pre-wrap`, 时间戳是浅色胶囊 (下划线在中文正文里与着重号混淆, 且品牌填充色在深色卡片上对比不足). 行内操作紧跟时间之后, 只在悬浮该条或焦点进入该条时出现 — 只在 `@media (hover: hover)` 内隐藏, 触摸设备常显, 用 `opacity` 隐藏以免显隐时重排. 评论与关联文件在 `lg`(1200px) 以上并排各占一半, 断点不能降到 `md`, 再窄文件路径会明显截断; 两栏各自保持自然高度, 拉平只会把空白挪进较短的一栏. 详情页内容栈底部留 `10dvh`: 滚到底时末尾的卡片不贴视口底边.
 
 影片详情: 用户标签与刮削标签分栏, 加减菜单一次提交多名 — `POST /api/metadata/batch/user-tags` 是多影片 × 单标签, 不允许一次挂多个.
 
