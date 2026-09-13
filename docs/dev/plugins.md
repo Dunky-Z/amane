@@ -12,6 +12,8 @@
 
 插件是可信的进程内纯 Python: `importlib` 从数据目录加载 `plugin.py`, 与主机共用解释器. 没有进程隔离. 插件不能声明自己的 pip 依赖或原生扩展, 只使用主机已提供的 API (经 `amane.plugin` 与 `context.http_client`).
 
+**插件可以放心 import 标准库**: 桌面打包版按平台收集整个标准库, 只排除依赖包外产物的 GUI 与安装器 (`tkinter`、`turtle`、`idlelib`、`turtledemo`、`ensurepip`, 做法与体积见 [desktop.md](desktop.md)); Docker 与源码运行用的是完整标准库. 不可用的仍是第三方包与原生扩展: 安装时导入失败的模块以可读的 422 报出, 已放好的目录在发现期进入 `failures`.
+
 ## 发现与身份
 
 插件作者只从 `amane.plugin` 导入类型与契约. 主机实现在 `amane.plugins.*` (发现、落盘安装、Factory), 内部代码不允许导入 `amane.plugin`. 这是导入路径上的分层, 不是运行时沙箱. 包内相对导入与绝对导入约定见 [architecture.md](architecture.md).
