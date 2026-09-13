@@ -1,0 +1,225 @@
+/*
+  media-chrome 的控件在 shadow DOM 内, 颜色、尺寸与字体只能经 CSS 变量对接 Mantine 主题.
+  这里按主流播放器的形态组织: 贴底的渐变遮罩承载控件, 进度条独占一行, 按钮不各自画底色.
+*/
+.controller {
+  --media-primary-color: #fff;
+  /* 逐按钮画深色底会让控件在任何画面下都像一块块补丁, 底色交给遮罩. */
+  --media-secondary-color: transparent;
+  --media-control-background: transparent;
+  --media-control-hover-background: rgb(255 255 255 / 0.18);
+  --media-icon-color: #fff;
+  --media-button-padding: 6px 10px;
+  --media-button-icon-width: 22px;
+  --media-button-icon-height: 22px;
+  --media-font-family: var(--mantine-font-family);
+  --media-font-size: 13px;
+  --media-focus-box-shadow: 0 0 0 2px var(--mantine-color-brand-5);
+
+  --media-range-track-height: 3px;
+  --media-range-track-background: rgb(255 255 255 / 0.32);
+  --media-range-track-border-radius: 999px;
+  --media-range-bar-color: var(--mantine-color-brand-4);
+  --media-range-thumb-width: 13px;
+  --media-range-thumb-height: 13px;
+  --media-range-thumb-border-radius: 50%;
+  --media-range-thumb-background: var(--mantine-color-brand-4);
+  --media-range-thumb-box-shadow: 0 0 0 4px rgb(255 255 255 / 0.16);
+  --media-range-thumb-transform: scale(0);
+  --media-range-thumb-transition: transform 0.15s ease-out;
+  --media-time-range-buffered-color: rgb(255 255 255 / 0.4);
+
+  /* 控件不带悬浮说明; 无障碍名称仍由各控件自带的 aria-label 提供. */
+  --media-tooltip-display: none;
+
+  /* 音量浮层与倍速菜单共用的实心底色. */
+  --amane-player-panel-background: rgb(24 24 27);
+  /* 菜单条目自己渲染, 取不到 media-chrome 给自动生成条目用的默认选中底色. */
+  --media-menu-item-checked-background: rgb(255 255 255 / 0.18);
+
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+/* 遮罩独立成层: 控件在播放中会被 media-chrome 淡出, 遮罩随之淡出才不留下一条黑带. */
+.scrim {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 140px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0.32) 42%, rgb(0 0 0 / 0));
+}
+
+/*
+  控制条必须排在进度条之上 (进度条 1, 遮罩 0).
+  控制条带 z-index 会自成层叠上下文, 浮层在其中的 z-index 再高也越不出这一层; 进度条是它的兄弟节点,
+  同层时按 DOM 顺序绘制, 排在后面就会盖住浮层并把指针截走, 浮层悬停中途断掉.
+*/
+.controller media-control-bar {
+  position: relative;
+  z-index: 2;
+  height: 48px;
+  padding-inline: 8px;
+  align-items: center;
+}
+
+/* 把右侧控件推到角落. */
+.barSpacer {
+  flex: 1;
+  pointer-events: none;
+}
+
+/* 音量提示: 键盘调音量与静音时显示在画面中央, 由 React 状态控制显隐. */
+.volumeIndicatorLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.volumeIndicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--amane-player-panel-background);
+  color: #fff;
+  font-family: var(--mantine-font-family);
+  font-size: var(--mantine-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.volumeIndicatorBar {
+  width: 96px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.32);
+}
+
+.volumeIndicatorFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mantine-color-brand-4);
+  transition: width 0.08s linear;
+}
+
+/* 进度条独占一行, 铺满播放器宽度并贴在控制条上方. */
+.controller media-time-range {
+  position: absolute;
+  inset-inline: 12px;
+  bottom: 52px;
+  z-index: 1;
+  height: 16px;
+  /* 控件本身带 `width: 100px` 的默认值, 脱离控制条后必须交回给左右定位决定宽度. */
+  width: auto;
+  min-height: 0;
+}
+
+.controller media-time-range:hover,
+.controller media-time-range:focus-visible {
+  --media-range-track-height: 5px;
+  --media-range-thumb-transform: scale(1);
+}
+
+/*
+  悬停浮层: 音量与倍速都收在按钮上方, 指针进入按钮才展开.
+  浮层与按钮之间留 8px, 这段空隙用浮层自己的伪元素补上, 指针经过时悬停不会中断.
+  两者都不画底色, 滑杆与条目直接叠在画面上, 条目自带悬停与选中底色.
+*/
+.popupHost {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.volumePanel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding: 8px 10px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--amane-player-panel-background);
+  box-shadow: var(--mantine-shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+
+.volumePanel::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: 8px;
+}
+
+.popupHost:hover .volumePanel,
+.popupHost[data-open] .volumePanel {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.controller media-time-display {
+  color: rgb(255 255 255 / 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.controller media-control-bar media-play-button,
+.controller media-control-bar media-mute-button,
+.controller media-control-bar media-fullscreen-button,
+.controller media-control-bar media-playback-rate-menu-button,
+.controller media-control-bar media-captions-menu-button {
+  border-radius: var(--mantine-radius-sm);
+}
+
+/* 画面明亮时图标仍要看得清. */
+.controller media-control-bar media-play-button,
+.controller media-control-bar media-mute-button,
+.controller media-control-bar media-playback-rate-menu-button,
+.controller media-control-bar media-captions-menu-button,
+.controller media-control-bar media-fullscreen-button,
+.controller media-time-display {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+}
+
+/*
+  菜单由前端定位.
+  media-chrome 只在 ResizeObserver 回调里计算菜单位置, 而它在展开时重新 observe 目标元素,
+  浏览器不保证这次重新 observe 会再投递一次回调 —— 实测控制器与菜单都不会收到, 菜单因此停在
+  静态位置 (控制条行内), 大部分被控制器的 overflow: hidden 裁掉.
+  倍速菜单挂在按钮的浮层里, 相对按钮定位; 字幕菜单仍挂在控制条下, 相对控制条右上角定位.
+*/
+.controller media-chrome-menu {
+  position: absolute;
+  left: auto;
+  top: auto;
+  border-radius: var(--mantine-radius-md);
+  background: var(--amane-player-panel-background);
+  box-shadow: var(--mantine-shadow-md);
+  /* 条目自带悬停与选中底色, 实心底色之上仍需区分. */
+  --media-menu-item-hover-background: rgb(255 255 255 / 0.16);
+  /* 菜单自身可滚动; 上限取播放器内的可用高度, 短播放器下也不越出画面. */
+  max-height: min(300px, 55dvh);
+}
+
+.popupHost media-chrome-menu {
+  right: 0;
+  bottom: calc(100% + 8px);
+}
+
+.controller media-control-bar > media-captions-menu {
+  right: 4px;
+  bottom: calc(100% + 20px);
+}

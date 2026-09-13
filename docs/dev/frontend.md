@@ -9,7 +9,7 @@
 | 域 | 路由重心 |
 |----|---------|
 | **Browse** | `/` 对话; `/meta` 片库; `/actors` 演员; `/catalog/...` 分类词云; `/saved-queries/$queryId` 查询结果; `/feeds` 阅读器 (`?feed=` / `?group=`) |
-| **Manage** | `/libraries` `/libraries/$id`; `/plugins` 刮削插件; `/feeds/sources` 订阅源 |
+| **Manage** | `/libraries` `/libraries/$id`; `/plugins` 来源插件; `/feeds/sources` 订阅源 |
 | **Ops** | `/tasks` `/schedules` `/logs` |
 | **Settings** | `/settings` (`?section=` 分组; Schema 表单) |
 
@@ -18,6 +18,9 @@
 **入口分流**: 非演员实体 → `/catalog/$kind/$facetId`; 演员 → `/actors/$actorId`. 结果筛选在 `/meta` (`q` + 各 `*_id`; `saved_query_id` 与其它筛选项 AND, 见 [agent.md](agent.md)). `FacetBadge` 默认 `mode="catalog"` (actor 深链 `/actors/$id`), 筛选深链用 `mode="meta"`. 演员不进入 `/catalog`. 详情出演徽章的性别来自同一次 `Actor` 行查找 (`actor_genders`), 不是 `raw` 里的 `FilmActor`; 仅 `female` / `male` 画符号.
 
 影片详情的用户标签与刮削标签分栏. 加减菜单勾选后保持打开, 底部按钮一次提交多名; 绑定/解绑是前端循环单条 API. `POST /api/metadata/batch/user-tags` 是多影片 × 单标签, 不允许用来给一部影片一次挂多个标签.
+
+影片详情在封面预告片之外播放正片. 面板先只取来源列表 (`GET /api/playback/sources`, 主机不调用插件, 因此立刻渲染), 当前来源的流 (`GET /api/playback/{source_id}/{metadata_id}/streams`) 在挂载时与切换来源时按需加载, 加载期间以等宽占位显示. 一个来源可以给出多条流, 因此有两级选择: 两级都经 `EnumToggle` 平铺 (来源选择器常驻, 流选择器只在所选来源多于一条流时出现), 一级超过 4 项时该级回退为下拉菜单; 切换来源要重置流的选择, 否则会指向另一个来源的 key; 流的名称由主机拼成「来源名 · 流名」, 前端不拆分. 当前不可播的行在选择器中标记为不可用; 不可用项同样可以选中, 选中后不渲染播放器, 原因 (主机给出的 `detail`, 缺失时是通用文案) 显示在红色提示里. 来源列表为空 (没有已启用的播放源) 时整块不渲染; 不向页面外抛出错误. 播放窗口常驻且尺寸由比例决定: 探测中显示占位, 流列表查询失败、选中不可用的流、播放失败与媒体类型不支持都在窗口内居中提示 —— 状态变化不得改变外框尺寸, 否则切换来源时页面高度突变会把滚动位置夹回顶部. `video` 的媒体地址只使用列表给出的本机端点. 码流与字幕均为同源 `/api/playback/...`, 原生 `<video>` 不设置 `crossOrigin` (凭据模式与 `Access-Control-Allow-Origin: *` 不能同时成立). `video/*` 与 HLS 都由 media-chrome 的控制条驱动: HLS (`mpegurl`) 在 Safari 等可原生播放的浏览器采用 `<video src>`, 其它浏览器用 `hls.js` 且 XHR `withCredentials`; 列表给出的 WebVTT 渲染为 `<track>`. 播放器模块经 `React.lazy` 懒加载, 与 `hls.js` 一样不进入主包. 视频区由 `AspectRatio` 固定 16:9, 宽度上限为 `min(100%, calc(72dvh * 16 / 9))` 并居中: 只限制高度会让替换元素的盒子比例宽于素材比例, `object-fit: contain` 于是在左右留黑边. media-chrome 的菜单必须是控制条的子元素并初始带 `hidden`; 位置由前端 CSS 固定在控制条上方 (media-chrome 只在 ResizeObserver 回调里计算位置, 而展开时重新 observe 目标元素不保证再收到回调, 菜单会停在与控制条同一行的静态位置并被 `overflow: hidden` 裁掉). 四个方向键都由前端接管 (media-chrome 的按键处理在松手时才执行一次, 无法按住连续调节): 左右按下即跳 5 秒, 按住 400ms 后把倍速提到 2 倍, 松开、失焦或切换标签页恢复; 上下按住可连续调节音量, 并在画面中央显示音量提示. 因此控制器的 `hotkeys` 关掉这四个键, 其余快捷键仍由 media-chrome 提供. 拖动进度条或音量条期间置 `gesturesdisabled`: 指针若松在画面上, 浏览器会把随后的 click 目标定为控制器 (按下与松开的最近公共祖先), 手势层据此切换播放/暂停. 音量与静音偏好由 media-chrome 写入 `localStorage` (`media-chrome-pref-volume` / `-muted`), 装载时读回; 若要改为不记忆, 给控制器加 `novolumepref` / `nomutedpref`. 倍速与音量收在按钮上方的悬停浮层里: 指针进入按钮即展开, 离开后收起, 浮层用实心底色. 倍速条目由前端渲染 (media-chrome 自带的倍速菜单固定升序, 与「快的在上」相反, 而用 `column-reverse` 反转会让方向键与视觉顺序错位), 菜单按钮经 `invoketarget` 指向它. 音量条是自绘的竖向 Mantine Slider: media-chrome 的 range 只按 `clientX` 取值, 旋转成竖向会拖不准; 浮层内的焦点落在其 shadow DOM, `:focus-within` 在 WebKit 下不匹配宿主, 因此展开由指针与焦点事件驱动. 播放器控件不显示悬浮说明, 无障碍名称仍由 media-chrome 自带的 `aria-label` 提供. 控制条文案取自 media-chrome 自带语言包, 语言在播放器模块加载时与 i18next 对齐, 界面语言切换后要重新挂载播放器才生效. `seekable` 为假的流不渲染进度条, 也不接管方向键. 不允许把上游 URL 或密钥写入前端状态. 播放失败优先展示主机返回的中文 `detail`; 主机没有给出 `detail` 时展示 `hls.js` 致命错误的错误类型、HTTP 状态码与失败地址, 该错误不存在时展示探测响应的 HTTP 状态码. 探测响应为 2xx 时不展示其状态码, 该状态码不含失败信息.
+评论正文里的时间戳是跳转入口: 识别 `mm:ss` 与 `h:mm:ss`, 秒必须是两位 —— 这一条让 `16:9`、`3:2` 这类比例与比分不成为链接. 点击后经路由的 seek 请求传给播放器 (同一秒连点靠请求里的自增序号重新触发), 播放窗口滚进视野, 播放器定位并开始播放; 目标秒数同时写进地址栏 `?t=` (replace, 不堆历史记录), 带该参数打开页面时按它定位. 当前没有可跳转的播放 (没有可播的流、流不可寻址、已出错) 时时间戳置灰, 悬浮说明给出原因.
 
 分类实体页必须是 `catalog.$kind_.$facetId.tsx` (trailing `_`): `$kind` 是词云叶页而非 layout, 写成 `catalog.$kind.$facetId` 会成为无 `<outlet />` 的父路由的子路由, 子页永不渲染.
 
@@ -47,7 +50,7 @@ Tabs 同时挂载全部条目, 叶子 `id`/`htmlFor` 必须经由 `useFieldDomId
 
 可增减 key 的 dict (无 `x-frozen-keys`): 值为空数组 / 空对象 / `null` 的条目与缺席等价, 编码时删除, 条目控件把值清空时也删除该 key. 新增 key 的空默认值仍留在表单上供继续填写, 在写入值之前不构成变更. `x-frozen-keys` 必须保留全部 key, 空列表原样提交 (`content_routes` 的空列表是关停该类型; 缺席会被校验补回默认路由). dirty 与 PATCH 都比较编码后的值.
 
-`/plugins` 通过 `/api/plugins` 取得插件自带 JSON Schema, 单独渲染每个来源配置; 插件配置不进入核心 HotSettings 表单. 安装用 `PathPicker` 选服务器目录/zip, 或上传本机 zip; 重新扫描 / 卸载经由同一资源的 POST/DELETE, 成功后同时失效插件列表与 config schema (路由 enum 会变).
+`/plugins` 通过 `/api/plugins` 取得插件自带 JSON Schema, 单独渲染每个来源配置; 插件配置不进入核心 HotSettings 表单. 页面按能力分区: 声明 `film_metadata` 的进入影片刮削区 (该区链到内容路由设置), 声明 `playback` 的进入播放源区; 同时声明两者的插件在两个分区都列出, 配置仍只有一份, 不进入内容路由. 安装用 `PathPicker` 选服务器目录/zip, 或上传本机 zip; 重新扫描 / 卸载经由同一资源的 POST/DELETE, 成功后同时失效插件列表与 config schema (路由 enum 会变).
 
 任务 / 定时提交用 `DiscriminatedSchemaForm`: 外部选 `type` → schema variant → 去掉 const `type` 后交给 `create` 模式. 短枚举共用 `EnumToggle` (`components/common/enum-toggle.tsx`): 项间分隔线 + 滑动指示; `fullWidth` 占据整行 (任务/定时 type、cron 模式、订阅内容类型), 默认按文案宽度 (Schema 表单短枚举、库放置方式/自动化、间隔单位). 片库 grid/list 等页面 view 切换仍用 SegmentedControl. 定时的 cron 用 `CronPicker`: 可视化覆盖间隔/每天/每周/每月, 无法往返的表达式回落「高级」手写; 产出 5-field, 与后端 croniter 一致. 每天/每周/每月的时刻按浏览器本地墙钟填写, 写出时换算为 UTC 字段 (星期与日期随跨日平移); 间隔不换算; 「高级」手写按 UTC. 定时列表与编辑弹窗按响应里的 `RoutineSubmission` 展示 payload; PATCH 仍只改 name / cron / enabled.
 
