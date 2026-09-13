@@ -31,6 +31,8 @@ ORGANIZE 复制到库路径的 poster / thumb 在 `watermark.enabled` 时按**�
 
 `Metadata.number` 的唯一约束与 `get_metadata_by_number` / `upsert_metadata` 查重均忽略大小写; 命中已有行时不改写库内 `number` 字符串 (保留首次写入的大小写). 新建时按调用方传入原样落库. 调用方那份字符串是否已经过路径解析重写, 见 [crawlers.md](crawlers.md) 番号入参.
 
+同番号多路 SCRAPE (如多 CD) 或同 `Resource.url` 并发入库时, `upsert_metadata` / `ResourceStore.ingest_file` (及 `acquire` / `acquire_derived`) 在 UNIQUE 冲突时回退为读取已有行, 不允许把竞态抬升为任务失败.
+
 ## Library 归属
 
 与 Emby Library 概念对齐: 一个 Library = 一个根目录 + 一组路径模板 + 整理放置方式 (`move_mode`) + 自动化级别 (`automation`: none / watch / scrape) + 发现通道 (`ingest`: native / clouddrive) + 跳过规则 (`trailer_pattern` / `blacklist_patterns` / `min_file_size`). 库始终有效, `automation` 只控制发现侧: 不监控、仅登记、或登记后自动刮削. `ingest=clouddrive` 时必填 `cloud_path` (CloudDrive 虚拟 POSIX 路径), 且不挂 watchdog Observer; 契约见 [watcher.md](watcher.md). **自动整理尚未开放**, 落盘只由手动 ORGANIZE. **每个 `MediaFile` 必须持久关联到唯一 Library** (`MediaFile.library_id` 非空 FK). 库目录落盘只由 ORGANIZE 执行 — 读 `media_file.library_id` 取模板与放置方式, 是归属的唯一真值来源. SCRAPE 用 `media_file_id` 只作查询输入 (番号 / oshash) 与刮削后回写关联, 不移动文件.

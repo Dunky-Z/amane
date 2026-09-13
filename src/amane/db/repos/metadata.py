@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Unpack
 
 from sqlalchemy import func, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql.functions import count
 from sqlmodel import col, select
 
@@ -166,32 +167,39 @@ class MetadataRepoMixin(RepositoryMixinBase):
     ) -> Metadata:
         """查重忽略大小写; 已存在时不改写 number 的原始大小写.
         ``actor_genders`` 只填 ``Actor.gender`` 空位, 不是 Metadata 列.
+        并发新建同番号时 UNIQUE 冲突回退为更新已有行.
         """
         async with self._session() as session:
             stmt = select(Metadata).where(func.lower(Metadata.number) == number.lower())
-            result = await session.exec(stmt)
-            existing = result.first()
-            if existing:
+            existing = (await session.exec(stmt)).first()
+            if existing is None:
+                meta = Metadata(number=number, **kwargs)
+                session.add(meta)
+                try:
+                    await session.flush()
+                    existing = meta
+                except IntegrityError:
+                    await session.rollback()
+                    existing = (await session.exec(stmt)).first()
+                    if existing is None:
+                        raise
+                    for key, value in kwargs.items():
+                        setattr(existing, key, value)
+                    existing.updated_at = _utcnow()
+                    session.add(existing)
+                    await session.flush()
+            else:
                 for key, value in kwargs.items():
                     setattr(existing, key, value)
                 existing.updated_at = _utcnow()
                 session.add(existing)
                 await session.flush()
-                await clean_actor_names(session, existing, actor_genders)
-                await apply_facet_rules_to_metadata(session, existing)
-                await sync_metadata_facets(session, existing)
-                await session.commit()
-                await session.refresh(existing)
-                return existing
-            meta = Metadata(number=number, **kwargs)
-            session.add(meta)
-            await session.flush()
-            await clean_actor_names(session, meta, actor_genders)
-            await apply_facet_rules_to_metadata(session, meta)
-            await sync_metadata_facets(session, meta)
+            await clean_actor_names(session, existing, actor_genders)
+            await apply_facet_rules_to_metadata(session, existing)
+            await sync_metadata_facets(session, existing)
             await session.commit()
-            await session.refresh(meta)
-            return meta
+            await session.refresh(existing)
+            return existing
 
     async def update_metadata(
         self,
