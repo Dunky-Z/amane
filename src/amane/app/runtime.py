@@ -328,10 +328,10 @@ def build_handlers(
     # 译文缓存是会话级, 热重载时复用同一实例.
     translator = build_translator(
         enabled=hot.llm.enabled,
+        api_type=hot.llm.api_type,
         api_key=hot.llm.api_key,
         base_url=hot.llm.base_url,
         model=hot.llm.model,
-        max_retries=hot.llm.max_retries,
         rate_limit=hot.llm.rate_limit,
         proxy=hot.network.proxy,
         system_prompt=hot.llm.system_prompt,

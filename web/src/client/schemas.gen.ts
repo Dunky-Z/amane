@@ -504,16 +504,6 @@ export const ActorUpdateRequestSchema = {
     title: 'ActorUpdateRequest'
 } as const;
 
-export const AgentApiTypeSchema = {
-    type: 'string',
-    enum: [
-        'chat',
-        'response',
-        'anthropic'
-    ],
-    title: 'AgentApiType'
-} as const;
-
 export const AgentApproveRequestSchema = {
     properties: {
         approval_ids: {
@@ -558,7 +548,7 @@ export const AgentCancelResponseSchema = {
 export const AgentConfigSchema = {
     properties: {
         api_type: {
-            $ref: '#/components/schemas/AgentApiType',
+            $ref: '#/components/schemas/ApiType',
             default: 'response'
         },
         api_key: {
@@ -844,6 +834,16 @@ export const AgentTraceResponseSchema = {
         'events'
     ],
     title: 'AgentTraceResponse'
+} as const;
+
+export const ApiTypeSchema = {
+    type: 'string',
+    enum: [
+        'chat',
+        'response',
+        'anthropic'
+    ],
+    title: 'ApiType'
 } as const;
 
 export const Body_install_pluginSchema = {
@@ -2432,9 +2432,9 @@ export const HotSettingsSchema = {
                     'plot'
                 ],
                 field_prompts: {},
+                api_type: 'chat',
                 base_url: 'https://api.openai.com/v1',
                 model: '',
-                max_retries: 3,
                 rate_limit: 2
             }
         },
@@ -2546,6 +2546,10 @@ export const LLMConfigSchema = {
             ],
             title: 'Api Key'
         },
+        api_type: {
+            $ref: '#/components/schemas/ApiType',
+            default: 'chat'
+        },
         base_url: {
             type: 'string',
             title: 'Base Url',
@@ -2555,13 +2559,6 @@ export const LLMConfigSchema = {
             type: 'string',
             title: 'Model',
             default: ''
-        },
-        max_retries: {
-            type: 'integer',
-            maximum: 10,
-            minimum: 0,
-            title: 'Max Retries',
-            default: 3
         },
         rate_limit: {
             type: 'number',

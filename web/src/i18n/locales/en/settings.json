@@ -540,15 +540,20 @@
         "label": "API Key",
         "description": ""
       },
+      "api_type": {
+        "label": "API Type",
+        "options": {
+          "chat": "Chat",
+          "response": "Responses",
+          "anthropic": "Anthropic"
+        }
+      },
       "base_url": {
         "label": "API Endpoint",
         "description": "OpenAI-compatible API base URL"
       },
       "model": {
         "label": "Model"
-      },
-      "max_retries": {
-        "label": "Max Retries"
       },
       "rate_limit": {
         "label": "Max requests per second"

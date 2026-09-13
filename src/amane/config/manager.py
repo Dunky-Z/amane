@@ -21,7 +21,15 @@ from ..crawlers.site_roles import (
     site_list_value_schema,
 )
 from ..crawlers.sites.official import Manufacturer
-from ..enums import DownloadableResource, Language, MetadataField, SiteName, WatermarkCorner, WatermarkKind
+from ..enums import (
+    ApiType,
+    DownloadableResource,
+    Language,
+    MetadataField,
+    SiteName,
+    WatermarkCorner,
+    WatermarkKind,
+)
 from ..parsing import ContentType
 from ..plugins.models import PluginConfig
 from ..sr import SrPreset
@@ -521,9 +529,9 @@ class LLMConfig(BaseModel):
     api_key: str | None = None
     """为空时即使 enabled 也不翻译."""
 
+    api_type: ApiType = ApiType.CHAT
     base_url: str = "https://api.openai.com/v1"
     model: str = ""
-    max_retries: int = Field(default=3, ge=0, le=10)
     rate_limit: float = Field(default=2.0, ge=0.1, le=100)
     """与站点限速隔离."""
 
@@ -542,12 +550,6 @@ class LLMConfig(BaseModel):
         return {field: text.strip() for field, text in value.items() if text.strip()}
 
 
-class AgentApiType(StrEnum):
-    CHAT = "chat"
-    RESPONSE = "response"
-    ANTHROPIC = "anthropic"
-
-
 class AgentThinkingMode(StrEnum):
     """会话可覆盖; 全局为新建会话的回退默认."""
 
@@ -562,7 +564,7 @@ class AgentThinkingMode(StrEnum):
 class AgentConfig(BaseModel):
     """与 llm 翻译 section 分离: 凭据/模型/限速各自独立."""
 
-    api_type: AgentApiType = AgentApiType.RESPONSE
+    api_type: ApiType = ApiType.RESPONSE
     api_key: str | None = None
     base_url: str = "https://api.openai.com/v1"
     """可指向自建/第三方代理; anthropic 须填 Anthropic 端点."""
