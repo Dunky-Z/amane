@@ -1,6 +1,9 @@
 ---
 emoji: "🔧"
 on:
+  # 标签事件只认 retriage 一个命令标签. 其余标签虽仍会生成 run 记录 (GitHub 无法在
+  # on: 层按标签名过滤), 但条件落在 pre_activation 上, 全 job 跳过, 不启动 runner.
+  labels: [retriage]
   issues:
     types: [opened, reopened, labeled]
   # issues 属"不安全触发", gh-aw 默认只允许 admin/maintainer/write 触发.
@@ -24,15 +27,8 @@ on:
       if: github.event_name == 'issues'
       env:
         LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
-        ADDED_LABEL: ${{ github.event.label.name }}
-      run: |
-        if [ -n "$ADDED_LABEL" ]; then
-          # 标签事件: 只有 retriage 这一个命令标签才放行
-          test "$ADDED_LABEL" = "retriage"
-        else
-          # 新开/重开: 无标签的 issue 交给其他自动化流程处理
-          test "$LABELS" != "[]"
-        fi
+      # 无标签的 issue 由 Issues 工作流按"未走模板"关闭, 不归分诊处理.
+      run: test "$LABELS" != "[]"
 concurrency:
   job-discriminator: ${{ github.event.issue.number || github.run_id }}
 permissions:
