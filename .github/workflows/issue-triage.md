@@ -40,7 +40,7 @@ permissions:
   issues: read
 engine:
   id: copilot
-  model: deepseek/deepseek-v4.1-flash
+  model: deepseek/deepseek-v4.1-flash?effort=high
   env:
     COPILOT_PROVIDER_BASE_URL: ${{ secrets.LLM_BASE_URL }}
     COPILOT_MODEL: deepseek/deepseek-v4.1-flash
@@ -74,15 +74,19 @@ tools:
   # 只给只读命令, 与"阅读边界"一致: 读文档可以, 动手不行.
   bash: ["cat", "ls", "find", "grep", "head", "tail", "wc"]
   github:
-    toolsets: [issues, labels]
+    toolsets: [issues, labels, repos]
     # 公开仓库默认 min-integrity=approved, 只放行 OWNER/MEMBER/COLLABORATOR 的内容.
     # 本流程的职责就是读外部用户提的 issue, 因此必须放到最低档 none.
     # 安全性由其余层级兜底: agent 只读, 写操作走 safe-outputs 白名单, 且有威胁检测.
     min-integrity: none
     # 限定只读写本仓库, 避免模型跑去查别的仓库
     allowed-repos: ["sqzw-x/amane"]
-    # 逐个工具收紧, 与 max-turns 共同兜住失控调用
+    # 逐个工具收紧, 与 max-turns 共同兜住失控调用.
+    # search_repositories 必须有: 模型会用它取仓库元信息, 不给就对着 unknown tool
+    # 反复重试 (实测 90 次), 白烧掉大半 token.
     allowed:
+      - name: search_repositories
+        max-calls: 2
       - name: issue_read
         max-calls: 8
       - name: search_issues
