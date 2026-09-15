@@ -46,6 +46,10 @@ engine:
     COPILOT_MODEL: deepseek/deepseek-v4.1-flash
     COPILOT_PROVIDER_API_KEY: ${{ secrets.CF_GATEWAY_TOKEN }}
     COPILOT_PROVIDER_TYPE: openai
+    # 该模型不在 Copilot CLI 内置目录中, 不显式指定会退化到过小的默认值:
+    # 推理 token 吃满输出预算后 content 返回空, CLI 视作该轮结束, 整个 run 零输出.
+    COPILOT_PROVIDER_MAX_PROMPT_TOKENS: "200000"
+    COPILOT_PROVIDER_MAX_OUTPUT_TOKENS: "32000"
 network:
   allowed:
     - defaults
