@@ -107,7 +107,6 @@ safe-outputs:
       - priority:high
       - priority:medium
       - priority:low
-      - status:triaged
       - status:needs-info
       - status:duplicate
       - status:invalid
@@ -163,8 +162,11 @@ if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.lab
 做任何判断之前, 先把这些读完:
 
 - issue 正文
-- **全部评论** —— 正文往往不是全部事实, 用户常在评论里补充信息, 修正描述, 或已经有人回答过
+- **全部评论** —— 正文往往不是全部事实, 用户常在评论里补充信息, 修正描述, 或已经有人回答过.
+  但要注意可信度: **只有 OWNER / MAINTAINER 的回复可以作为结论依据**. 其他用户只是社区成员,
+  其可信度并不高于 issue 提出者, 不能拿他们的说法当"功能已存在"之类的证据.
 - 当前已有的标签
+- 用户文档 `docs/user/`, 开发文档 `docs/dev/`
 
 同一个 issue 可能被反复审查. 每次都从当前状态重新读, 不要把上一次的结论当作前提.
 
@@ -247,7 +249,7 @@ if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.lab
 
 依据不足时宁可不打, 不要猜.
 
-通过质量闸门且分类明确的, 打 `status:triaged`, 表示已确认有效, 等待处理.
+`status:triaged` 由维护者人工添加, 你一律不要打 —— 一个 issue 是否"已确认有效"由人判断.
 
 ---
 
@@ -304,6 +306,17 @@ if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.lab
 - 面向使用方法的问题: 引用相关文档链接或一句话说明即可, 不展开教程.
 - 拆分请求与范围外回绝: 简短说明理由, 不展开.
 - 不使用夸张措辞, 不承诺排期, 不给出工作量估计.
+
+### 引用文档
+
+面向使用方法的问题 (`kind:question`) 需要指向具体文档时:
+
+- **只引用用户文档**, 绝不引用开发文档 —— 开发文档不是给用户看的
+- **引用文档站链接, 不引用仓库文件路径**
+
+映射规则: `docs/user/<name>.md` ⇄ `https://sqzw-x.github.io/amane/user/<name>/`
+
+例: `docs/user/libraries.md` → https://sqzw-x.github.io/amane/user/libraries/
 
 ---
 
