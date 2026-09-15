@@ -24,11 +24,13 @@ on:
   steps:
     - name: Gate on labels
       id: label_check
-      if: github.event_name == 'issues'
+      # 无标签的 issue 由 Issues 工作流按"未走模板"关闭, 不归分诊处理.
+      # 条件写在 if 里而非 exit code: 步骤跳过时 outcome 是 skipped,
+      # pre_activation 不会因此判失败, 整条 run 保持绿色.
+      if: github.event_name == 'issues' && github.event.issue.labels[0] != null
       env:
         LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
-      # 无标签的 issue 由 Issues 工作流按"未走模板"关闭, 不归分诊处理.
-      run: test "$LABELS" != "[]"
+      run: 'echo "issue 标签 $LABELS"'
 concurrency:
   job-discriminator: ${{ github.event.issue.number || github.run_id }}
 permissions:
