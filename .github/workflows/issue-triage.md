@@ -66,8 +66,29 @@ max-ai-credits: 15
 max-turns: 20
 timeout-minutes: 10
 tools:
+  # min-integrity=none 时 gh-aw 强制要求显式声明 bash, 使 shell 访问是有意为之.
+  # 只给只读命令, 与"阅读边界"一致: 读文档可以, 动手不行.
+  bash: ["cat", "ls", "find", "grep", "head", "tail", "wc"]
   github:
     toolsets: [issues, labels]
+    # 公开仓库默认 min-integrity=approved, 只放行 OWNER/MEMBER/COLLABORATOR 的内容.
+    # 本流程的职责就是读外部用户提的 issue, 因此必须放到最低档 none.
+    # 安全性由其余层级兜底: agent 只读, 写操作走 safe-outputs 白名单, 且有威胁检测.
+    min-integrity: none
+    # 限定只读写本仓库, 避免模型跑去查别的仓库
+    allowed-repos: ["sqzw-x/amane"]
+    # 逐个工具收紧, 与 max-turns 共同兜住失控调用
+    allowed:
+      - name: issue_read
+        max-calls: 8
+      - name: search_issues
+        max-calls: 3
+      - name: list_issues
+        max-calls: 2
+      - name: list_label
+        max-calls: 1
+      - name: get_label
+        max-calls: 1
 safe-outputs:
   # 手动触发时由 dry_run 输入决定; 自动触发时 inputs 为空, 即正常落地.
   staged: ${{ inputs.dry_run }}
