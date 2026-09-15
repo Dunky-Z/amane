@@ -134,6 +134,9 @@ safe-outputs:
     # 重复审查同一 issue 时, 把本流程先前发的评论折叠为 outdated, 避免堆叠
     hide-older-comments: true
     allowed-reasons: [outdated]
+  threat-detection:
+    # 默认 400 过于宽松. 实测检测单次约 1 AIC, 10 有约 10 倍余量.
+    max-ai-credits: 10
 if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.label_check_result == 'success'
 ---
 
