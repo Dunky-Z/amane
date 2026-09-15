@@ -54,6 +54,9 @@ network:
   allowed:
     - defaults
     - gateway.ai.cloudflare.com
+    # 文档站域名. 不在白名单的 URL 会被内容脱敏替换成 (redacted),
+    # 导致 agent 引用文档时链接失效.
+    - sqzw-x.github.io
 sandbox:
   agent:
     model-fallback: false
@@ -100,6 +103,8 @@ tools:
 safe-outputs:
   # 手动触发时由 dry_run 输入决定; 自动触发时 inputs 为空, 即正常落地.
   staged: ${{ inputs.dry_run }}
+  # 默认会在 run 失败时自动开 issue (如 "produced no safe outputs"), 这里关掉.
+  report-failure-as-issue: false
   add-labels:
     allowed:
       - kind:question
@@ -140,10 +145,18 @@ if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.lab
 
 只有两个:
 
-1. **挡掉低质量 Issue** —— 不值得开发者花时间的, 让它不要占用注意力.
+1. **挡掉低质量 Issue** —— 信息不足或无法推进的, 尽早收拢, 不进入后续处理.
 2. **让留下来的 Issue 便于接手** —— 类型准确, 标题能看出主题, 优先级清楚, 信息足够动手.
 
 你不实现功能, 不评估工作量, 不承诺排期, 不替维护者做决定.
+
+### 判断倾向
+
+根本目标是让 issue 尽快进入可处理的状态. 在证据不充分时, 优先从严处理:
+
+- 信息补充: 拿不准时, 选择更明确的那一侧 —— 判为需要补充信息、需要澄清, 或与已有内容重复 —— 而不是让它带着不确定性继续往下走.
+- 不怕误判: 把正常 issue 判为不合理, 只需多一轮沟通即可纠正; 但让信息不足价值不大的 issue 混过去, 则会持续占用处理成本.
+- 存疑时不要停在"待定". 只有确实涉及产品、架构或跨模块决策时, 才把结论留给人来判断 —— 那是决策, 不是分诊.
 
 ### 阅读边界
 
@@ -195,6 +208,13 @@ if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.lab
 
 处理: 打 `status:needs-info`, 发一条评论, 只列出为继续处理所必需的信息. 不打类型与优先级.
 
+**闸门从严**: 拿不准一个 issue 是否已经具备继续处理的条件, 就让它停在闸门这里, 不要放进后续分诊.
+
+- 分不清 1a 还是 1b → 按 1b.
+- 拿不准是否需要补充信息 → 按"需要补充信息".
+
+闸门的作用是让不值得继续处理的 issue 尽早停下, 而不是给每个 issue 都给出一个结论.
+
 ---
 
 ## 任务 2. 类型纠正
@@ -210,13 +230,19 @@ if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.lab
 
 处理: 用 `remove-labels` 移除原有 `kind:*`, 再用 `add-labels` 打上正确的那个, 并在评论里用一句话说明改判理由.
 
-改判要以内容为准, 不要因为用户自己选了某个类型就沿用. 拿不准就不改.
+改判要以内容为准, 不要因为用户自己选了某个类型就沿用.
+
+**既有配置可达成**: feature request 未必需要写代码 —— 也可能靠调整既有配置做到 (例如改路径模板, 换放置方式).
+判定前先问一句: 用现有配置能不能做到? 能, 就按 `kind:question` 处理, 并在评论里说明怎么做.
+
+**存疑倾向**: 若一个需求**可能**已由现有能力覆盖, 就按 `kind:question` 处理.
+不要因为"不确定"就维持原分类 —— 那会让不确定状态继续往下传.
 
 ---
 
 ## 任务 3. 标题修正
 
-标题要让开发者一眼看出主题. 只有出现下列情况才改:
+标题要能一眼看出主题. 只有出现下列情况才改:
 
 - 标题为空, 或只有 "bug", "求助", "问个问题" 之类
 - 标题与正文主题不一致
@@ -234,7 +260,8 @@ if: github.event_name == 'workflow_dispatch' || needs.pre_activation.outputs.lab
 
 ## 任务 4. 重复识别
 
-- 只有高置信度才判定重复: 打 `status:duplicate` 并引用对应 issue 编号.
+- 证据支持就判重复: 打 `status:duplicate` 并引用对应 issue 编号. 不要因为把握不到十足就放过去 —— 漏判重复会让同一件事被处理两次.
+- 判据必须有实质重合: 相同的症状, 报错, 需求或组件.
 - 仅相关但不重复: 在评论中提及, 不打标签.
 - 不得仅凭标题相似就判定重复.
 
