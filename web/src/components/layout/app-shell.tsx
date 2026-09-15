@@ -101,7 +101,7 @@ function isNavActive(pathname: string, to: string, end = false): boolean {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-function NavItemLink({ item }: { item: NavItem }) {
+function NavItemLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const { t } = useTranslation("common");
   const { pathname } = useLocation();
   const Icon = item.icon;
@@ -114,6 +114,7 @@ function NavItemLink({ item }: { item: NavItem }) {
       leftSection={<Icon size={18} stroke={1.6} />}
       active={isNavActive(pathname, item.to, item.end)}
       variant="filled"
+      onClick={onNavigate}
       style={{ borderRadius: "var(--mantine-radius-md)" }}
     />
   );
@@ -215,12 +216,15 @@ function HeaderSearch() {
 
   // 快捷入口: 已在片库页时隐藏, 避免与页内搜索重复
   if (location.pathname === "/meta" || location.pathname.startsWith("/meta/")) {
-    return <div style={{ flex: 1 }} />;
+    return <div style={{ flex: 1, minWidth: 0 }} />;
   }
 
   return (
-    <form
-      style={{ flex: 1, maxWidth: 480, marginLeft: 24 }}
+    // 窄屏顶栏放不下搜索框, 入口回落到片库页内搜索.
+    <Box
+      component="form"
+      visibleFrom="sm"
+      style={{ flex: 1, minWidth: 0, maxWidth: 480, marginLeft: 24 }}
       onSubmit={(e) => {
         e.preventDefault();
         const q = value.trim();
@@ -235,7 +239,7 @@ function HeaderSearch() {
         leftSection={<IconSearch size={16} />}
         radius="md"
       />
-    </form>
+    </Box>
   );
 }
 
@@ -255,12 +259,13 @@ function HeaderBrand() {
           <Title order={4}>{APP_NAME}</Title>
         </Group>
       </Link>
-      <VersionMenu />
+      {/* 窄屏顶栏只保留品牌与图标动作, 版本号在侧栏内呈现; 不加包装元素, 避免改变宽屏下的行内基线. */}
+      <VersionMenu visibleFrom="sm" />
     </Group>
   );
 }
 
-function GithubLink() {
+function GithubLink({ visibleFrom }: { visibleFrom?: "sm" }) {
   const { t } = useTranslation("common");
 
   return (
@@ -273,6 +278,7 @@ function GithubLink() {
         variant="subtle"
         color="gray"
         size="lg"
+        visibleFrom={visibleFrom}
         aria-label={t("about.github")}
       >
         <IconBrandGithub size={18} />
@@ -283,7 +289,7 @@ function GithubLink() {
 
 export function AppShellLayout(): ReactNode {
   const { t } = useTranslation("common");
-  const [mobileOpened, { toggle: toggleMobile }] = useDisclosure(false);
+  const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false);
   const desktopCollapsed = useUIStore((s) => s.navbarCollapsed);
   const toggleDesktop = useUIStore((s) => s.toggleNavbar);
 
@@ -320,7 +326,8 @@ export function AppShellLayout(): ReactNode {
             <ConnectionIndicator />
             <ThemeToggle />
             <LanguageMenu />
-            <GithubLink />
+            {/* 窄屏顶栏放不下外链, 该入口收进侧栏底部. */}
+            <GithubLink visibleFrom="sm" />
           </Group>
         </Group>
       </AppShell.Header>
@@ -340,13 +347,23 @@ export function AppShellLayout(): ReactNode {
                 {t(group.labelKey)}
               </Text>
               {group.items.map((item) => (
-                <NavItemLink key={item.to} item={item} />
+                <NavItemLink key={item.to} item={item} onNavigate={closeMobile} />
               ))}
             </div>
           ))}
         </ScrollArea>
         <Divider mb="sm" />
-        <NavItemLink item={{ to: "/settings", labelKey: "nav.settings", icon: IconSettings }} />
+        <NavItemLink
+          item={{ to: "/settings", labelKey: "nav.settings", icon: IconSettings }}
+          onNavigate={closeMobile}
+        />
+        {/* 窄屏顶栏放不下版本与外链, 收进侧栏底部. */}
+        <Group hiddenFrom="sm" gap="xs" px="xs" pt="sm" wrap="nowrap">
+          <VersionMenu />
+          <Box ml="auto">
+            <GithubLink />
+          </Box>
+        </Group>
       </AppShell.Navbar>
 
       <AppShell.Main>
