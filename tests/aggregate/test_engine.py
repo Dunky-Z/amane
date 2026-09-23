@@ -21,7 +21,7 @@ from amane.enums import ActorGender, Language, MetadataField, SiteName
 S1, S2, S3 = SiteName.JAVDB, SiteName.DMM, SiteName.JAVBUS
 K1, K2, K3 = str(S1), str(S2), str(S3)
 DB, DMM, BUS, OFF = SiteName.JAVDB, SiteName.DMM, SiteName.JAVBUS, SiteName.OFFICIAL
-PLUGIN = "sample.javdbapi"
+PLUGIN = "example.source"
 
 IQQTV = SiteName.IQQTV
 TITLE = MetadataField.TITLE
@@ -572,7 +572,7 @@ class TestExecuteGraph:
         expect_failed: list[str],
     ) -> None:
         """路由里有但 crawlers 映射没有的来源 (禁用插件等) 跳过, 不记失败, 沿 fallback 继续."""
-        plugin = "sample.javdbapi"
+        plugin = "example.source"
         fp = defaultdict(lambda: [plugin, DB, DMM])
         graph = build_graph(fp, {})
         crawlers = {
@@ -655,7 +655,7 @@ class TestAggregate:
     @pytest.mark.asyncio
     async def test_unavailable_source_skipped_not_failed(self):
         """禁用/缺失来源不写入 failed_sites, 后续源仍可聚合."""
-        plugin = "sample.javdbapi"
+        plugin = "example.source"
         result = await aggregate(
             SearchQuery("X"),
             {K1: MockCrawler(MediaMetadata(number="X", title="FromJavDB"))},
@@ -683,6 +683,27 @@ class TestAggregate:
         assert result.metadata.title == "Cached"
         assert result.metadata.studio == "CS"
         assert "javdb" in result.raw
+
+    @pytest.mark.asyncio
+    async def test_plot_normalized_on_fetch(self):
+        """长文本在聚合出口收成纯文本, raw 快照与字段值一致."""
+        crawler = MockCrawler(result=MediaMetadata(number="X", title="T", plot="前戏<br>高潮<br><br>尾声 &amp; 至此"))
+
+        result = await aggregate(SearchQuery("X"), {K1: crawler}, defaultdict(lambda: [DB]))
+
+        assert result.metadata.plot == "前戏\n高潮\n\n尾声 & 至此"
+        assert result.raw["javdb"]["plot"] == result.metadata.plot
+
+    @pytest.mark.asyncio
+    async def test_plot_normalized_on_cache_hit(self):
+        """快照复用同样过归一: 旧快照里的 HTML 不会绕过出口."""
+        crawler = MockCrawler(result=_full_metadata(number="X"))
+        snapshot = _full_metadata(number="X", title="Cached", plot="旧<br>快照").model_dump()
+
+        result = await aggregate(SearchQuery("X"), {K1: crawler}, defaultdict(lambda: [DB]), cache={"javdb": snapshot})
+
+        assert len(crawler.fetch_calls) == 0
+        assert result.metadata.plot == "旧\n快照"
 
 
 # ============================================================

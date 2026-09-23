@@ -12,6 +12,7 @@ from .libraries import router as libraries_router
 from .llm import router as llm_router
 from .media import router as media_router
 from .metadata import router as metadata_router
+from .playback import router as playback_router
 from .plugins import router as plugins_router
 from .resources import router as resources_router
 from .schedules import router as schedules_router
@@ -29,6 +30,7 @@ router.include_router(files_router)
 router.include_router(media_router)
 router.include_router(metadata_router)
 router.include_router(llm_router)
+router.include_router(playback_router)
 router.include_router(plugins_router)
 router.include_router(actors_router)
 router.include_router(facets_router)

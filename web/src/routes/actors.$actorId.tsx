@@ -386,7 +386,8 @@ function ActorHero({
         )}
       </Box>
 
-      <Stack gap="sm" style={{ flex: 1, minWidth: 0 }}>
+      {/* basis 不能为 0: 换行按 flex-basis 判定, 取 0 时信息列永不换行, 窄屏只会被压成几十像素宽. */}
+      <Stack gap="sm" style={{ flex: "1 1 20rem", minWidth: 0 }}>
         <Group gap="sm" align="center">
           <Title order={2}>{actor.name}</Title>
           <Badge size="lg" variant="light">
@@ -551,7 +552,6 @@ function AliasTags({
   values: string[];
   onSetDisplay: (alias: string) => void;
 }) {
-  const { t } = useTranslation(["metadata", "common"]);
   return (
     <Group gap={6}>
       {values.map((value) => (
@@ -560,7 +560,6 @@ function AliasTags({
           variant="light"
           size="compact-sm"
           style={{ textTransform: "none", fontWeight: 500 }}
-          title={t("actors.setDisplayName")}
           rightSection={<IconStar size={12} />}
           onClick={() => onSetDisplay(value)}
         >

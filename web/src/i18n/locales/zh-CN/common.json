@@ -9,6 +9,8 @@
     "reset": "重置",
     "discard": "放弃更改",
     "retry": "重试",
+    "close": "关闭",
+    "filters": "筛选与搜索",
     "confirm": "确认",
     "browse": "浏览",
     "saving": "保存中...",
@@ -21,7 +23,9 @@
     "scrapeNormal": "刮削",
     "scrapeNormalDesc": "不重新抓取已缓存数据",
     "scrapeForce": "强制刮削",
-    "scrapeForceDesc": "重新抓取全部来源(覆盖缓存)"
+    "scrapeForceDesc": "重新抓取全部来源(覆盖缓存)",
+    "moveUp": "上移",
+    "moveDown": "下移"
   },
   "status": {
     "loading": "加载中...",
@@ -34,10 +38,11 @@
   },
   "nav": {
     "library": "媒体库",
-    "plugins": "刮削插件",
+    "plugins": "插件",
     "tasks": "任务",
     "schedules": "定时任务",
     "settings": "设置",
+    "client": "客户端设置",
     "logs": "日志",
     "meta": "片库",
     "actors": "演员",
@@ -51,6 +56,12 @@
       "manage": "管理",
       "ops": "运行"
     }
+  },
+  "defaults": {
+    "set": "设为默认",
+    "clear": "清除默认",
+    "saved": "已设为默认",
+    "cleared": "已清除默认"
   },
   "theme": {
     "light": "浅色",
@@ -66,7 +77,8 @@
     "totalItems": "(共 {{count}} 条)",
     "range": "第 {{start}}–{{end}} 条，共 {{total}} 条",
     "pageSizeShort": "{{size}}/页",
-    "loadedOfTotal": "已加载 {{loaded}} / {{total}}"
+    "loadedOfTotal": "已加载 {{loaded}} / {{total}}",
+    "pageOf": "第 {{page}} / {{total}} 页"
   },
   "validation": {
     "invalid": "无效值",
@@ -114,6 +126,7 @@
     "facetDeleted": "分类已删除并加入黑名单",
     "facetRuleDeleted": "规则已移除",
     "commentCreated": "评论已发表",
+    "commentUpdated": "评论已保存",
     "commentDeleted": "评论已删除"
   },
   "batch": {
@@ -137,6 +150,7 @@
     "title": "需要登录",
     "description": "桌面端可点击菜单栏/任务栏图标 - 复制 API Token, 容器端可在数据目录的 token 文件中查看",
     "tokenPlaceholder": "粘贴令牌",
+    "serverSettings": "服务器设置",
     "invalidToken": "令牌无效，请检查后重试。",
     "connectionFailed": "无法连接服务器，请确认服务已启动。"
   }
