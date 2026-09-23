@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Amane API",
-    "version": "0.12.0"
+    "version": "0.16.1"
   },
   "paths": {
     "/api/health": {
@@ -1406,6 +1406,561 @@
         }
       }
     },
+    "/api/playback/sources": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "List Playback Sources",
+        "description": "列出可选的播放源; 不调用插件, 因此不发任何上游请求.",
+        "operationId": "list_playback_sources",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSourceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/streams": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "List Playback Streams",
+        "description": "探测一个来源在这个条目上的流.\n\n由前端在切到该来源时调用, 因此没有人工预算: 慢就慢在用户等待的那一次, 结果按来源与条目缓存\n一小段时间, 来回切换不重复探测. 探测失败也是一行不可用记录, 前端按 ``detail`` 显示原因.",
+        "operationId": "list_playback_streams",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackStreamListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/index.m3u8": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Metadata Playlist",
+        "operationId": "play_metadata_playlist",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/streams/{key}/index.m3u8": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Stream Playlist",
+        "operationId": "play_stream_playlist",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,64}$",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/hls/{token}": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Metadata Hls Part",
+        "operationId": "play_metadata_hls_part",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/streams/{key}/hls/{token}": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Stream Hls Part",
+        "operationId": "play_stream_hls_part",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,64}$",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/subtitles/{track_id}": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Metadata Subtitle",
+        "operationId": "play_metadata_subtitle",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,64}$",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/streams/{key}/subtitles/{track_id}": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Stream Subtitle",
+        "operationId": "play_stream_subtitle",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,64}$",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,64}$",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Metadata",
+        "operationId": "play_metadata",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playback/{source_id}/{metadata_id}/streams/{key}": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play Stream",
+        "operationId": "play_stream",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Metadata Id"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,64}$",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins": {
       "get": {
         "tags": [
@@ -2717,6 +3272,15 @@
             }
           },
           {
+            "name": "read",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/FeedItemReadState",
+              "default": "all"
+            }
+          },
+          {
             "name": "feed_id",
             "in": "query",
             "required": false,
@@ -3003,6 +3567,15 @@
             "schema": {
               "$ref": "#/components/schemas/FeedItemState",
               "default": "active"
+            }
+          },
+          {
+            "name": "read",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/FeedItemReadState",
+              "default": "all"
             }
           },
           {
@@ -5614,15 +6187,6 @@
         "type": "object",
         "title": "ActorUpdateRequest"
       },
-      "AgentApiType": {
-        "type": "string",
-        "enum": [
-          "chat",
-          "response",
-          "anthropic"
-        ],
-        "title": "AgentApiType"
-      },
       "AgentApproveRequest": {
         "properties": {
           "approval_ids": {
@@ -5665,7 +6229,7 @@
       "AgentConfig": {
         "properties": {
           "api_type": {
-            "$ref": "#/components/schemas/AgentApiType",
+            "$ref": "#/components/schemas/ApiType",
             "default": "response"
           },
           "api_key": {
@@ -5943,6 +6507,15 @@
         ],
         "title": "AgentTraceResponse"
       },
+      "ApiType": {
+        "type": "string",
+        "enum": [
+          "chat",
+          "response",
+          "anthropic"
+        ],
+        "title": "ApiType"
+      },
       "Body_install_plugin": {
         "properties": {
           "file": {
@@ -6086,27 +6659,13 @@
             "title": "Body"
           },
           "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "format": "date-time",
             "title": "Created At"
           },
           "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "format": "date-time",
             "title": "Updated At"
           }
         },
@@ -6114,7 +6673,9 @@
         "required": [
           "id",
           "metadata_id",
-          "body"
+          "body",
+          "created_at",
+          "updated_at"
         ],
         "title": "CommentResponse"
       },
@@ -6431,6 +6992,7 @@
           "age_verification",
           "empty_response",
           "no_usable_metadata",
+          "parse_error",
           "crawler_unavailable",
           "unexpected"
         ],
@@ -6498,6 +7060,13 @@
             "type": "array",
             "uniqueItems": true,
             "title": "Use Cache"
+          },
+          "ignore_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ignore Keywords"
           }
         },
         "type": "object",
@@ -6511,6 +7080,8 @@
         "enum": [
           "ignore",
           "unignore",
+          "read",
+          "unread",
           "delete",
           "scrape"
         ],
@@ -6592,6 +7163,15 @@
           "total"
         ],
         "title": "FeedItemListResponse"
+      },
+      "FeedItemReadState": {
+        "type": "string",
+        "enum": [
+          "unread",
+          "read",
+          "all"
+        ],
+        "title": "FeedItemReadState"
       },
       "FeedItemResponse": {
         "properties": {
@@ -6679,6 +7259,18 @@
               }
             ],
             "title": "Ignored At"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
           },
           "metadata_id": {
             "anyOf": [
@@ -6790,6 +7382,13 @@
             "type": "array",
             "title": "Use Cache"
           },
+          "ignore_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ignore Keywords"
+          },
           "next_fetch_at": {
             "anyOf": [
               {
@@ -6828,6 +7427,11 @@
           "last_enqueued": {
             "type": "integer",
             "title": "Last Enqueued",
+            "default": 0
+          },
+          "unread_count": {
+            "type": "integer",
+            "title": "Unread Count",
             "default": 0
           }
         },
@@ -6944,6 +7548,20 @@
               }
             ],
             "title": "Use Cache"
+          },
+          "ignore_keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ignore Keywords"
           }
         },
         "type": "object",
@@ -7114,6 +7732,7 @@
               "poster_ratio": 0.7,
               "poster_crop_skip_ratio": 0.9,
               "jpeg_quality": 95,
+              "local_roots": [],
               "content_routes": {
                 "amateur": [
                   "mgstage",
@@ -7295,6 +7914,13 @@
                   "use_browser": false,
                   "use_proxy": true
                 },
+                "local": {
+                  "cookie": {},
+                  "official_routes": {},
+                  "rate_limit": 2.0,
+                  "use_browser": false,
+                  "use_proxy": true
+                },
                 "mgstage": {
                   "cookie": {},
                   "official_routes": {},
@@ -7433,9 +8059,10 @@
                 "title",
                 "plot"
               ],
+              "field_prompts": {},
+              "api_type": "chat",
               "base_url": "https://api.openai.com/v1",
               "model": "",
-              "max_retries": 3,
               "rate_limit": 2.0
             }
           },
@@ -7510,6 +8137,31 @@
             "type": "array",
             "title": "Translate Fields"
           },
+          "system_prompt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Prompt",
+            "x-long": true
+          },
+          "field_prompts": {
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 2000,
+              "x-long": true
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/MetadataField"
+            },
+            "type": "object",
+            "title": "Field Prompts"
+          },
           "api_key": {
             "anyOf": [
               {
@@ -7521,6 +8173,10 @@
             ],
             "title": "Api Key"
           },
+          "api_type": {
+            "$ref": "#/components/schemas/ApiType",
+            "default": "chat"
+          },
           "base_url": {
             "type": "string",
             "title": "Base Url",
@@ -7530,13 +8186,6 @@
             "type": "string",
             "title": "Model",
             "default": ""
-          },
-          "max_retries": {
-            "type": "integer",
-            "maximum": 10.0,
-            "minimum": 0.0,
-            "title": "Max Retries",
-            "default": 3
           },
           "rate_limit": {
             "type": "number",
@@ -9708,6 +10357,158 @@
         "title": "PathTemplateSchemaResponse",
         "description": "与 resolve_paths 同源."
       },
+      "PlaybackSourceListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlaybackSourceOption"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlaybackSourceListResponse"
+      },
+      "PlaybackSourceOption": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "name"
+        ],
+        "title": "PlaybackSourceOption",
+        "description": "一个可选的播放源. 只有名字, 不含探测结果: 切到它时才去问它有哪些流."
+      },
+      "PlaybackStreamItem": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "seekable": {
+            "type": "boolean",
+            "title": "Seekable"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "subtitles": {
+            "items": {
+              "$ref": "#/components/schemas/PlaybackSubtitleItem"
+            },
+            "type": "array",
+            "title": "Subtitles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "name",
+          "content_type",
+          "seekable",
+          "available",
+          "href"
+        ],
+        "title": "PlaybackStreamItem",
+        "description": "某个来源的一条流. ``name`` 是主机拼好的展示名 (来源名 · 流的展示名).\n\n``key`` 是这条流的标识, 同时出现在 ``href`` 里; 来源整个不可用时为 ``None``."
+      },
+      "PlaybackStreamListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlaybackStreamItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlaybackStreamListResponse"
+      },
+      "PlaybackSubtitleItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "href"
+        ],
+        "title": "PlaybackSubtitleItem"
+      },
       "PluginConfig": {
         "properties": {
           "enabled": {
@@ -10369,9 +11170,30 @@
             "$ref": "#/components/schemas/RoutineType"
           },
           "payload": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Payload"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CleanupSubmission"
+              },
+              {
+                "$ref": "#/components/schemas/UpscaleSubmission"
+              },
+              {
+                "$ref": "#/components/schemas/R18ImportSubmission"
+              },
+              {
+                "$ref": "#/components/schemas/RescrapeSubmission"
+              }
+            ],
+            "title": "Payload",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "cleanup": "#/components/schemas/CleanupSubmission",
+                "r18_import": "#/components/schemas/R18ImportSubmission",
+                "rescrape": "#/components/schemas/RescrapeSubmission",
+                "upscale": "#/components/schemas/UpscaleSubmission"
+              }
+            }
           },
           "enabled": {
             "type": "boolean",
@@ -10407,6 +11229,7 @@
           "id",
           "cron",
           "task_type",
+          "payload",
           "enabled"
         ],
         "title": "ScheduleResponse"
@@ -10544,6 +11367,17 @@
             "default": 95,
             "x-hidden": true
           },
+          "local_roots": {
+            "items": {
+              "type": "string",
+              "x-path-type": "directory",
+              "x-widget": "PathPicker"
+            },
+            "type": "array",
+            "title": "Local Roots",
+            "description": "本地刮削源根目录列表; 须存在且位于 AMANE_SAFE_DIRS 内. 视频旁路目录始终优先.",
+            "x-ordered": true
+          },
           "content_routes": {
             "additionalProperties": {
               "items": {
@@ -10566,6 +11400,7 @@
                   "javdb",
                   "javlibrary",
                   "kin8",
+                  "local",
                   "mgstage",
                   "official",
                   "prestige",
@@ -10606,6 +11441,7 @@
                   "javdb",
                   "javlibrary",
                   "kin8",
+                  "local",
                   "mgstage",
                   "official",
                   "prestige",
@@ -10646,6 +11482,7 @@
                   "javdb",
                   "javlibrary",
                   "kin8",
+                  "local",
                   "mgstage",
                   "official",
                   "prestige",
@@ -10781,6 +11618,7 @@
           "javdb",
           "javlibrary",
           "kin8",
+          "local",
           "mgstage",
           "minnano",
           "official",

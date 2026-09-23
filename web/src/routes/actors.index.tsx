@@ -1,13 +1,4 @@
-import {
-  ActionIcon,
-  Badge,
-  Group,
-  SegmentedControl,
-  Text,
-  TextInput,
-  Title,
-  Tooltip,
-} from "@mantine/core";
+import { ActionIcon, Badge, Group, SegmentedControl, Text, TextInput, Title } from "@mantine/core";
 import { IconFilter, IconSearch, IconTable, IconX } from "@tabler/icons-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
@@ -17,7 +8,9 @@ import { useTranslation } from "react-i18next";
 import { listActorsInfiniteOptions, listActorsOptions } from "@/client/@tanstack/react-query.gen";
 import type { ActorGender, ActorSortField } from "@/client/types.gen";
 import { BrowsePageShell } from "@/components/common/browse-page-shell";
+import { HintedActionIcon } from "@/components/common/hinted-action-icon";
 import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
+import { ListDefaultActions } from "@/components/common/list-default-actions";
 import { PageSizeSelect } from "@/components/common/page-size-select";
 import { SortMenu } from "@/components/common/sort-menu";
 import { ActorFilterControls } from "@/components/media/actor-filter-controls";
@@ -40,9 +33,11 @@ import {
   rangeValue,
   replaceActorFilters,
 } from "@/lib/actors/browse";
+import { useNarrowViewport } from "@/hooks/use-narrow-viewport";
 import { exhaustiveRecord } from "@/lib/exhaustive";
 import { ACTOR_SORT_FIELDS } from "@/lib/exhaustive-maps";
 import { nextOffsetPageParam } from "@/lib/infinite-list";
+import { actorListDefaults } from "@/lib/nav-defaults";
 import { useUIStore } from "@/stores/ui";
 
 const ACTOR_SORT_I18N_KEY = exhaustiveRecord<ActorSortField>()({
@@ -106,6 +101,7 @@ function ActorsIndexPage() {
 
   const [searchInput, setSearchInput] = useState(search.q ?? "");
   const [advancedOpen, setAdvancedOpen] = useState(hasNonDefaultFilters);
+  const narrowViewport = useNarrowViewport("md");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const isList = search.view === "list";
@@ -195,6 +191,7 @@ function ActorsIndexPage() {
     <BrowsePageShell
       fill={isList}
       title={<Title order={2}>{t("actors.title")}</Title>}
+      actions={<ListDefaultActions update={{ key: "actors", value: actorListDefaults(search) }} />}
       viewSwitch={
         <SegmentedControl
           value={search.view}
@@ -229,16 +226,17 @@ function ActorsIndexPage() {
       }
       extras={
         <>
-          <Tooltip label={t("search.advanced")}>
-            <ActionIcon
+          {/* 窄屏的筛选在底部面板里常驻展开, 该开关只在宽屏有意义. */}
+          {narrowViewport ? null : (
+            <HintedActionIcon
               variant={advancedOpen || hasNonDefaultFilters ? "filled" : "default"}
               size={36}
               onClick={() => setAdvancedOpen((v) => !v)}
-              aria-label={t("search.advanced")}
+              label={t("search.advanced")}
             >
               <IconFilter size={16} />
-            </ActionIcon>
-          </Tooltip>
+            </HintedActionIcon>
+          )}
           {!isList && (
             <SortMenu
               options={ACTOR_SORT_FIELDS.map((f) => ({
@@ -271,9 +269,14 @@ function ActorsIndexPage() {
           />
         ) : undefined
       }
+      filterPanel={
+        <ActorFilterControls
+          opened={narrowViewport || advancedOpen}
+          committed={filters}
+          onApply={applyFilters}
+        />
+      }
     >
-      <ActorFilterControls opened={advancedOpen} committed={filters} onApply={applyFilters} />
-
       {hasActiveFilters && (
         <Group gap="xs">
           {search.saved_query_id != null && (

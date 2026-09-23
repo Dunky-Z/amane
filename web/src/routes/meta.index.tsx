@@ -1,19 +1,9 @@
-import {
-  ActionIcon,
-  Badge,
-  Group,
-  SegmentedControl,
-  Text,
-  TextInput,
-  Title,
-  Tooltip,
-} from "@mantine/core";
+import { ActionIcon, Badge, Group, SegmentedControl, Text, TextInput, Title } from "@mantine/core";
 import { IconFilter, IconSearch, IconTable, IconX } from "@tabler/icons-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { z } from "zod";
 import {
   getFacetOptions,
   listMetadataInfiniteOptions,
@@ -21,7 +11,9 @@ import {
 } from "@/client/@tanstack/react-query.gen";
 import type { FacetKind, MetadataSortField } from "@/client/types.gen";
 import { BrowsePageShell } from "@/components/common/browse-page-shell";
+import { HintedActionIcon } from "@/components/common/hinted-action-icon";
 import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
+import { ListDefaultActions } from "@/components/common/list-default-actions";
 import { PageSizeSelect } from "@/components/common/page-size-select";
 import { SortMenu } from "@/components/common/sort-menu";
 import { FacetBadge } from "@/components/media/facet-badge";
@@ -32,21 +24,11 @@ import {
 } from "@/components/media/facet-filter-controls";
 import { MetaTable } from "@/components/media/meta-table";
 import { PosterGrid } from "@/components/media/poster-grid";
-import {
-  CONTENT_TYPES,
-  FILE_DEFINITIONS,
-  METADATA_SORT_FIELDS,
-  MOSAICS,
-  SORT_ORDERS,
-} from "@/lib/exhaustive-maps";
-import {
-  activeFacetFilters,
-  addFacetId,
-  coerceIdList,
-  type FacetFilters,
-  removeFacetId,
-} from "@/lib/facets";
+import { activeFacetFilters, addFacetId, type FacetFilters, removeFacetId } from "@/lib/facets";
+import { useNarrowViewport } from "@/hooks/use-narrow-viewport";
 import { nextOffsetPageParam } from "@/lib/infinite-list";
+import { metaSearchSchema } from "@/lib/media/browse";
+import { metaListDefaults } from "@/lib/nav-defaults";
 import { useUIStore } from "@/stores/ui";
 
 const CHUNK = 30;
@@ -60,30 +42,6 @@ const SORT_FIELDS = [
   "release",
   "file_count",
 ] as const satisfies readonly MetadataSortField[];
-
-const idListSchema = z.preprocess(coerceIdList, z.array(z.number().int().positive()).optional());
-
-const metaSearchSchema = z.object({
-  q: z.string().optional(),
-  view: z.enum(["grid", "list"]).catch("grid").default("grid"),
-  sort_by: z.enum(METADATA_SORT_FIELDS).optional(),
-  order: z.enum(SORT_ORDERS).optional(),
-  page: z.coerce.number().int().min(1).catch(1).default(1),
-  actor_id: idListSchema,
-  director_id: idListSchema,
-  tag_id: idListSchema,
-  studio_id: idListSchema,
-  publisher_id: idListSchema,
-  series_id: idListSchema,
-  user_tag_id: idListSchema,
-  has_files: z.enum(["true", "false"]).optional(),
-  has_subtitle: z.enum(["true", "false"]).optional(),
-  uncensored: z.enum(["true", "false"]).optional(),
-  mosaic: z.enum(MOSAICS).optional(),
-  definition: z.enum(FILE_DEFINITIONS).optional(),
-  content_type: z.enum(CONTENT_TYPES).optional(),
-  saved_query_id: z.coerce.number().int().positive().optional(),
-});
 
 export const Route = createFileRoute("/meta/")({
   validateSearch: metaSearchSchema,
@@ -165,6 +123,7 @@ function MetaIndexPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const listLimit = useUIStore((s) => s.pageSizes.metaList);
+  const narrowViewport = useNarrowViewport("md");
 
   const hasFiles = parseHasFiles(search.has_files);
   const filePhase: FilePhaseFilters = {
@@ -336,6 +295,7 @@ function MetaIndexPage() {
     <BrowsePageShell
       fill={isList}
       title={<Title order={2}>{t("common:nav.meta")}</Title>}
+      actions={<ListDefaultActions update={{ key: "meta", value: metaListDefaults(search) }} />}
       viewSwitch={
         <SegmentedControl
           value={search.view}
@@ -370,16 +330,17 @@ function MetaIndexPage() {
       }
       extras={
         <>
-          <Tooltip label={t("search.advanced")}>
-            <ActionIcon
+          {/* 窄屏的筛选在底部面板里常驻展开, 该开关只在宽屏有意义. */}
+          {narrowViewport ? null : (
+            <HintedActionIcon
               variant={advancedOpen || hasFiles !== null ? "filled" : "default"}
               size={36}
               onClick={() => setAdvancedOpen((v) => !v)}
-              aria-label={t("search.advanced")}
+              label={t("search.advanced")}
             >
               <IconFilter size={16} />
-            </ActionIcon>
-          </Tooltip>
+            </HintedActionIcon>
+          )}
           {!isList && (
             <SortMenu
               options={SORT_FIELDS.map((f) => ({
@@ -405,17 +366,18 @@ function MetaIndexPage() {
           />
         ) : undefined
       }
+      filterPanel={
+        <FacetFilterControls
+          opened={narrowViewport || advancedOpen}
+          filters={filters}
+          onSelect={appendFacet}
+          hasFiles={hasFiles}
+          onHasFilesChange={setHasFilesFilter}
+          filePhase={filePhase}
+          onFilePhaseChange={setFilePhaseFilter}
+        />
+      }
     >
-      <FacetFilterControls
-        opened={advancedOpen}
-        filters={filters}
-        onSelect={appendFacet}
-        hasFiles={hasFiles}
-        onHasFilesChange={setHasFilesFilter}
-        filePhase={filePhase}
-        onFilePhaseChange={setFilePhaseFilter}
-      />
-
       {hasActiveFilters && (
         <Group gap="xs">
           {search.saved_query_id != null && (

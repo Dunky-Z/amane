@@ -1,17 +1,20 @@
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Checkbox,
   Group,
+  Menu,
   Modal,
   Select,
   Stack,
   Table,
   Text,
+  type MantineBreakpoint,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconRefresh, IconTag, IconTrash } from "@tabler/icons-react";
+import { IconDots, IconRefresh, IconTag, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -26,6 +29,7 @@ import {
   submitTaskMutation,
 } from "@/client/@tanstack/react-query.gen";
 import type { MetadataResponse, MetadataSortField, SortOrder } from "@/client/types.gen";
+import { HintedActionIcon } from "@/components/common/hinted-action-icon";
 import { ListToolbar } from "@/components/common/list-toolbar";
 import { ResizableTh, SortableTh } from "@/components/common/sortable-th";
 import { SelectionBar } from "@/components/common/selection-bar";
@@ -35,6 +39,7 @@ import { extractErrorMessage } from "@/lib/api-error";
 import { confirm } from "@/lib/confirm";
 import { USER_TAG_FACET_LIST } from "@/lib/facets";
 import { type MetaTableColumnKey, useUIStore } from "@/stores/ui";
+import classes from "./meta-table.module.css";
 
 const SORTABLE_COLUMNS = [
   "number",
@@ -69,6 +74,19 @@ const DEFAULT_COLUMN_WIDTHS = {
 
 /** title 默认自适应; 其它列用默认 px. */
 const FLEX_COLUMNS = new Set<MetaTableColumnKey>(["title"]);
+
+/**
+ * 次要列的隐藏断点.
+ * lg 以下固定列与动作列的默认宽度之和为 760, 超过容器宽度时自适应列 title 归零.
+ * 该映射同时决定表头与单元格的显隐, 任一处缺失即列错位.
+ */
+const COLUMN_VISIBLE_FROM: Partial<Record<MetaTableColumnKey, MantineBreakpoint>> = {
+  studio: "lg",
+  release: "lg",
+  updated_at: "lg",
+  file_count: "lg",
+  score: "lg",
+};
 
 const CELL_OVERFLOW = { overflow: "hidden", maxWidth: 0 } as const;
 
@@ -291,7 +309,7 @@ export function MetaTable({
           verticalSpacing="sm"
           layout="fixed"
           w="100%"
-          style={{ minWidth: 720 }}
+          className={classes.table}
         >
           <Table.Thead>
             <Table.Tr>
@@ -307,13 +325,18 @@ export function MetaTable({
                   order={effectiveOrder}
                   onSort={onSort}
                   w={columnWidth(field)}
+                  visibleFrom={COLUMN_VISIBLE_FROM[field]}
                   resizeHandle={getResizeHandleProps(field)}
                 />
               ))}
-              <ResizableTh w={columnWidth("score")} resizeHandle={getResizeHandleProps("score")}>
+              <ResizableTh
+                w={columnWidth("score")}
+                visibleFrom={COLUMN_VISIBLE_FROM.score}
+                resizeHandle={getResizeHandleProps("score")}
+              >
                 {t("columns.score")}
               </ResizableTh>
-              <Table.Th w={88} ta="right">
+              <Table.Th ta="right" className={classes.actionsColumn}>
                 {t("columns.actions")}
               </Table.Th>
             </Table.Tr>
@@ -330,7 +353,11 @@ export function MetaTable({
                 {SORTABLE_COLUMNS.map((field) => {
                   const value = cellValue(item, field);
                   return (
-                    <Table.Td key={field} style={CELL_OVERFLOW}>
+                    <Table.Td
+                      key={field}
+                      style={CELL_OVERFLOW}
+                      visibleFrom={COLUMN_VISIBLE_FROM[field]}
+                    >
                       {field === "number" ? (
                         <Link
                           to="/meta/$metadataId"
@@ -349,7 +376,7 @@ export function MetaTable({
                     </Table.Td>
                   );
                 })}
-                <Table.Td style={CELL_OVERFLOW}>
+                <Table.Td style={CELL_OVERFLOW} visibleFrom={COLUMN_VISIBLE_FROM.score}>
                   {item.score != null && (
                     <Badge variant="light" color="yellow">
                       {item.score.toFixed(1)}
@@ -357,25 +384,53 @@ export function MetaTable({
                   )}
                 </Table.Td>
                 <Table.Td>
-                  <Group gap={4} justify="flex-end" wrap="nowrap">
-                    <ActionIcon
+                  {/* 窄屏动作列只容得下一个按钮, 两个动作移入菜单. */}
+                  <Group gap={4} justify="flex-end" wrap="nowrap" visibleFrom="sm">
+                    <HintedActionIcon
                       variant="subtle"
+                      label={t("actions.scrape")}
                       onClick={() =>
                         scrapeOne.mutate({ body: { type: "scrape", number: item.number } })
                       }
-                      title={t("actions.scrape")}
                     >
                       <IconRefresh size={16} />
-                    </ActionIcon>
-                    <ActionIcon
+                    </HintedActionIcon>
+                    <HintedActionIcon
                       variant="subtle"
                       color="red"
+                      label={t("common:actions.delete")}
                       onClick={() => void handleDeleteOne(item.id)}
-                      title={t("common:actions.delete")}
                     >
                       <IconTrash size={16} />
-                    </ActionIcon>
+                    </HintedActionIcon>
                   </Group>
+                  {/* Menu 不接受 visibleFrom / hiddenFrom, 显隐由外层 Box 承担. */}
+                  <Box hiddenFrom="sm" style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <Menu position="bottom-end" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon size="sm" variant="subtle" aria-label={t("columns.actions")}>
+                          <IconDots size={14} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<IconRefresh size={14} />}
+                          onClick={() =>
+                            scrapeOne.mutate({ body: { type: "scrape", number: item.number } })
+                          }
+                        >
+                          {t("actions.scrape")}
+                        </Menu.Item>
+                        <Menu.Item
+                          color="red"
+                          leftSection={<IconTrash size={14} />}
+                          onClick={() => void handleDeleteOne(item.id)}
+                        >
+                          {t("common:actions.delete")}
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  </Box>
                 </Table.Td>
               </Table.Tr>
             ))}

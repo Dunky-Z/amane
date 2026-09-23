@@ -49,6 +49,13 @@ from .metadata import (
     MetadataResponse,
     PartialMetadata,
 )
+from .playback import (
+    PlaybackSourceListResponse,
+    PlaybackSourceOption,
+    PlaybackStreamItem,
+    PlaybackStreamListResponse,
+    PlaybackSubtitleItem,
+)
 from .plugins import PluginConfigUpdate, PluginListResponse, PluginResponse
 from .schedules import ScheduleCreateRequest, ScheduleListResponse, ScheduleResponse, ScheduleUpdateRequest
 from .system import DesktopResponse, ReleaseResponse
@@ -129,6 +136,10 @@ __all__ = [
     "PartialMetadata",
     "PathTemplatePlaceholder",
     "PathTemplateSchemaResponse",
+    "PlaybackSourceListResponse",
+    "PlaybackSourceOption",
+    "PlaybackStreamItem",
+    "PlaybackStreamListResponse",
     "PluginConfigUpdate",
     "PluginListResponse",
     "PluginResponse",

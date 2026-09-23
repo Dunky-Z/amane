@@ -38,24 +38,27 @@ Vite 将 `/api` 代理到本机 uvicorn (`localhost:8000`), 前端经局域网�
 
 ## 就绪探测
 
-就绪以 HTTP 为准. 在运行 `just dev` 的机器上探测与回显一律用 `localhost`, 禁止写死 `127.0.0.1`.
+就绪以 HTTP 为准. 探测一律用 `localhost`, 禁止 `127.0.0.1` (进程不一定监听 IPv4).
 
 | 进程 | 就绪 |
 |------|------|
 | API | `GET http://localhost:${AMANE_PORT:-8000}/api/health` 返回 200; 日志 `amane service ready` 亦可 |
 | Web | `GET http://localhost:8899/` 返回 200 |
 
-已在监听则禁止再启动一份. 就绪后回显:
+已在监听则禁止再启动一份. `AMANE_PORT` 或 Vite 占用顺延时, 按实际端口写.
 
-```
-API: http://localhost:8000
-Web: http://localhost:8899
-```
+## 地址的输出
 
-若用户在远程机 (如 Windows 连 NAS) 打开页面, 额外给出局域网 URL (本机非 loopback IP + 实际端口), 例如:
+**只输出 Web 地址**, 且**只以纯文本给出**, 不放进代码块 —— 代码块内的 URL 不会渲染成可点击链接, 纯文本才会.
 
-```
-LAN Web: http://192.168.31.220:8899
-```
+就绪后输出一行 Web: http://localhost:8899 (实际回复里是裸文本, 可点击).
 
-`AMANE_PORT` 或 Vite 占用顺延时, 按实际端口写.
+若用户在远程机 (如 Windows 连 NAS) 打开页面, 额外给出局域网 URL, 例如 Web: http://192.168.31.220:8899.
+
+API 地址只在探测就绪时使用, 不写给用户: 用户经浏览器访问前端, 请求由 Vite 代理到 `/api`.
+
+要用户打开某个页面时, 给出带路径的完整地址, 同样纯文本, 例如 Web: http://localhost:8899/meta/1393.
+
+## 让用户验证时
+
+凡请用户手测、复验、确认现象, 回复里必须再打印一次 Web 地址与要打开的具体页面, 不允许只写「刷新页面」「再试一次」. 是否已在运行都要打印.

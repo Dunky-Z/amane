@@ -504,16 +504,6 @@ export const ActorUpdateRequestSchema = {
     title: 'ActorUpdateRequest'
 } as const;
 
-export const AgentApiTypeSchema = {
-    type: 'string',
-    enum: [
-        'chat',
-        'response',
-        'anthropic'
-    ],
-    title: 'AgentApiType'
-} as const;
-
 export const AgentApproveRequestSchema = {
     properties: {
         approval_ids: {
@@ -558,7 +548,7 @@ export const AgentCancelResponseSchema = {
 export const AgentConfigSchema = {
     properties: {
         api_type: {
-            $ref: '#/components/schemas/AgentApiType',
+            $ref: '#/components/schemas/ApiType',
             default: 'response'
         },
         api_key: {
@@ -846,6 +836,16 @@ export const AgentTraceResponseSchema = {
     title: 'AgentTraceResponse'
 } as const;
 
+export const ApiTypeSchema = {
+    type: 'string',
+    enum: [
+        'chat',
+        'response',
+        'anthropic'
+    ],
+    title: 'ApiType'
+} as const;
+
 export const Body_install_pluginSchema = {
     properties: {
         file: {
@@ -995,27 +995,13 @@ export const CommentResponseSchema = {
             title: 'Body'
         },
         created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
+            type: 'string',
+            format: 'date-time',
             title: 'Created At'
         },
         updated_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
+            type: 'string',
+            format: 'date-time',
             title: 'Updated At'
         }
     },
@@ -1023,7 +1009,9 @@ export const CommentResponseSchema = {
     required: [
         'id',
         'metadata_id',
-        'body'
+        'body',
+        'created_at',
+        'updated_at'
     ],
     title: 'CommentResponse'
 } as const;
@@ -1355,6 +1343,7 @@ export const FailureReasonSchema = {
         'age_verification',
         'empty_response',
         'no_usable_metadata',
+        'parse_error',
         'crawler_unavailable',
         'unexpected'
     ],
@@ -1423,6 +1412,13 @@ export const FeedCreateRequestSchema = {
             type: 'array',
             uniqueItems: true,
             title: 'Use Cache'
+        },
+        ignore_keywords: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Ignore Keywords'
         }
     },
     type: 'object',
@@ -1437,6 +1433,8 @@ export const FeedItemBatchActionSchema = {
     enum: [
         'ignore',
         'unignore',
+        'read',
+        'unread',
         'delete',
         'scrape'
     ],
@@ -1521,6 +1519,16 @@ export const FeedItemListResponseSchema = {
         'total'
     ],
     title: 'FeedItemListResponse'
+} as const;
+
+export const FeedItemReadStateSchema = {
+    type: 'string',
+    enum: [
+        'unread',
+        'read',
+        'all'
+    ],
+    title: 'FeedItemReadState'
 } as const;
 
 export const FeedItemResponseSchema = {
@@ -1609,6 +1617,18 @@ export const FeedItemResponseSchema = {
                 }
             ],
             title: 'Ignored At'
+        },
+        read_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Read At'
         },
         metadata_id: {
             anyOf: [
@@ -1723,6 +1743,13 @@ export const FeedResponseSchema = {
             type: 'array',
             title: 'Use Cache'
         },
+        ignore_keywords: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Ignore Keywords'
+        },
         next_fetch_at: {
             anyOf: [
                 {
@@ -1761,6 +1788,11 @@ export const FeedResponseSchema = {
         last_enqueued: {
             type: 'integer',
             title: 'Last Enqueued',
+            default: 0
+        },
+        unread_count: {
+            type: 'integer',
+            title: 'Unread Count',
             default: 0
         }
     },
@@ -1878,6 +1910,20 @@ export const FeedUpdateRequestSchema = {
                 }
             ],
             title: 'Use Cache'
+        },
+        ignore_keywords: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Ignore Keywords'
         }
     },
     type: 'object',
@@ -2054,6 +2100,7 @@ export const HotSettingsSchema = {
                 poster_ratio: 0.7,
                 poster_crop_skip_ratio: 0.9,
                 jpeg_quality: 95,
+                local_roots: [],
                 content_routes: {
                     amateur: [
                         'mgstage',
@@ -2235,6 +2282,13 @@ export const HotSettingsSchema = {
                         use_browser: false,
                         use_proxy: true
                     },
+                    local: {
+                        cookie: {},
+                        official_routes: {},
+                        rate_limit: 2,
+                        use_browser: false,
+                        use_proxy: true
+                    },
                     mgstage: {
                         cookie: {},
                         official_routes: {},
@@ -2373,9 +2427,10 @@ export const HotSettingsSchema = {
                     'title',
                     'plot'
                 ],
+                field_prompts: {},
+                api_type: 'chat',
                 base_url: 'https://api.openai.com/v1',
                 model: '',
-                max_retries: 3,
                 rate_limit: 2
             }
         },
@@ -2451,6 +2506,31 @@ export const LLMConfigSchema = {
             type: 'array',
             title: 'Translate Fields'
         },
+        system_prompt: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 2000
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'System Prompt',
+            'x-long': true
+        },
+        field_prompts: {
+            additionalProperties: {
+                type: 'string',
+                maxLength: 2000,
+                'x-long': true
+            },
+            propertyNames: {
+                $ref: '#/components/schemas/MetadataField'
+            },
+            type: 'object',
+            title: 'Field Prompts'
+        },
         api_key: {
             anyOf: [
                 {
@@ -2462,6 +2542,10 @@ export const LLMConfigSchema = {
             ],
             title: 'Api Key'
         },
+        api_type: {
+            $ref: '#/components/schemas/ApiType',
+            default: 'chat'
+        },
         base_url: {
             type: 'string',
             title: 'Base Url',
@@ -2471,13 +2555,6 @@ export const LLMConfigSchema = {
             type: 'string',
             title: 'Model',
             default: ''
-        },
-        max_retries: {
-            type: 'integer',
-            maximum: 10,
-            minimum: 0,
-            title: 'Max Retries',
-            default: 3
         },
         rate_limit: {
             type: 'number',
@@ -4685,6 +4762,163 @@ export const PathTemplateSchemaResponseSchema = {
     description: '与 resolve_paths 同源.'
 } as const;
 
+export const PlaybackSourceListResponseSchema = {
+    properties: {
+        items: {
+            items: {
+                $ref: '#/components/schemas/PlaybackSourceOption'
+            },
+            type: 'array',
+            title: 'Items'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    title: 'PlaybackSourceListResponse'
+} as const;
+
+export const PlaybackSourceOptionSchema = {
+    properties: {
+        source_id: {
+            type: 'string',
+            title: 'Source Id'
+        },
+        name: {
+            type: 'string',
+            title: 'Name'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+        'source_id',
+        'name'
+    ],
+    title: 'PlaybackSourceOption',
+    description: '一个可选的播放源. 只有名字, 不含探测结果: 切到它时才去问它有哪些流.'
+} as const;
+
+export const PlaybackStreamItemSchema = {
+    properties: {
+        source_id: {
+            type: 'string',
+            title: 'Source Id'
+        },
+        key: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Key'
+        },
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        content_type: {
+            type: 'string',
+            title: 'Content Type'
+        },
+        seekable: {
+            type: 'boolean',
+            title: 'Seekable'
+        },
+        available: {
+            type: 'boolean',
+            title: 'Available'
+        },
+        detail: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Detail'
+        },
+        href: {
+            type: 'string',
+            title: 'Href'
+        },
+        subtitles: {
+            items: {
+                $ref: '#/components/schemas/PlaybackSubtitleItem'
+            },
+            type: 'array',
+            title: 'Subtitles'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+        'source_id',
+        'name',
+        'content_type',
+        'seekable',
+        'available',
+        'href'
+    ],
+    title: 'PlaybackStreamItem',
+    description: '某个来源的一条流. ``name`` 是主机拼好的展示名 (来源名 · 流的展示名).\n\n``key`` 是这条流的标识, 同时出现在 ``href`` 里; 来源整个不可用时为 ``None``.'
+} as const;
+
+export const PlaybackStreamListResponseSchema = {
+    properties: {
+        items: {
+            items: {
+                $ref: '#/components/schemas/PlaybackStreamItem'
+            },
+            type: 'array',
+            title: 'Items'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    title: 'PlaybackStreamListResponse'
+} as const;
+
+export const PlaybackSubtitleItemSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        label: {
+            type: 'string',
+            title: 'Label'
+        },
+        language: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Language'
+        },
+        href: {
+            type: 'string',
+            title: 'Href'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+        'id',
+        'label',
+        'href'
+    ],
+    title: 'PlaybackSubtitleItem'
+} as const;
+
 export const PluginConfigSchema = {
     properties: {
         enabled: {
@@ -5366,9 +5600,30 @@ export const ScheduleResponseSchema = {
             $ref: '#/components/schemas/RoutineType'
         },
         payload: {
-            additionalProperties: true,
-            type: 'object',
-            title: 'Payload'
+            oneOf: [
+                {
+                    $ref: '#/components/schemas/CleanupSubmission'
+                },
+                {
+                    $ref: '#/components/schemas/UpscaleSubmission'
+                },
+                {
+                    $ref: '#/components/schemas/R18ImportSubmission'
+                },
+                {
+                    $ref: '#/components/schemas/RescrapeSubmission'
+                }
+            ],
+            title: 'Payload',
+            discriminator: {
+                propertyName: 'type',
+                mapping: {
+                    cleanup: '#/components/schemas/CleanupSubmission',
+                    r18_import: '#/components/schemas/R18ImportSubmission',
+                    rescrape: '#/components/schemas/RescrapeSubmission',
+                    upscale: '#/components/schemas/UpscaleSubmission'
+                }
+            }
         },
         enabled: {
             type: 'boolean',
@@ -5404,6 +5659,7 @@ export const ScheduleResponseSchema = {
         'id',
         'cron',
         'task_type',
+        'payload',
         'enabled'
     ],
     title: 'ScheduleResponse'
@@ -5544,6 +5800,17 @@ export const ScrapingConfigSchema = {
             default: 95,
             'x-hidden': true
         },
+        local_roots: {
+            items: {
+                type: 'string',
+                'x-path-type': 'directory',
+                'x-widget': 'PathPicker'
+            },
+            type: 'array',
+            title: 'Local Roots',
+            description: '本地刮削源根目录列表; 须存在且位于 AMANE_SAFE_DIRS 内. 视频旁路目录始终优先.',
+            'x-ordered': true
+        },
         content_routes: {
             additionalProperties: {
                 items: {
@@ -5566,6 +5833,7 @@ export const ScrapingConfigSchema = {
                         'javdb',
                         'javlibrary',
                         'kin8',
+                        'local',
                         'mgstage',
                         'official',
                         'prestige',
@@ -5606,6 +5874,7 @@ export const ScrapingConfigSchema = {
                         'javdb',
                         'javlibrary',
                         'kin8',
+                        'local',
                         'mgstage',
                         'official',
                         'prestige',
@@ -5646,6 +5915,7 @@ export const ScrapingConfigSchema = {
                         'javdb',
                         'javlibrary',
                         'kin8',
+                        'local',
                         'mgstage',
                         'official',
                         'prestige',
@@ -5783,6 +6053,7 @@ export const SiteNameSchema = {
         'javdb',
         'javlibrary',
         'kin8',
+        'local',
         'mgstage',
         'minnano',
         'official',
