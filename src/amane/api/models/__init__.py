@@ -1,13 +1,14 @@
-from .actors import ActorListResponse, ActorResponse, ActorScrapeRequest, ActorUpdateRequest
+from .actors import ActorListResponse, ActorResponse, ActorScrapeRequest, ActorUpdateRequest, ActorUserTagsRequest
 from .comments import CommentCreateRequest, CommentResponse, CommentUpdateRequest
 from .facets import (
-    FacetCreateRequest,
     FacetListResponse,
     FacetMergeRequest,
     FacetRenameRequest,
     FacetResponse,
     FacetRuleListResponse,
     FacetRuleResponse,
+    UserTagsCreateRequest,
+    UserTagsCreateResponse,
 )
 from .feeds import (
     FeedCreateRequest,
@@ -42,13 +43,13 @@ from .metadata import (
     MetadataBatchIdsRequest,
     MetadataBatchScrapeRequest,
     MetadataBatchScrapeResponse,
-    MetadataBatchUserTagsRequest,
-    MetadataBatchUserTagsResponse,
     MetadataDetailResponse,
     MetadataListResponse,
     MetadataResponse,
+    MetadataUserTagsRequest,
     PartialMetadata,
 )
+from .network import ConnectivityCheckRequest, ConnectivityItemResponse, ConnectivityReportResponse
 from .playback import (
     PlaybackSourceListResponse,
     PlaybackSourceOption,
@@ -82,7 +83,7 @@ from .tasks import (
     TrashSubmission,
     UpscaleSubmission,
 )
-from .user_tags import UserTagResponse
+from .user_tags import UserTagLinksResponse, UserTagResponse
 
 __all__ = [
     "ActorListResponse",
@@ -90,13 +91,16 @@ __all__ = [
     "ActorScrapeRequest",
     "ActorScrapeSubmission",
     "ActorUpdateRequest",
+    "ActorUserTagsRequest",
     "CleanupSubmission",
     "CommentCreateRequest",
     "CommentResponse",
     "CommentUpdateRequest",
+    "ConnectivityCheckRequest",
+    "ConnectivityItemResponse",
+    "ConnectivityReportResponse",
     "CropPosterRequest",
     "DesktopResponse",
-    "FacetCreateRequest",
     "FacetListResponse",
     "FacetMergeRequest",
     "FacetRenameRequest",
@@ -126,11 +130,10 @@ __all__ = [
     "MetadataBatchIdsRequest",
     "MetadataBatchScrapeRequest",
     "MetadataBatchScrapeResponse",
-    "MetadataBatchUserTagsRequest",
-    "MetadataBatchUserTagsResponse",
     "MetadataDetailResponse",
     "MetadataListResponse",
     "MetadataResponse",
+    "MetadataUserTagsRequest",
     "OptionalPathTemplateDefaults",
     "OrganizeSubmission",
     "PartialMetadata",
@@ -168,7 +171,10 @@ __all__ = [
     "TranslateResponse",
     "TrashSubmission",
     "UpscaleSubmission",
+    "UserTagLinksResponse",
     "UserTagResponse",
+    "UserTagsCreateRequest",
+    "UserTagsCreateResponse",
     "normalize_feed_group",
     "path_template_schema",
 ]

@@ -209,10 +209,8 @@ androidapp/*.keystore
 
 .cursor
 .cursorrules
-.claude
 .codex
 .cursor/
-.claude/
 .codex/
 
 # parley discussion workspaces created by tooling — never track

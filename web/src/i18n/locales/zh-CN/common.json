@@ -44,6 +44,7 @@
     "settings": "设置",
     "client": "客户端设置",
     "logs": "日志",
+    "networkCheck": "网络检测",
     "meta": "片库",
     "actors": "演员",
     "catalog": "分类",
@@ -73,7 +74,6 @@
     "en": "English"
   },
   "pagination": {
-    "next": "下一页",
     "totalItems": "(共 {{count}} 条)",
     "range": "第 {{start}}–{{end}} 条，共 {{total}} 条",
     "pageSizeShort": "{{size}}/页",
@@ -120,7 +120,9 @@
     "taskCreated": "任务已创建",
     "organizeStarted": "整理任务已提交",
     "userTagCreated": "用户标签已创建",
+    "userTagExists": "用户标签已存在",
     "userTagAttached": "已添加用户标签",
+    "userTagBatchUpdated": "已更新 {{count}} 条影片",
     "userTagDetached": "已移除用户标签",
     "userTagDeleted": "用户标签已删除",
     "facetDeleted": "分类已删除并加入黑名单",
