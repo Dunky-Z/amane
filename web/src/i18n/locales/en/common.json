@@ -44,6 +44,7 @@
     "settings": "Settings",
     "client": "Client",
     "logs": "Logs",
+    "networkCheck": "Network Check",
     "meta": "Library",
     "actors": "Actors",
     "catalog": "Catalog",
@@ -73,7 +74,6 @@
     "en": "English"
   },
   "pagination": {
-    "next": "Next",
     "totalItems": "({{count}} total)",
     "totalItems_one": "({{count}} total)",
     "totalItems_other": "({{count}} total)",
@@ -126,7 +126,10 @@
     "taskCreated": "Task queued",
     "organizeStarted": "",
     "userTagCreated": "User tag created",
+    "userTagExists": "User tag already exists",
     "userTagAttached": "User tag attached",
+    "userTagBatchUpdated_one": "User tags updated on {{count}} title",
+    "userTagBatchUpdated_other": "User tags updated on {{count}} titles",
     "userTagDetached": "User tag removed",
     "userTagDeleted": "User tag deleted",
     "facetDeleted": "Facet deleted and blocklisted",
