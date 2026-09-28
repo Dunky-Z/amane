@@ -7,7 +7,9 @@ ARG HTTPS_PROXY
 ARG NO_PROXY=localhost,127.0.0.1,::1,mirrors.aliyun.com,registry.npmmirror.com,cdn.npmmirror.com,pypi.tuna.tsinghua.edu.cn,mirrors.cloud.tencent.com
 ARG APT_MIRROR=mirrors.aliyun.com
 ARG NPM_REGISTRY=https://registry.npmmirror.com
-ARG UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+# 清华源在本机 NO_PROXY 直连常超时; 阿里云可直连且 wheel 路径与 PyPI 一致
+ARG UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+ARG UV_FILES_MIRROR=https://mirrors.aliyun.com/pypi
 
 # --- 前端构建阶段 ---
 FROM node:26-slim AS web-builder
@@ -45,7 +47,8 @@ ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
 ARG APT_MIRROR
-ARG UV_INDEX_URL
+ARG UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+ARG UV_FILES_MIRROR=https://mirrors.aliyun.com/pypi
 ENV HTTP_PROXY=${HTTP_PROXY} \
     HTTPS_PROXY=${HTTPS_PROXY} \
     NO_PROXY=${NO_PROXY} \
@@ -63,11 +66,14 @@ RUN set -eux; \
       sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}|g" \
         /etc/apt/sources.list; \
     fi
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# 不依赖 ghcr.io（本机代理拉 ghcr 常 reset）; 用阿里云 PyPI 装 uv
+RUN pip install --no-cache-dir -i "${UV_INDEX_URL}" uv
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN uv sync --no-dev --frozen --no-editable
+# uv.lock 写死 files.pythonhosted.org; --frozen 会直拉该 URL, 经代理易超时
+RUN sed -i "s|https://files.pythonhosted.org|${UV_FILES_MIRROR}|g" uv.lock \
+    && uv sync --no-dev --frozen --no-editable
 
 # --- 最终镜像 ---
 FROM base
