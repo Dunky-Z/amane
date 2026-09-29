@@ -55,6 +55,7 @@ import { useTranslation } from "react-i18next";
 import type { PlaybackSubtitleItem } from "@/client/types.gen";
 import { useLatestRef } from "@/hooks/use-latest-ref";
 import i18n from "@/i18n";
+import { copyText } from "@/lib/copy-text";
 
 import classes from "./playback-player.module.css";
 
@@ -312,12 +313,11 @@ function ContextMenu({
   }, [onClose]);
 
   const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      notifications.show({ message: t("detail.playbackCopied"), color: "blue" });
-    } catch {
-      notifications.show({ message: t("detail.playbackCopyFailed"), color: "red" });
-    }
+    const ok = await copyText(text);
+    notifications.show({
+      message: ok ? t("detail.playbackCopied") : t("detail.playbackCopyFailed"),
+      color: ok ? "blue" : "red",
+    });
     onClose(true);
   };
 

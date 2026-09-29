@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 import { notifications } from "@mantine/notifications";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { copyText } from "@/lib/copy-text";
 import { getPathTemplateSchemaOptions } from "@/client/@tanstack/react-query.gen";
 import { LibraryCreateRequestSchema, LibraryResponseSchema } from "@/client/schemas.gen";
 import type {
@@ -269,15 +270,13 @@ export function LibraryFormFields({ value, onChange, showCreateOnly }: LibraryFo
 
   const copyPlaceholder = async (name: string) => {
     const text = `{${name}}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      notifications.show({
-        message: t("placeholders.copied", { placeholder: text }),
-        color: "blue",
-      });
-    } catch {
-      notifications.show({ message: t("placeholders.copyFailed"), color: "red" });
-    }
+    const ok = await copyText(text);
+    notifications.show({
+      message: ok
+        ? t("placeholders.copied", { placeholder: text })
+        : t("placeholders.copyFailed"),
+      color: ok ? "blue" : "red",
+    });
   };
 
   return (
