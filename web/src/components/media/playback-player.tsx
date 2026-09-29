@@ -1239,6 +1239,8 @@ export function PlaybackPlayer({
   }, [applyPendingSeek, onSeekHandled, seekRequest]);
 
   // 可寻址流按影片节流上报进度; 关闭浮层时组件卸载会再刷一次.
+  // 未真正开始播放前不上报: 挂载 / 探测阶段的 pause 常在 currentTime≈0, 会覆盖已存进度.
+  // 待处理的续播 seek 完成前也不上报.
   useEffect(() => {
     if (metadataId == null || metadataId <= 0 || !seekable) {
       return;
@@ -1250,7 +1252,11 @@ export function PlaybackPlayer({
     const PROGRESS_INTERVAL_MS = 8000;
     let lastWrote = -1;
     let throttleTimer: number | null = null;
+    let allowSave = false;
     const write = () => {
+      if (!allowSave || pendingSeekRef.current != null) {
+        return;
+      }
       const seconds = video.currentTime;
       if (!Number.isFinite(seconds) || seconds < 0) {
         return;
@@ -1264,6 +1270,9 @@ export function PlaybackPlayer({
         body: { position_seconds: seconds },
       }).catch(() => undefined);
     };
+    const onPlaying = () => {
+      allowSave = true;
+    };
     const onTimeUpdate = () => {
       if (throttleTimer != null) {
         return;
@@ -1275,6 +1284,7 @@ export function PlaybackPlayer({
     };
     const onPause = () => write();
     const onPageHide = () => write();
+    video.addEventListener("playing", onPlaying);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("pause", onPause);
     window.addEventListener("pagehide", onPageHide);
@@ -1283,6 +1293,7 @@ export function PlaybackPlayer({
         window.clearTimeout(throttleTimer);
       }
       write();
+      video.removeEventListener("playing", onPlaying);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("pause", onPause);
       window.removeEventListener("pagehide", onPageHide);

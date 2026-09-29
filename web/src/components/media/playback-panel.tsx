@@ -410,21 +410,27 @@ export function PlaybackPanel({
     if (skipRestoreRef.current || restoreAttemptedRef.current || !canSeek || metadataId <= 0) {
       return;
     }
-    restoreAttemptedRef.current = true;
     let cancelled = false;
-    void getPlaybackProgress({ path: { metadata_id: metadataId } })
+    // 等 GET 完成再钉死 attempted: Strict Mode / canSeek 抖动会取消 inflight,
+    // 若提前置位则重挂后永远不再恢复.
+    void getPlaybackProgress({ path: { metadata_id: metadataId }, throwOnError: true })
       .then(({ data }) => {
         if (cancelled || skipRestoreRef.current || seekRequest != null) {
           return;
         }
-        const seconds = data?.position_seconds;
+        restoreAttemptedRef.current = true;
+        const seconds = data.position_seconds;
         if (seconds == null || seconds <= 0) {
           return;
         }
         restoreNonceRef.current += 1;
         setRestoreSeek({ seconds, nonce: restoreNonceRef.current });
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) {
+          restoreAttemptedRef.current = true;
+        }
+      });
     return () => {
       cancelled = true;
     };
