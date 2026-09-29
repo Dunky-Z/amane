@@ -291,6 +291,7 @@ export function PlaybackPanel({
   seekRequest,
   onSeekHandled,
   onCanSeekChange,
+  autoScrollOnSeek = true,
 }: {
   metadataId: number;
   /** 评论时间戳的跳转请求; 为空表示没有待处理的跳转. */
@@ -299,6 +300,11 @@ export function PlaybackPanel({
   onSeekHandled: () => void;
   /** 当前能否跳转, 供评论里的时间戳决定是否可点. */
   onCanSeekChange: (canSeek: boolean) => void;
+  /**
+   * 跳转时是否把播放窗口滚进视野.
+   * 浮层内的播放器已在视口内, 滚页面反而把评论带出视野, 因此关掉.
+   */
+  autoScrollOnSeek?: boolean;
 }) {
   const { t } = useTranslation("metadata");
   // 来源列表不调用插件, 因此打开面板就能渲染; 探测推迟到用户切到某个来源时.
@@ -384,7 +390,7 @@ export function PlaybackPanel({
   // 把它带回屏幕, 并对齐上沿而不是居中 —— 居中会把刚点的那条评论一起挪出视野.
   // 依赖流的选择: 流列表到位之前播放窗口尚未渲染, 带 `t` 的地址要在这里补一次.
   useEffect(() => {
-    if (seekRequest == null || selected == null) {
+    if (!autoScrollOnSeek || seekRequest == null || selected == null) {
       return;
     }
     const frame = playerFrameRef.current;
@@ -396,7 +402,7 @@ export function PlaybackPanel({
       return;
     }
     frame.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [seekRequest, selected]);
+  }, [autoScrollOnSeek, seekRequest, selected]);
 
   const title = (
     <Text size="sm" fw={600}>

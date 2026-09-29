@@ -1,0 +1,41 @@
+.root {
+  position: fixed;
+  z-index: 320;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  resize: both;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-body);
+  box-shadow: var(--mantine-shadow-lg);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  background: var(--mantine-color-default-hover);
+}
+
+.header:active {
+  cursor: grabbing;
+}
+
+.grip {
+  flex: 0 0 auto;
+  color: var(--mantine-color-dimmed);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
