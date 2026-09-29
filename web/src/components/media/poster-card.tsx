@@ -1,15 +1,30 @@
-import { AspectRatio, Box, Card, Center, Group, Stack, Text } from "@mantine/core";
-import { IconCalendar, IconStar, IconUser } from "@tabler/icons-react";
+import { AspectRatio, Box, Card, Center, Group, Stack, Text, UnstyledButton } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { IconCalendar, IconCheck, IconHeart, IconHeartFilled, IconStar, IconUser } from "@tabler/icons-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
-import type { MetadataResponse } from "@/client/types.gen";
+
+import {
+  batchMetadataUserTagsMutation,
+  createUserTagsMutation,
+  listFacetsQueryKey,
+  listMetadataQueryKey,
+} from "@/client/@tanstack/react-query.gen";
+import type { MetadataResponse, UserTagResponse } from "@/client/types.gen";
 import { FilePhaseOverlay } from "@/components/media/file-phase-badges";
 import { OverlayChip, OverlayChipLabel } from "@/components/media/overlay-chip";
 import { ProxyImage } from "@/components/media/proxy-image";
+import { extractErrorMessage } from "@/lib/api-error";
 import { ageAtRelease } from "@/lib/format-birthday";
 import { formatReleaseYearMonth } from "@/lib/format-release";
+import { USER_TAG_FACET_LIST } from "@/lib/facets";
 import { proxyImageUrl } from "@/lib/utils";
+
+/** 海报快捷开关写入的用户标签名 (固定中文, 便于筛选). */
+export const WATCHED_USER_TAG = "已播放";
+export const FAVORITE_USER_TAG = "收藏";
 
 interface PosterCardProps {
   item: MetadataResponse;
@@ -17,16 +32,73 @@ interface PosterCardProps {
   actorBirthday?: string | null;
 }
 
+function hasTag(tags: UserTagResponse[] | undefined, name: string): boolean {
+  return (tags ?? []).some((tag) => tag.name === name);
+}
+
 /** 加载失败退化为番号占位块. */
 export function PosterCard({ item, actorBirthday }: PosterCardProps) {
-  const { t } = useTranslation("metadata");
+  const { t } = useTranslation(["metadata", "common"]);
+  const queryClient = useQueryClient();
   const [errored, setErrored] = useState(false);
+  const [optimisticTags, setOptimisticTags] = useState<UserTagResponse[] | null>(null);
+  const serverKey = `${item.id}:${(item.user_tags ?? []).map((tag) => `${tag.id}:${tag.name}`).join(",")}`;
+  const [syncedKey, setSyncedKey] = useState(serverKey);
+  if (serverKey !== syncedKey) {
+    setSyncedKey(serverKey);
+    setOptimisticTags(null);
+  }
+  const tags = optimisticTags ?? item.user_tags ?? [];
+
   const posterUrl = proxyImageUrl(item.poster_url ?? item.poster_urls?.[0]);
   const showImage = posterUrl && !errored;
   const actors = item.actors ?? [];
   const actorsLabel = actors.length > 0 ? actors.join(" / ") : null;
   const releaseLabel = formatReleaseYearMonth(item.release);
   const ageThen = ageAtRelease(actorBirthday, item.release);
+
+  const watched = hasTag(tags, WATCHED_USER_TAG);
+  const favorite = hasTag(tags, FAVORITE_USER_TAG);
+
+  const ensureTags = useMutation(createUserTagsMutation());
+  const applyTags = useMutation(batchMetadataUserTagsMutation());
+  const busy = ensureTags.isPending || applyTags.isPending;
+
+  async function toggleMark(name: string, active: boolean, event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (busy || item.id <= 0) {
+      return;
+    }
+    const previous = tags;
+    const optimistic: UserTagResponse[] = active
+      ? previous.filter((tag) => tag.name !== name)
+      : [...previous.filter((tag) => tag.name !== name), { id: -1, name }];
+    setOptimisticTags(optimistic);
+    try {
+      const ensured = await ensureTags.mutateAsync({ body: { names: [name] } });
+      const tagId = ensured.items[0]?.id;
+      if (tagId == null) {
+        throw new Error("missing tag id");
+      }
+      void queryClient.invalidateQueries({ queryKey: listFacetsQueryKey(USER_TAG_FACET_LIST) });
+      await applyTags.mutateAsync({
+        body: {
+          ids: [item.id],
+          user_tag_ids: [tagId],
+          action: active ? "detach" : "attach",
+        },
+      });
+      setOptimisticTags(null);
+      void queryClient.invalidateQueries({ queryKey: listMetadataQueryKey() });
+    } catch (err) {
+      setOptimisticTags(null);
+      notifications.show({
+        message: extractErrorMessage(err, t("common:toast.operationFailed")),
+        color: "red",
+      });
+    }
+  }
 
   return (
     <Link
@@ -54,6 +126,48 @@ export function PosterCard({ item, actorBirthday }: PosterCardProps) {
               </Center>
             )}
           </AspectRatio>
+          <Group gap={4} pos="absolute" top={6} left={6} style={{ zIndex: 2 }}>
+            <UnstyledButton
+              onClick={(event) => void toggleMark(WATCHED_USER_TAG, watched, event)}
+              aria-pressed={watched}
+              aria-label={t("detail.markWatched")}
+              title={t("detail.markWatched")}
+              disabled={busy}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: "var(--mantine-radius-xl)",
+                background: watched ? "var(--mantine-color-teal-6)" : "rgba(0, 0, 0, 0.72)",
+                color: "white",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              <IconCheck size={14} stroke={2.4} />
+            </UnstyledButton>
+            <UnstyledButton
+              onClick={(event) => void toggleMark(FAVORITE_USER_TAG, favorite, event)}
+              aria-pressed={favorite}
+              aria-label={t("detail.markFavorite")}
+              title={t("detail.markFavorite")}
+              disabled={busy}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: "var(--mantine-radius-xl)",
+                background: favorite ? "var(--mantine-color-pink-6)" : "rgba(0, 0, 0, 0.72)",
+                color: "white",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              {favorite ? <IconHeartFilled size={14} /> : <IconHeart size={14} />}
+            </UnstyledButton>
+          </Group>
           <FilePhaseOverlay
             phase={item.file_phase}
             bottomExtra={
@@ -114,16 +228,7 @@ export function PosterCard({ item, actorBirthday }: PosterCardProps) {
               >
                 <IconUser size={11} stroke={2.2} />
               </Box>
-              <Text
-                size="xs"
-                fw={600}
-                lineClamp={1}
-                style={{
-                  minWidth: 0,
-                  flex: 1,
-                  color: "light-dark(var(--mantine-color-grape-7), var(--mantine-color-grape-3))",
-                }}
-              >
+              <Text size="xs" fw={600} lineClamp={1} style={{ minWidth: 0 }}>
                 {actorsLabel}
               </Text>
             </Group>

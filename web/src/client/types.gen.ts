@@ -2144,6 +2144,12 @@ export type MetadataResponse = {
     file_count?: number;
     file_phase?: FilePhaseSummary;
     /**
+     * User Tags
+     *
+     * 用户标签
+     */
+    user_tags?: Array<UserTagResponse>;
+    /**
      * Created At
      */
     created_at?: string | null;

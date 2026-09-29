@@ -4554,6 +4554,14 @@ export const MetadataResponseSchema = {
         file_phase: {
             $ref: '#/components/schemas/FilePhaseSummary'
         },
+        user_tags: {
+            items: {
+                $ref: '#/components/schemas/UserTagResponse'
+            },
+            type: 'array',
+            title: 'User Tags',
+            description: '用户标签'
+        },
         created_at: {
             anyOf: [
                 {

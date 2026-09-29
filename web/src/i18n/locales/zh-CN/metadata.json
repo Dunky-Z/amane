@@ -146,7 +146,9 @@
     "playbackCopyTimestamp": "复制时间戳",
     "playbackCopyLink": "复制当前时间的链接",
     "playbackCopied": "已复制到剪贴板",
-    "playbackCopyFailed": "复制失败"
+    "playbackCopyFailed": "复制失败",
+    "markWatched": "已播放",
+    "markFavorite": "收藏"
   },
   "browse": {
     "title": "分类浏览",

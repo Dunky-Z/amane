@@ -29,7 +29,7 @@ HTTP 宿主与 DI 在 `app.py` / `deps.py` / `middleware.py` / `spa.py`; `routes
 | `config` | `/config` | HotSettings + schema |
 | `plugins` | `/plugins` | 插件目录、安装 / 卸载 / 热扫描、配置 schema 与启用状态 |
 | `network` | `/network` | 刮削来源连通性探测 |
-| `playback` | `/playback` | 播放源列表与码流 |
+| `playback` | `/playback` | 播放源列表与码流; `GET|PUT /progress/{metadata_id}` 按影片进度 |
 | `files` | `/files` | 目录浏览; 契约见下 |
 | `resources` | `/resources` | 本地资源 + `GET /proxy` |
 | `agent` | `/agent`, `/saved-queries` | 见 [agent.md](agent.md) |
@@ -40,7 +40,7 @@ OpenAPI 列出参数, 不表达组合语义:
 - metadata 同 kind 的筛选: 关联类 AND / 标量类 OR; 跨 kind 始终 AND. `saved_query_id` 与其它筛选项 AND; `data` 实体不可作列表筛选 (400). 关联文件相位筛选与 `has_files` 一样 AND (布尔项 True = 至少一份具备, False = 没有任何一份具备), 列表项带聚合 `file_phase`. 见 [data-model.md](data-model.md) / [agent.md](agent.md).
 - GET `/media` 的相位 query 作用在单行列上: 布尔 False 是 `col = false`, 不是 metadata 那种 NOT EXISTS. 未知 `definition` → 422; 相位列不纳入 PATCH.
 - 裁切海报基准是 `thumb_urls[0]` **当前本地文件**像素, 不修改库路径海报; locator 见 [data-model.md](data-model.md).
-- 注册顺序有约束的五处: `/facets/{kind}/rules` 先于 `/{facet_id}`; `/plugins/reload` 先于 `/plugins/{plugin_id}` (否则 `reload` 被当成插件 ID); `/tasks/batch` 与 `/tasks/worker*` 先于 `/{task_id}` (否则被当成非法整数 id); `/feeds/items` 先于 `/{feed_id}`; `/playback/sources` 先于 `/{source_id}`.
+- 注册顺序有约束的五处: `/facets/{kind}/rules` 先于 `/{facet_id}`; `/plugins/reload` 先于 `/plugins/{plugin_id}` (否则 `reload` 被当成插件 ID); `/tasks/batch` 与 `/tasks/worker*` 先于 `/{task_id}` (否则被当成非法整数 id); `/feeds/items` 先于 `/{feed_id}`; `/playback/sources` 与 `/playback/progress/{metadata_id}` 先于 `/{source_id}`.
 - 播放端点的形状 (流的一行、`available` / `key` / `detail` 的三种组合、Range、HLS 分片与字幕路径、404 / 502 语义) 见 [plugins.md](plugins.md)「播放源」.
 - `/network/check` 的探测范围 = 当前热配置真正会请求的来源 (各类型路由的并集 + 演员档案 / 头像来源), 省略 `source_ids` 即全量. `source_id` 是 `str` 而非 `SiteName` 枚举 (第三方来源是 `namespace.local`, 且来源集合随插件增删变化), 未知值无法用 schema 拒绝, 不存在的 ID 计入条目返回 `SKIPPED`. 逐来源的失败只进条目, 端点始终 200 — 探测结果本身就是响应体; `reason` 只在失败时给出, `skip_reason` 只在未探测时给出, `detail` 是语言中立的补充说明 (界面原样渲染, 不翻译). 探测不进入任务队列, 也不写入站点 outcome (那是刮削任务的记录).
 - 评论正文先去除首尾空白再校验长度, 全空白与超过 10000 字符均为 422. `updated_at` 晚于 `created_at` 表示正文被编辑过: PATCH 提交与库中一致的正文不写库, 也不刷新 `updated_at`, 前端据此判定「已编辑」; 排序由前端在详情响应上完成, 端点不提供 order 参数.
@@ -66,7 +66,7 @@ OpenAPI 列出参数, 不表达组合语义:
 
 **资源缓存**: `/resources/{hash}` 与 `/proxy` 因就地超分 URL 不变, 不可 immutable — `Cache-Control: public, no-cache` + `content_hash` ETag. proxy 上游失败 502, 进程内负缓存 15 分钟 (不纳入配置), 同 URL singleflight; 刮削下载不经由该缓存.
 
-**批量**: 不存在的 id 计入 `missing` / `skipped`, 存在的照常处理 (非事务 all-or-nothing). `POST /tasks/batch` 的选择集是 `task_ids` **或**与列表同形的 `status` / `type` (未传则不限): `cancel` 把排队 / 运行中标 `failed` 而不删行, `delete` 只动终态并清除磁盘产物, `retry` 只对 `failed` 按原 type / payload / priority 再入队并返回新 `task_ids`; 筛选范围与 action 允许状态求交后为空则 `affected=0`. FeedItem 的批量是单一 `POST /feeds/{feed_id}/items/batch`, 一个请求只携带一个 action, 语义见 [feeds.md](feeds.md). 用户标签挂载同样只有批量入口 (`POST /api/metadata/batch/user-tags`, 影片与标签两个维度都是集合, `action` 决定并入或移除): 未知标签 id 属请求级错误返回 404, 不存在的影片 id 计入 `missing`, 已处于目标态的影片计入 `unchanged`. 标签新建也是单一批量入口 (`POST /api/facets/user_tag`): 按名称取回或新建, 已存在的名称直接复用而不报错, 响应与入参同序. 演员侧挂载与影片侧同形 (`POST /api/actors/batch/user-tags`), 筛选参数为 `user_tag_ids`(多值为 AND).
+**批量**: 不存在的 id 计入 `missing` / `skipped`, 存在的照常处理 (非事务 all-or-nothing). `POST /tasks/batch` 的选择集是 `task_ids` **或**与列表同形的 `status` / `type` (未传则不限): `cancel` 把排队 / 运行中标 `failed` 而不删行, `delete` 只动终态并清除磁盘产物, `retry` 只对 `failed` 按原 type / payload / priority 再入队并返回新 `task_ids`; 筛选范围与 action 允许状态求交后为空则 `affected=0`. FeedItem 的批量是单一 `POST /feeds/{feed_id}/items/batch`, 一个请求只携带一个 action, 语义见 [feeds.md](feeds.md). 用户标签挂载同样只有批量入口 (`POST /api/metadata/batch/user-tags`, 影片与标签两个维度都是集合, `action` 决定并入或移除): 未知标签 id 属请求级错误返回 404, 不存在的影片 id 计入 `missing`, 已处于目标态的影片计入 `unchanged`. 标签新建也是单一批量入口 (`POST /api/facets/user_tag`): 按名称取回或新建, 已存在的名称直接复用而不报错, 响应与入参同序. `GET /api/metadata` 列表项附带当页 `user_tags` (供海报快捷开关判态). 演员侧挂载与影片侧同形 (`POST /api/actors/batch/user-tags`), 筛选参数为 `user_tag_ids`(多值为 AND).
 
 ## WebSocket
 
