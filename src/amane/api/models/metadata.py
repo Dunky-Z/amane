@@ -123,11 +123,16 @@ class CropPosterRequest(BaseModel):
 
 class MetadataBatchIdsRequest(BaseModel):
     ids: list[int] = Field(min_length=1, description="Metadata ID 列表")
+    delete_files: bool = Field(
+        default=False,
+        description="为真时同时删除已索引视频文件与文件索引行; 为假时只删除元数据并解除文件关联",
+    )
 
 
 class MetadataBatchDeleteResponse(BaseModel):
     deleted: int = Field(description="成功删除的数量")
     missing: int = Field(description="不存在的 id 数量")
+    failed: int = Field(description="源文件删除被拒绝、因而元数据仍保留的数量")
 
 
 class MetadataBatchScrapeRequest(BaseModel):

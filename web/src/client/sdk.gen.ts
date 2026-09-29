@@ -94,7 +94,7 @@ export const listMetadata = <ThrowOnError extends boolean = false>(options?: Opt
 /**
  * Batch Delete Metadata
  *
- * 级联行为与单条删除一致.
+ * 级联行为与单条删除一致. ``delete_files`` 时按条删除磁盘文件, 失败的 id 不删除元数据.
  */
 export const batchDeleteMetadata = <ThrowOnError extends boolean = false>(options: Options<BatchDeleteMetadataData, ThrowOnError>): RequestResult<BatchDeleteMetadataResponses, BatchDeleteMetadataErrors, ThrowOnError> => (options.client ?? client).post<BatchDeleteMetadataResponses, BatchDeleteMetadataErrors, ThrowOnError>({
     url: '/api/metadata/batch/delete',
@@ -135,6 +135,10 @@ export const batchMetadataUserTags = <ThrowOnError extends boolean = false>(opti
 
 /**
  * Delete Metadata
+ *
+ * ``delete_files`` 为假时保留磁盘文件并解除索引关联. 为真时先删除已索引路径, 再删除索引行与元数据.
+ *
+ * 任一路径不能删除时返回 409, 元数据与其余文件都保留.
  */
 export const deleteMetadata = <ThrowOnError extends boolean = false>(options: Options<DeleteMetadataData, ThrowOnError>): RequestResult<DeleteMetadataResponses, DeleteMetadataErrors, ThrowOnError> => (options.client ?? client).delete<DeleteMetadataResponses, DeleteMetadataErrors, ThrowOnError>({ url: '/api/metadata/{metadata_id}', ...options });
 

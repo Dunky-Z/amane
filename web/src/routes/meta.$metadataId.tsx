@@ -51,6 +51,7 @@ import {
 } from "@/client/@tanstack/react-query.gen";
 import { getMetadataSchema, translateText } from "@/client/sdk.gen";
 import type { MetadataResponse, TranslateRequest } from "@/client/types.gen";
+import { confirmMetadataDelete } from "@/components/media/delete-metadata-dialog";
 import { FacetBadge } from "@/components/media/facet-badge";
 import { UserTagActions } from "@/components/media/user-tag-add";
 import { FanartLightbox, FanartStrip } from "@/components/media/fanart-lightbox";
@@ -60,7 +61,6 @@ import { MergeDialog } from "@/components/metadata/merge-dialog";
 import { type JSONSchemaObject, resolveSchema } from "@/components/schema-form/schema";
 import { SchemaForm } from "@/components/schema-form/schema-form";
 import { extractErrorMessage } from "@/lib/api-error";
-import { confirm } from "@/lib/confirm";
 import { USER_TAG_FACET_LIST } from "@/lib/facets";
 import { proxyImageUrl } from "@/lib/utils";
 import { ProxyImage } from "@/components/media/proxy-image";
@@ -208,8 +208,12 @@ function TitleDetailPage() {
 
   const deleteMutation = useMutation({
     ...deleteMetadataMutation(),
-    onSuccess: () => {
-      notifications.show({ message: t("common:toast.metadataDeleted"), color: "blue" });
+    onSuccess: (_data, variables) => {
+      const deletedFiles = variables.query?.delete_files === true;
+      notifications.show({
+        message: deletedFiles ? t("common:toast.sourceFilesDeleted") : t("common:toast.metadataDeleted"),
+        color: "blue",
+      });
       void queryClient.invalidateQueries({ queryKey: listMetadataQueryKey() });
       void navigate({ to: "/meta" });
     },
@@ -221,13 +225,15 @@ function TitleDetailPage() {
   });
 
   async function handleDelete() {
-    const ok = await confirm({
+    const choice = await confirmMetadataDelete({
       title: t("common:actions.delete"),
       message: t("confirmDelete", { id }),
-      confirmLabel: t("common:actions.delete"),
     });
-    if (!ok) return;
-    deleteMutation.mutate({ path: { metadata_id: id } });
+    if (choice == null) return;
+    deleteMutation.mutate({
+      path: { metadata_id: id },
+      query: { delete_files: choice.deleteFiles },
+    });
   }
 
   const { data: userTagOptions } = useQuery(listFacetsOptions(USER_TAG_FACET_LIST));

@@ -104,6 +104,8 @@
     "scanStarted": "Scan started",
     "metadataUpdated": "Metadata updated",
     "metadataDeleted": "Metadata deleted",
+    "sourceFilesDeleted": "Metadata and source files deleted",
+    "sourceFilesDeletePartial": "Deleted {{deleted}}. {{failed}} kept because source files could not be deleted",
     "configSaved": "Configuration saved",
     "watchPathAdded": "Watch path added",
     "watchPathRemoved": "Watch path removed",

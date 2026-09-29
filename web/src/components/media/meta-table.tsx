@@ -33,10 +33,10 @@ import { HintedActionIcon } from "@/components/common/hinted-action-icon";
 import { ListToolbar } from "@/components/common/list-toolbar";
 import { ResizableTh, SortableTh } from "@/components/common/sortable-th";
 import { SelectionBar } from "@/components/common/selection-bar";
+import { confirmMetadataDelete } from "@/components/media/delete-metadata-dialog";
 import { useIdSelection } from "@/hooks/use-id-selection";
 import { useResizableColumns } from "@/hooks/use-resizable-columns";
 import { extractErrorMessage } from "@/lib/api-error";
-import { confirm } from "@/lib/confirm";
 import { USER_TAG_FACET_LIST } from "@/lib/facets";
 import { type MetaTableColumnKey, useUIStore } from "@/stores/ui";
 import classes from "./meta-table.module.css";
@@ -156,8 +156,12 @@ export function MetaTable({
   const scrapeOne = useMutation(submitTaskMutation());
   const deleteOne = useMutation({
     ...deleteMetadataMutation(),
-    onSuccess: () => {
-      notifications.show({ message: t("common:toast.metadataDeleted"), color: "blue" });
+    onSuccess: (_data, variables) => {
+      const deletedFiles = variables.query?.delete_files === true;
+      notifications.show({
+        message: deletedFiles ? t("common:toast.sourceFilesDeleted") : t("common:toast.metadataDeleted"),
+        color: "blue",
+      });
       invalidate();
     },
     onError: (err) =>
@@ -187,12 +191,17 @@ export function MetaTable({
 
   const batchDelete = useMutation({
     ...batchDeleteMetadataMutation(),
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
+      const failed = res.failed ?? 0;
+      const deletedFiles = variables.body?.delete_files === true;
       notifications.show({
-        message: t("common:toast.metadataDeleted", {
-          defaultValue: `已删除 ${res.deleted} 条`,
-        }),
-        color: "blue",
+        message:
+          failed > 0
+            ? t("common:toast.sourceFilesDeletePartial", { deleted: res.deleted, failed })
+            : deletedFiles
+              ? t("common:toast.sourceFilesDeleted")
+              : t("common:toast.metadataDeleted"),
+        color: failed > 0 ? "yellow" : "blue",
       });
       clear();
       invalidate();
@@ -205,23 +214,24 @@ export function MetaTable({
   });
 
   async function handleBatchDelete() {
-    const ok = await confirm({
+    const choice = await confirmMetadataDelete({
       title: t("actions.confirmBatchDeleteTitle"),
       message: t("actions.confirmBatchDeleteDesc", { count: selectedIds.length }),
-      confirmLabel: t("common:actions.delete"),
     });
-    if (!ok) return;
-    batchDelete.mutate({ body: { ids: selectedIds } });
+    if (choice == null) return;
+    batchDelete.mutate({ body: { ids: selectedIds, delete_files: choice.deleteFiles } });
   }
 
   async function handleDeleteOne(metadataId: number) {
-    const ok = await confirm({
+    const choice = await confirmMetadataDelete({
       title: t("common:actions.delete"),
       message: t("confirmDelete", { id: metadataId }),
-      confirmLabel: t("common:actions.delete"),
     });
-    if (!ok) return;
-    deleteOne.mutate({ path: { metadata_id: metadataId } });
+    if (choice == null) return;
+    deleteOne.mutate({
+      path: { metadata_id: metadataId },
+      query: { delete_files: choice.deleteFiles },
+    });
   }
 
   const batchTags = useMutation({

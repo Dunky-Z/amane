@@ -777,6 +777,18 @@ class TestMetadataRepo:
         assert (zero, all_miss) == (0, 2)
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_delete_metadata_remove_files_drops_media_rows(self, repo: Repository):
+        meta = await repo.upsert_metadata(number="RM-001", title="Remove")
+        assert meta.id is not None
+        media = await repo.create_media_file(library_id=1, path="/video/RM-001.mp4", number="RM-001")
+        assert media.id is not None
+        await repo.update_media_file(media.id, status=MediaFileStatus.SCRAPED, metadata_id=meta.id)
+
+        assert await repo.delete_metadata(meta.id, remove_files=True) is True
+        assert await repo.get_metadata(meta.id) is None
+        assert await repo.get_media_file(media.id) is None
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_get_media_by_metadata_id(self, repo: Repository):
         meta = await repo.upsert_metadata(number="ABC-001", title="Test")
         assert meta.id is not None

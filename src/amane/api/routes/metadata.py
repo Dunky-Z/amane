@@ -8,6 +8,7 @@ from ...aggregate import compute_merge_updates
 from ...db.models import MetadataSortField, SavedQueryEntity, SortOrder, TaskType
 from ...db.repos.media import file_phase_of
 from ...handlers import ScrapePayload
+from ...library.source_delete import SourceDeleteError, unlink_indexed_files
 from ...media import manual_crop_poster
 from ...parsing import DEFINITION_VALUES, ContentType, Mosaic, infer_content_type, summarize_file_phases
 from ...parsing import FilePhaseSummary as ParsedFilePhase
@@ -137,10 +138,32 @@ async def list_metadata(
 
 @router.post("/batch/delete")
 async def batch_delete_metadata(req: MetadataBatchIdsRequest, repo: RepoDep) -> MetadataBatchDeleteResponse:
-    """级联行为与单条删除一致."""
-    deleted, missing = await repo.batch_delete_metadata(req.ids)
-    logger.info("metadata batch deleted", deleted=deleted, missing=missing)
-    return MetadataBatchDeleteResponse(deleted=deleted, missing=missing)
+    """级联行为与单条删除一致. ``delete_files`` 时按条删除磁盘文件, 失败的 id 不删除元数据."""
+    if not req.delete_files:
+        deleted, missing = await repo.batch_delete_metadata(req.ids)
+        logger.info("metadata batch deleted", deleted=deleted, missing=missing)
+        return MetadataBatchDeleteResponse(deleted=deleted, missing=missing, failed=0)
+
+    deleted = 0
+    missing = 0
+    failed = 0
+    for metadata_id in req.ids:
+        if await repo.get_metadata(metadata_id) is None:
+            missing += 1
+            continue
+        files = await repo.get_media_by_metadata_id(metadata_id)
+        try:
+            await unlink_indexed_files([item.path for item in files])
+        except SourceDeleteError as exc:
+            logger.warning("source file delete rejected", metadata_id=metadata_id, reason=exc.reason, path=exc.path)
+            failed += 1
+            continue
+        if await repo.delete_metadata(metadata_id, remove_files=True):
+            deleted += 1
+        else:
+            missing += 1
+    logger.info("metadata batch deleted", deleted=deleted, missing=missing, failed=failed, delete_files=True)
+    return MetadataBatchDeleteResponse(deleted=deleted, missing=missing, failed=failed)
 
 
 @router.post("/batch/scrape", status_code=202)
@@ -251,11 +274,28 @@ async def update_metadata(metadata_id: int, req: PartialMetadata, repo: RepoDep)
 
 
 @router.delete("/{metadata_id}", status_code=204)
-async def delete_metadata(metadata_id: int, repo: RepoDep) -> None:
-    deleted = await repo.delete_metadata(metadata_id)
+async def delete_metadata(
+    metadata_id: int,
+    repo: RepoDep,
+    delete_files: Annotated[bool, Query()] = False,
+) -> None:
+    """``delete_files`` 为假时保留磁盘文件并解除索引关联. 为真时先删除已索引路径, 再删除索引行与元数据.
+
+    任一路径不能删除时返回 409, 元数据与其余文件都保留.
+    """
+    if delete_files:
+        if await repo.get_metadata(metadata_id) is None:
+            raise HTTPException(status_code=404, detail="Metadata not found")
+        files = await repo.get_media_by_metadata_id(metadata_id)
+        try:
+            await unlink_indexed_files([item.path for item in files])
+        except SourceDeleteError as exc:
+            logger.warning("source file delete rejected", metadata_id=metadata_id, reason=exc.reason, path=exc.path)
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    deleted = await repo.delete_metadata(metadata_id, remove_files=delete_files)
     if not deleted:
         raise HTTPException(status_code=404, detail="Metadata not found")
-    logger.info("metadata deleted", metadata_id=metadata_id)
+    logger.info("metadata deleted", metadata_id=metadata_id, delete_files=delete_files)
 
 
 @router.post("/{metadata_id}/crop-poster")

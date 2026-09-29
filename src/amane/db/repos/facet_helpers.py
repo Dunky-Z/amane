@@ -645,20 +645,28 @@ def _replace_names_in_list(values: list[str], old_names: set[str], new_name: str
     return result
 
 
-async def cascade_delete_metadata(session: AsyncSession, metadata: Metadata) -> None:
-    """不提交事务. 必须 nullify MediaFile.metadata_id 并回 PENDING, 否则留下悬空 FK;
-    文件记录本身保留. 分类关联 / 评论 / 用户 tag / 播放进度须显式删除 (不依赖 FK pragma);
+async def cascade_delete_metadata(session: AsyncSession, metadata: Metadata, *, remove_files: bool = False) -> None:
+    """不提交事务, 也不删除磁盘文件.
+
+    ``remove_files`` 为假时必须 nullify ``MediaFile.metadata_id`` 并回 PENDING, 否则留下悬空 FK;
+    文件记录本身保留. 为真时删除这些 MediaFile 行.
+    分类关联 / 评论 / 用户 tag / 播放进度须显式删除 (不依赖 FK pragma);
     Actor/Director 等目录实体本身保留.
     """
     assert metadata.id is not None
     metadata_id = metadata.id
     stmt = select(MediaFile).where(MediaFile.metadata_id == metadata_id)
     result = await session.exec(stmt)
-    for mf in result.all():
-        mf.metadata_id = None
-        mf.status = MediaFileStatus.PENDING
-        mf.updated_at = _utcnow()
-        session.add(mf)
+    if remove_files:
+        for mf in result.all():
+            await session.delete(mf)
+        await session.flush()
+    else:
+        for mf in result.all():
+            mf.metadata_id = None
+            mf.status = MediaFileStatus.PENDING
+            mf.updated_at = _utcnow()
+            session.add(mf)
     await session.exec(sqla_delete(MetadataActor).where(col(MetadataActor.metadata_id) == metadata_id))
     await session.exec(sqla_delete(MetadataDirector).where(col(MetadataDirector.metadata_id) == metadata_id))
     await session.exec(sqla_delete(MetadataTag).where(col(MetadataTag.metadata_id) == metadata_id))

@@ -17,6 +17,7 @@ import { createRoot } from "react-dom/client";
 
 import { client } from "@/client/client.gen";
 import { LoginGate } from "@/components/auth/login-gate";
+import { MetadataDeleteDialogHost } from "@/components/media/delete-metadata-dialog";
 import { ConfirmHost } from "@/lib/confirm";
 import { apiFetch, AUTH_EXPIRED_EVENT } from "@/lib/api-token";
 import { initConnection } from "@/lib/connection";
@@ -112,6 +113,7 @@ function Root() {
     >
       <Notifications position="top-right" />
       <ConfirmHost />
+      <MetadataDeleteDialogHost />
       {authed === null ? (
         <Center h="var(--amane-vh)">
           <Loader size="sm" />

@@ -256,6 +256,12 @@
   "notFound": "未找到元数据",
   "invalidId": "无效的元数据 ID",
   "confirmDelete": "确定删除元数据 #{{id}}？此操作不可撤销。",
+  "deleteChoice": {
+    "metadata": "删除元数据",
+    "metadataHint": "删除数据库中的元数据。磁盘上的视频文件保留，文件索引解除关联。",
+    "files": "删除源文件",
+    "filesHint": "删除磁盘上已索引的视频文件，并同时删除元数据与文件索引。没有已索引视频时，只删除元数据。"
+  },
   "empty": "暂无元数据记录",
   "editor": {
     "title": {

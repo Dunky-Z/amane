@@ -1,5 +1,6 @@
 """/metadata/batch/* HTTP 接线. 删除级联 / 挂载语义见 tests/db."""
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -27,12 +28,66 @@ class TestMetadataBatchHttp:
         assert m1.id is not None and m2.id is not None
         resp = await client.post("metadata/batch/delete", json={"ids": [m1.id, m2.id, 9999]})
         assert resp.status_code == 200
-        assert resp.json() == {"deleted": 2, "missing": 1}
+        assert resp.json() == {"deleted": 2, "missing": 1, "failed": 0}
         assert (await client.post("metadata/batch/delete", json={"ids": [8888]})).json() == {
             "deleted": 0,
             "missing": 1,
+            "failed": 0,
         }
         assert (await client.post("metadata/batch/delete", json={"ids": []})).status_code == 422
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_delete_source_files(self, client: AsyncClient, repo: Repository, tmp_path: Path):
+        meta = await repo.upsert_metadata(number="DEL-FILE-001")
+        kept = await repo.upsert_metadata(number="DEL-FILE-002")
+        blocked = await repo.upsert_metadata(number="DEL-FILE-003")
+        assert meta.id is not None and kept.id is not None and blocked.id is not None
+        video = tmp_path / "clip.mp4"
+        video.write_bytes(b"video")
+        media = await repo.create_media_file(library_id=1, path=str(video), metadata_id=meta.id)
+        assert media.id is not None
+        untouched = tmp_path / "stay.mp4"
+        untouched.write_bytes(b"stay")
+        stay = await repo.create_media_file(library_id=1, path=str(untouched), metadata_id=kept.id)
+        assert stay.id is not None
+        folder = tmp_path / "not-a-file"
+        folder.mkdir()
+        await repo.create_media_file(library_id=1, path=str(folder), metadata_id=blocked.id)
+
+        only_meta = await client.delete(f"metadata/{kept.id}")
+        assert only_meta.status_code == 204
+        assert untouched.is_file()
+        assert await repo.get_media_file(stay.id) is not None
+
+        rejected = await client.delete(f"metadata/{blocked.id}", params={"delete_files": True})
+        assert rejected.status_code == 409
+        assert folder.is_dir()
+        assert await repo.get_metadata(blocked.id) is not None
+
+        removed = await client.delete(f"metadata/{meta.id}", params={"delete_files": True})
+        assert removed.status_code == 204, removed.text
+        assert not video.exists()
+        assert await repo.get_metadata(meta.id) is None
+        assert await repo.get_media_file(media.id) is None
+
+        ok_meta = await repo.upsert_metadata(number="DEL-FILE-004")
+        bad_meta = await repo.upsert_metadata(number="DEL-FILE-005")
+        assert ok_meta.id is not None and bad_meta.id is not None
+        ok_video = tmp_path / "batch.mp4"
+        ok_video.write_bytes(b"batch")
+        await repo.create_media_file(library_id=1, path=str(ok_video), metadata_id=ok_meta.id)
+        bad_dir = tmp_path / "batch-dir"
+        bad_dir.mkdir()
+        await repo.create_media_file(library_id=1, path=str(bad_dir), metadata_id=bad_meta.id)
+        batch = await client.post(
+            "metadata/batch/delete",
+            json={"ids": [ok_meta.id, bad_meta.id, 9999], "delete_files": True},
+        )
+        assert batch.status_code == 200, batch.text
+        assert batch.json() == {"deleted": 1, "missing": 1, "failed": 1}
+        assert not ok_video.exists()
+        assert bad_dir.is_dir()
+        assert await repo.get_metadata(bad_meta.id) is not None
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_scrape(self, client: AsyncClient, repo: Repository, stop_worker: None):

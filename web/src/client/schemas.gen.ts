@@ -3837,12 +3837,18 @@ export const MetadataBatchDeleteResponseSchema = {
             type: 'integer',
             title: 'Missing',
             description: '不存在的 id 数量'
+        },
+        failed: {
+            type: 'integer',
+            title: 'Failed',
+            description: '源文件删除被拒绝、因而元数据仍保留的数量'
         }
     },
     type: 'object',
     required: [
         'deleted',
-        'missing'
+        'missing',
+        'failed'
     ],
     title: 'MetadataBatchDeleteResponse'
 } as const;
@@ -3857,6 +3863,12 @@ export const MetadataBatchIdsRequestSchema = {
             minItems: 1,
             title: 'Ids',
             description: 'Metadata ID 列表'
+        },
+        delete_files: {
+            type: 'boolean',
+            title: 'Delete Files',
+            description: '为真时同时删除已索引视频文件与文件索引行; 为假时只删除元数据并解除文件关联',
+            default: false
         }
     },
     type: 'object',

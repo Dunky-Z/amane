@@ -277,17 +277,17 @@ class MetadataRepoMixin(RepositoryMixinBase):
             await session.refresh(metadata)
             return metadata
 
-    async def delete_metadata(self, metadata_id: int) -> bool:
-        """级联见 ``cascade_delete_metadata``. 不存在返回 False."""
+    async def delete_metadata(self, metadata_id: int, *, remove_files: bool = False) -> bool:
+        """级联见 ``cascade_delete_metadata``. 不存在返回 False. 不删除磁盘文件."""
         async with self._session() as session:
             metadata = await session.get(Metadata, metadata_id)
             if metadata is None:
                 return False
-            await cascade_delete_metadata(session, metadata)
+            await cascade_delete_metadata(session, metadata, remove_files=remove_files)
             await session.commit()
             return True
 
-    async def batch_delete_metadata(self, ids: list[int]) -> tuple[int, int]:
+    async def batch_delete_metadata(self, ids: list[int], *, remove_files: bool = False) -> tuple[int, int]:
         """级联与 :meth:`delete_metadata` 一致, 单个事务. 不存在的 id 计入 missing."""
         async with self._session() as session:
             deleted = 0
@@ -297,7 +297,7 @@ class MetadataRepoMixin(RepositoryMixinBase):
                 if metadata is None:
                     missing += 1
                     continue
-                await cascade_delete_metadata(session, metadata)
+                await cascade_delete_metadata(session, metadata, remove_files=remove_files)
                 deleted += 1
             await session.commit()
             return deleted, missing

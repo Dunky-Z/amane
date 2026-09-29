@@ -330,7 +330,7 @@ export const listMetadataInfiniteOptions = (options?: Options<ListMetadataData>)
 /**
  * Batch Delete Metadata
  *
- * 级联行为与单条删除一致.
+ * 级联行为与单条删除一致. ``delete_files`` 时按条删除磁盘文件, 失败的 id 不删除元数据.
  */
 export const batchDeleteMetadataMutation = (options?: Partial<Options<BatchDeleteMetadataData>>): UseMutationOptions<BatchDeleteMetadataResponse, BatchDeleteMetadataError, Options<BatchDeleteMetadataData>> => {
     const mutationOptions: UseMutationOptions<BatchDeleteMetadataResponse, BatchDeleteMetadataError, Options<BatchDeleteMetadataData>> = {
@@ -386,6 +386,10 @@ export const batchMetadataUserTagsMutation = (options?: Partial<Options<BatchMet
 
 /**
  * Delete Metadata
+ *
+ * ``delete_files`` 为假时保留磁盘文件并解除索引关联. 为真时先删除已索引路径, 再删除索引行与元数据.
+ *
+ * 任一路径不能删除时返回 409, 元数据与其余文件都保留.
  */
 export const deleteMetadataMutation = (options?: Partial<Options<DeleteMetadataData>>): UseMutationOptions<DeleteMetadataResponse, DeleteMetadataError, Options<DeleteMetadataData>> => {
     const mutationOptions: UseMutationOptions<DeleteMetadataResponse, DeleteMetadataError, Options<DeleteMetadataData>> = {

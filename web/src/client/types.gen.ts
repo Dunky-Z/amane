@@ -1802,6 +1802,12 @@ export type MetadataBatchDeleteResponse = {
      * 不存在的 id 数量
      */
     missing: number;
+    /**
+     * Failed
+     *
+     * 源文件删除被拒绝、因而元数据仍保留的数量
+     */
+    failed: number;
 };
 
 /**
@@ -1814,6 +1820,12 @@ export type MetadataBatchIdsRequest = {
      * Metadata ID 列表
      */
     ids: Array<number>;
+    /**
+     * Delete Files
+     *
+     * 为真时同时删除已索引视频文件与文件索引行; 为假时只删除元数据并解除文件关联
+     */
+    delete_files?: boolean;
 };
 
 /**
@@ -4306,7 +4318,12 @@ export type DeleteMetadataData = {
          */
         metadata_id: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Delete Files
+         */
+        delete_files?: boolean;
+    };
     url: '/api/metadata/{metadata_id}';
 };
 

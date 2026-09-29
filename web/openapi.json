@@ -930,7 +930,7 @@
           "metadata"
         ],
         "summary": "Batch Delete Metadata",
-        "description": "级联行为与单条删除一致.",
+        "description": "级联行为与单条删除一致. ``delete_files`` 时按条删除磁盘文件, 失败的 id 不删除元数据.",
         "operationId": "batch_delete_metadata",
         "requestBody": {
           "content": {
@@ -1146,6 +1146,7 @@
           "metadata"
         ],
         "summary": "Delete Metadata",
+        "description": "``delete_files`` 为假时保留磁盘文件并解除索引关联. 为真时先删除已索引路径, 再删除索引行与元数据.\n\n任一路径不能删除时返回 409, 元数据与其余文件都保留.",
         "operationId": "delete_metadata",
         "parameters": [
           {
@@ -1155,6 +1156,16 @@
             "schema": {
               "type": "integer",
               "title": "Metadata Id"
+            }
+          },
+          {
+            "name": "delete_files",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Delete Files"
             }
           }
         ],
@@ -9569,12 +9580,18 @@
             "type": "integer",
             "title": "Missing",
             "description": "不存在的 id 数量"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "description": "源文件删除被拒绝、因而元数据仍保留的数量"
           }
         },
         "type": "object",
         "required": [
           "deleted",
-          "missing"
+          "missing",
+          "failed"
         ],
         "title": "MetadataBatchDeleteResponse"
       },
@@ -9588,6 +9605,12 @@
             "minItems": 1,
             "title": "Ids",
             "description": "Metadata ID 列表"
+          },
+          "delete_files": {
+            "type": "boolean",
+            "title": "Delete Files",
+            "description": "为真时同时删除已索引视频文件与文件索引行; 为假时只删除元数据并解除文件关联",
+            "default": false
           }
         },
         "type": "object",

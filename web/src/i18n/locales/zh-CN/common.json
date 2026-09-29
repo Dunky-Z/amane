@@ -102,6 +102,8 @@
     "scanStarted": "扫描已开始",
     "metadataUpdated": "元数据已更新",
     "metadataDeleted": "元数据已删除",
+    "sourceFilesDeleted": "已删除元数据与源文件",
+    "sourceFilesDeletePartial": "已删除 {{deleted}} 条，{{failed}} 条因源文件无法删除而保留",
     "configSaved": "配置已保存",
     "watchPathAdded": "监控路径已添加",
     "watchPathRemoved": "监控路径已移除",

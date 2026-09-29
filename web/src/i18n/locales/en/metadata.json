@@ -270,6 +270,12 @@
   "notFound": "Metadata not found",
   "invalidId": "Invalid metadata ID",
   "confirmDelete": "Delete metadata #{{id}}? This cannot be undone.",
+  "deleteChoice": {
+    "metadata": "Delete metadata",
+    "metadataHint": "Remove the metadata record. Video files stay on disk, and file rows are unlinked.",
+    "files": "Delete source files",
+    "filesHint": "Delete indexed video files from disk, and also delete the metadata and file rows. If no video is indexed, only metadata is deleted."
+  },
   "empty": "No metadata records",
   "editor": {
     "title": {
