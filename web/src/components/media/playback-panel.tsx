@@ -19,6 +19,7 @@ import type { TFunction } from "i18next";
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
+import { getPlaybackProgress } from "@/client";
 import {
   listPlaybackSourcesOptions,
   listPlaybackStreamsOptions,
@@ -381,16 +382,67 @@ export function PlaybackPanel({
     kind !== "other";
 
   const playerFrameRef = useRef<HTMLDivElement>(null);
+  // 评论 / URL 的 seek 优先于服务端进度; 有过显式 seek 则本面板不再自动恢复.
+  const [restoreSeek, setRestoreSeek] = useState<SeekRequest | null>(null);
+  const restoreNonceRef = useRef(0);
+  const skipRestoreRef = useRef(false);
+  const restoreAttemptedRef = useRef(false);
+  const [progressMetaId, setProgressMetaId] = useState(metadataId);
+  if (metadataId !== progressMetaId) {
+    setProgressMetaId(metadataId);
+    skipRestoreRef.current = false;
+    restoreAttemptedRef.current = false;
+    setRestoreSeek(null);
+  }
+
+  useEffect(() => {
+    if (seekRequest != null) {
+      skipRestoreRef.current = true;
+      setRestoreSeek(null);
+    }
+  }, [seekRequest]);
 
   useEffect(() => {
     onCanSeekChange(canSeek);
   }, [canSeek, onCanSeekChange]);
 
+  useEffect(() => {
+    if (skipRestoreRef.current || restoreAttemptedRef.current || !canSeek || metadataId <= 0) {
+      return;
+    }
+    restoreAttemptedRef.current = true;
+    let cancelled = false;
+    void getPlaybackProgress({ path: { metadata_id: metadataId } })
+      .then(({ data }) => {
+        if (cancelled || skipRestoreRef.current || seekRequest != null) {
+          return;
+        }
+        const seconds = data?.position_seconds;
+        if (seconds == null || seconds <= 0) {
+          return;
+        }
+        restoreNonceRef.current += 1;
+        setRestoreSeek({ seconds, nonce: restoreNonceRef.current });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canSeek, metadataId, seekRequest]);
+
+  const effectiveSeekRequest = seekRequest ?? restoreSeek;
+  const handleSeekHandled = () => {
+    if (seekRequest != null) {
+      onSeekHandled();
+    }
+    setRestoreSeek(null);
+  };
+
   // 评论就在播放窗口下方, 点时间戳通常不必移动页面: 窗口还有一部分在视野里就不滚动, 完全滑出视野时才
   // 把它带回屏幕, 并对齐上沿而不是居中 —— 居中会把刚点的那条评论一起挪出视野.
   // 依赖流的选择: 流列表到位之前播放窗口尚未渲染, 带 `t` 的地址要在这里补一次.
   useEffect(() => {
-    if (!autoScrollOnSeek || seekRequest == null || selected == null) {
+    if (!autoScrollOnSeek || effectiveSeekRequest == null || selected == null) {
       return;
     }
     const frame = playerFrameRef.current;
@@ -402,7 +454,7 @@ export function PlaybackPanel({
       return;
     }
     frame.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [autoScrollOnSeek, seekRequest, selected]);
+  }, [autoScrollOnSeek, effectiveSeekRequest, selected]);
 
   const title = (
     <Text size="sm" fw={600}>
@@ -490,8 +542,9 @@ export function PlaybackPanel({
                 kind={kind}
                 seekable={selected.seekable}
                 tracks={selected.subtitles ?? []}
-                seekRequest={seekRequest}
-                onSeekHandled={onSeekHandled}
+                metadataId={metadataId}
+                seekRequest={effectiveSeekRequest}
+                onSeekHandled={handleSeekHandled}
                 onFailed={(failure) => {
                   void readPlaybackDetail(
                     selected.href,

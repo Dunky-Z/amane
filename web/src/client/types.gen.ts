@@ -2356,6 +2356,26 @@ export type PathTemplateSchemaResponse = {
 };
 
 /**
+ * PlaybackProgressPutRequest
+ */
+export type PlaybackProgressPutRequest = {
+    /**
+     * Position Seconds
+     */
+    position_seconds: number;
+};
+
+/**
+ * PlaybackProgressResponse
+ */
+export type PlaybackProgressResponse = {
+    /**
+     * Position Seconds
+     */
+    position_seconds?: number | null;
+};
+
+/**
  * PlaybackSourceListResponse
  */
 export type PlaybackSourceListResponse = {
@@ -4490,6 +4510,66 @@ export type ListPlaybackSourcesResponses = {
 };
 
 export type ListPlaybackSourcesResponse = ListPlaybackSourcesResponses[keyof ListPlaybackSourcesResponses];
+
+export type GetPlaybackProgressData = {
+    body?: never;
+    path: {
+        /**
+         * Metadata Id
+         */
+        metadata_id: number;
+    };
+    query?: never;
+    url: '/api/playback/progress/{metadata_id}';
+};
+
+export type GetPlaybackProgressErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPlaybackProgressError = GetPlaybackProgressErrors[keyof GetPlaybackProgressErrors];
+
+export type GetPlaybackProgressResponses = {
+    /**
+     * Successful Response
+     */
+    200: PlaybackProgressResponse;
+};
+
+export type GetPlaybackProgressResponse = GetPlaybackProgressResponses[keyof GetPlaybackProgressResponses];
+
+export type PutPlaybackProgressData = {
+    body: PlaybackProgressPutRequest;
+    path: {
+        /**
+         * Metadata Id
+         */
+        metadata_id: number;
+    };
+    query?: never;
+    url: '/api/playback/progress/{metadata_id}';
+};
+
+export type PutPlaybackProgressErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutPlaybackProgressError = PutPlaybackProgressErrors[keyof PutPlaybackProgressErrors];
+
+export type PutPlaybackProgressResponses = {
+    /**
+     * Successful Response
+     */
+    200: PlaybackProgressResponse;
+};
+
+export type PutPlaybackProgressResponse = PutPlaybackProgressResponses[keyof PutPlaybackProgressResponses];
 
 export type ListPlaybackStreamsData = {
     body?: never;

@@ -55,6 +55,7 @@ import { useTranslation } from "react-i18next";
 import type { PlaybackSubtitleItem } from "@/client/types.gen";
 import { useLatestRef } from "@/hooks/use-latest-ref";
 import i18n from "@/i18n";
+import { putPlaybackProgress } from "@/client";
 import { copyText } from "@/lib/copy-text";
 
 import classes from "./playback-player.module.css";
@@ -1038,6 +1039,8 @@ export type PlaybackPlayerProps = {
   kind: "video" | "hls";
   seekable: boolean;
   tracks: PlaybackSubtitleItem[];
+  /** 有值时节流写入服务端播放进度. */
+  metadataId?: number;
   /** 评论时间戳的跳转请求; 同一秒数的重复点击靠新请求重新触发. */
   seekRequest: SeekRequest | null;
   /** 已经按请求定位之后回调, 由调用方清掉请求. */
@@ -1060,6 +1063,7 @@ export function PlaybackPlayer({
   kind,
   seekable,
   tracks,
+  metadataId,
   seekRequest,
   onSeekHandled,
   onFailed,
@@ -1233,6 +1237,57 @@ export function PlaybackPlayer({
     applyPendingSeek();
     onSeekHandled();
   }, [applyPendingSeek, onSeekHandled, seekRequest]);
+
+  // 可寻址流按影片节流上报进度; 关闭浮层时组件卸载会再刷一次.
+  useEffect(() => {
+    if (metadataId == null || metadataId <= 0 || !seekable) {
+      return;
+    }
+    const video = videoRef.current;
+    if (video == null) {
+      return;
+    }
+    const PROGRESS_INTERVAL_MS = 8000;
+    let lastWrote = -1;
+    let throttleTimer: number | null = null;
+    const write = () => {
+      const seconds = video.currentTime;
+      if (!Number.isFinite(seconds) || seconds < 0) {
+        return;
+      }
+      if (lastWrote >= 0 && Math.abs(seconds - lastWrote) < 0.5) {
+        return;
+      }
+      lastWrote = seconds;
+      void putPlaybackProgress({
+        path: { metadata_id: metadataId },
+        body: { position_seconds: seconds },
+      }).catch(() => undefined);
+    };
+    const onTimeUpdate = () => {
+      if (throttleTimer != null) {
+        return;
+      }
+      throttleTimer = window.setTimeout(() => {
+        throttleTimer = null;
+        write();
+      }, PROGRESS_INTERVAL_MS);
+    };
+    const onPause = () => write();
+    const onPageHide = () => write();
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("pause", onPause);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      if (throttleTimer != null) {
+        window.clearTimeout(throttleTimer);
+      }
+      write();
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("pause", onPause);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [href, metadataId, seekable, videoRef]);
 
   // 调整提示 (音量 / 亮度) 由 React 状态控制显隐, 不随控件自动隐藏, 见渲染处的提示层.
   const [hud, setHud] = useState<{ kind: HudKind; level: number } | null>(null);
@@ -1520,6 +1575,50 @@ export function PlaybackPlayer({
         <MediaControlBar>
           <MediaPlayButton />
           <MediaTimeDisplay showDuration />
+          <Menu withinPortal={false} position="top-start" offset={8}>
+            <Menu.Target>
+              <button
+                type="button"
+                className={classes.copyButton}
+                disabled={!seekable}
+                aria-label={t("detail.playbackCopyTimestamp")}
+              >
+                <IconClock size={18} aria-hidden />
+              </button>
+            </Menu.Target>
+            <Menu.Dropdown className={classes.copyMenuDropdown}>
+              <Menu.Item
+                leftSection={<IconClock size={14} />}
+                disabled={!seekable}
+                onClick={() => {
+                  void (async () => {
+                    const ok = await copyText(formatClock(readSeconds()));
+                    notifications.show({
+                      message: ok ? t("detail.playbackCopied") : t("detail.playbackCopyFailed"),
+                      color: ok ? "blue" : "red",
+                    });
+                  })();
+                }}
+              >
+                {t("detail.playbackCopyTimestamp")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconLink size={14} />}
+                disabled={!seekable}
+                onClick={() => {
+                  void (async () => {
+                    const ok = await copyText(shareableTimeUrl(readSeconds()));
+                    notifications.show({
+                      message: ok ? t("detail.playbackCopied") : t("detail.playbackCopyFailed"),
+                      color: ok ? "blue" : "red",
+                    });
+                  })();
+                }}
+              >
+                {t("detail.playbackCopyLink")}
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
           <div className={classes.barSpacer} aria-hidden="true" />
           {/* 音量收在按钮上方的浮层里, 指针进入或其中获得焦点时展开. */}
           <div

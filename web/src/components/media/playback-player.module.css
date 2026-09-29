@@ -531,3 +531,32 @@
   z-index: 3;
   background: transparent;
 }
+
+.copyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mantine-radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.copyButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.copyButton:not(:disabled):hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.copyMenuDropdown {
+  /* 挂在控制器内, 全屏可见; 避免被深色控制条淹没 */
+  z-index: 30;
+}

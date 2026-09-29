@@ -1392,6 +1392,100 @@
         }
       }
     },
+    "/api/playback/progress/{metadata_id}": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Get Playback Progress",
+        "description": "按影片读取播放进度; 无记录时 ``position_seconds`` 为 null.",
+        "operationId": "get_playback_progress",
+        "parameters": [
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Metadata Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackProgressResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Put Playback Progress",
+        "description": "按影片写入播放进度 (upsert).",
+        "operationId": "put_playback_progress",
+        "parameters": [
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Metadata Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackProgressPutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackProgressResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/playback/{source_id}/{metadata_id}/streams": {
       "get": {
         "tags": [
@@ -10539,6 +10633,39 @@
         ],
         "title": "PathTemplateSchemaResponse",
         "description": "与 resolve_paths 同源."
+      },
+      "PlaybackProgressPutRequest": {
+        "properties": {
+          "position_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Position Seconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "position_seconds"
+        ],
+        "title": "PlaybackProgressPutRequest"
+      },
+      "PlaybackProgressResponse": {
+        "properties": {
+          "position_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Seconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlaybackProgressResponse"
       },
       "PlaybackSourceListResponse": {
         "properties": {

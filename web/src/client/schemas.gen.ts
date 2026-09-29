@@ -4920,6 +4920,41 @@ export const PathTemplateSchemaResponseSchema = {
     description: '与 resolve_paths 同源.'
 } as const;
 
+export const PlaybackProgressPutRequestSchema = {
+    properties: {
+        position_seconds: {
+            type: 'number',
+            minimum: 0,
+            title: 'Position Seconds'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+        'position_seconds'
+    ],
+    title: 'PlaybackProgressPutRequest'
+} as const;
+
+export const PlaybackProgressResponseSchema = {
+    properties: {
+        position_seconds: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Position Seconds'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    title: 'PlaybackProgressResponse'
+} as const;
+
 export const PlaybackSourceListResponseSchema = {
     properties: {
         items: {
