@@ -126,48 +126,6 @@ export function PosterCard({ item, actorBirthday }: PosterCardProps) {
               </Center>
             )}
           </AspectRatio>
-          <Group gap={4} pos="absolute" top={6} left={6} style={{ zIndex: 2 }}>
-            <UnstyledButton
-              onClick={(event) => void toggleMark(WATCHED_USER_TAG, watched, event)}
-              aria-pressed={watched}
-              aria-label={t("detail.markWatched")}
-              title={t("detail.markWatched")}
-              disabled={busy}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                borderRadius: "var(--mantine-radius-xl)",
-                background: watched ? "var(--mantine-color-teal-6)" : "rgba(0, 0, 0, 0.72)",
-                color: "white",
-                backdropFilter: "blur(6px)",
-              }}
-            >
-              <IconCheck size={14} stroke={2.4} />
-            </UnstyledButton>
-            <UnstyledButton
-              onClick={(event) => void toggleMark(FAVORITE_USER_TAG, favorite, event)}
-              aria-pressed={favorite}
-              aria-label={t("detail.markFavorite")}
-              title={t("detail.markFavorite")}
-              disabled={busy}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                borderRadius: "var(--mantine-radius-xl)",
-                background: favorite ? "var(--mantine-color-pink-6)" : "rgba(0, 0, 0, 0.72)",
-                color: "white",
-                backdropFilter: "blur(6px)",
-              }}
-            >
-              {favorite ? <IconHeartFilled size={14} /> : <IconHeart size={14} />}
-            </UnstyledButton>
-          </Group>
           <FilePhaseOverlay
             phase={item.file_phase}
             bottomExtra={
@@ -211,28 +169,72 @@ export function PosterCard({ item, actorBirthday }: PosterCardProps) {
               {item.title}
             </Text>
           )}
-          {actorsLabel && (
-            <Group gap={5} wrap="nowrap" align="center" title={actorsLabel}>
-              <Box
+          <Group gap={5} wrap="nowrap" align="center" justify="space-between">
+            {actorsLabel ? (
+              <Group gap={5} wrap="nowrap" align="center" title={actorsLabel} style={{ minWidth: 0, flex: 1 }}>
+                <Box
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    width: 18,
+                    height: 18,
+                    borderRadius: "var(--mantine-radius-sm)",
+                    background: "var(--mantine-color-grape-filled)",
+                    color: "var(--mantine-color-white)",
+                  }}
+                >
+                  <IconUser size={11} stroke={2.2} />
+                </Box>
+                <Text size="xs" fw={600} lineClamp={1} style={{ minWidth: 0 }}>
+                  {actorsLabel}
+                </Text>
+              </Group>
+            ) : (
+              <Box style={{ flex: 1, minWidth: 0 }} />
+            )}
+            <Group gap={2} wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
+              <UnstyledButton
+                onClick={(event) => void toggleMark(WATCHED_USER_TAG, watched, event)}
+                aria-pressed={watched}
+                aria-label={t("detail.markWatched")}
+                title={t("detail.markWatched")}
+                disabled={busy}
                 style={{
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
-                  width: 18,
-                  height: 18,
+                  width: 24,
+                  height: 24,
                   borderRadius: "var(--mantine-radius-sm)",
-                  background: "var(--mantine-color-grape-filled)",
-                  color: "var(--mantine-color-white)",
+                  color: watched ? "var(--mantine-color-teal-6)" : "var(--mantine-color-dimmed)",
+                  flexShrink: 0,
                 }}
               >
-                <IconUser size={11} stroke={2.2} />
-              </Box>
-              <Text size="xs" fw={600} lineClamp={1} style={{ minWidth: 0 }}>
-                {actorsLabel}
-              </Text>
+                <IconCheck size={14} stroke={2.4} />
+              </UnstyledButton>
+              <UnstyledButton
+                onClick={(event) => void toggleMark(FAVORITE_USER_TAG, favorite, event)}
+                aria-pressed={favorite}
+                aria-label={t("detail.markFavorite")}
+                title={t("detail.markFavorite")}
+                disabled={busy}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 24,
+                  height: 24,
+                  borderRadius: "var(--mantine-radius-sm)",
+                  color: favorite ? "var(--mantine-color-pink-6)" : "var(--mantine-color-dimmed)",
+                  flexShrink: 0,
+                }}
+              >
+                {favorite ? <IconHeartFilled size={14} /> : <IconHeart size={14} />}
+              </UnstyledButton>
             </Group>
-          )}
+          </Group>
         </Stack>
       </Card>
     </Link>

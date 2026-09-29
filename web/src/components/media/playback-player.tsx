@@ -1,4 +1,4 @@
-import { Slider } from "@mantine/core";
+import { Menu, Slider } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
