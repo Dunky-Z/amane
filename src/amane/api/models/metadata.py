@@ -51,6 +51,7 @@ class MetadataResponse(BaseModel):
     raw: dict = {}
     file_count: int = 0
     file_phase: FilePhaseSummary = Field(default_factory=FilePhaseSummary)
+    user_tags: list[UserTagResponse] = Field(default_factory=list, description="用户标签")
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

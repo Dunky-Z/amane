@@ -100,6 +100,26 @@ class TestUserTagsApi:
         denied = await client.post("facets/studio", json={"name": "Nope"})
         assert denied.status_code == 405
 
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_list_includes_user_tags(self, client: AsyncClient, repo: Repository) -> None:
+        meta = await repo.upsert_metadata(number="UT-LIST-1")
+        assert meta.id is not None
+        created = await client.post("facets/user_tag", json={"names": ["已播放"]})
+        assert created.status_code == 200
+        tag_id = created.json()["items"][0]["id"]
+        assert (
+            await client.post(
+                "metadata/batch/user-tags",
+                json={"ids": [meta.id], "user_tag_ids": [tag_id], "action": "attach"},
+            )
+        ).status_code == 200
+
+        listed = await client.get("metadata?search=UT-LIST-1")
+        assert listed.status_code == 200
+        item = next(i for i in listed.json()["items"] if i["id"] == meta.id)
+        assert [t["name"] for t in item["user_tags"]] == ["已播放"]
+
+
 
 class TestCommentsApi:
     @pytest.mark.asyncio(loop_scope="function")

@@ -116,7 +116,9 @@ async def list_metadata(
         content_type=content_type,
         id_subquery_sql=id_subquery_sql,
     )
-    summaries = await repo.summarize_media_by_metadata_ids([m.id for m in items if m.id is not None])
+    ids = [m.id for m in items if m.id is not None]
+    summaries = await repo.summarize_media_by_metadata_ids(ids)
+    tags_by_id = await repo.list_user_tags_for_metadata_ids(ids)
     empty = FilePhaseSummary()
     return MetadataListResponse(
         items=[
@@ -124,6 +126,7 @@ async def list_metadata(
                 update={
                     "file_count": summaries[m.id].file_count if m.id in summaries else 0,
                     "file_phase": _file_phase_resp(summaries[m.id].phase) if m.id in summaries else empty,
+                    "user_tags": [to_resp(UserTagResponse, tag) for tag in tags_by_id.get(m.id, [])],
                 }
             )
             for m in items
