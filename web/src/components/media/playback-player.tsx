@@ -182,7 +182,58 @@ function nativeHlsSupported(): boolean {
   return document.createElement("video").canPlayType(HLS_TYPE) !== "";
 }
 
-function SubtitleTracks({ tracks }: { tracks: PlaybackSubtitleItem[] }) {
+function preferredSubtitleIndex(tracks: PlaybackSubtitleItem[]): number {
+  const chinese = tracks.findIndex((track) => (track.language ?? "").toLowerCase().startsWith("zh"));
+  return chinese >= 0 ? chinese : 0;
+}
+
+/**
+ * 浏览器只在解析 HTML 时承认 track 的 default. React 插入的轨道不会自动显示,
+ * 因此在轨道全部加入之后将优先轨道显示出来.
+ */
+function useAutoSubtitles(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  href: string,
+  tracks: PlaybackSubtitleItem[],
+  preferred: number,
+) {
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video == null || tracks.length === 0) {
+      return;
+    }
+    let applied = false;
+    const show = () => {
+      if (applied || video.textTracks.length < tracks.length) {
+        return;
+      }
+      const index = Math.min(preferred, video.textTracks.length - 1);
+      for (let i = 0; i < video.textTracks.length; i += 1) {
+        const track = video.textTracks[i];
+        if (track == null) {
+          continue;
+        }
+        track.mode = i === index ? "showing" : "disabled";
+      }
+      applied = true;
+    };
+    show();
+    video.textTracks.addEventListener("addtrack", show);
+    video.addEventListener("loadedmetadata", show);
+    return () => {
+      video.textTracks.removeEventListener("addtrack", show);
+      video.removeEventListener("loadedmetadata", show);
+    };
+  }, [href, preferred, tracks, videoRef]);
+}
+
+function SubtitleTracks({
+  tracks,
+  preferred,
+}: {
+  tracks: PlaybackSubtitleItem[];
+  preferred: number;
+}) {
   return tracks.map((track, index) => (
     <track
       key={track.id}
@@ -190,7 +241,7 @@ function SubtitleTracks({ tracks }: { tracks: PlaybackSubtitleItem[] }) {
       src={track.href}
       label={track.label}
       srcLang={track.language ?? undefined}
-      default={index === 0}
+      default={index === preferred}
     />
   ));
 }
@@ -1071,6 +1122,8 @@ export function PlaybackPlayer({
   const { t } = useTranslation("metadata");
   const videoRef = useRef<HTMLVideoElement>(null);
   const onFailedRef = useLatestRef(onFailed);
+  const preferredSubtitle = preferredSubtitleIndex(tracks);
+  useAutoSubtitles(videoRef, href, tracks, preferredSubtitle);
   const useNativeSrc = kind === "video" || nativeHlsSupported();
   const controllerRef = useRef<MediaControllerElement>(null);
   const fullscreenButtonRef = useRef<MediaFullscreenButtonElement>(null);
@@ -1559,7 +1612,7 @@ export function PlaybackPlayer({
           // 原生播放路径没有 hls.js 错误数据, 失败原因由探测结果说明.
           onError={() => onFailedRef.current(null)}
         >
-          <SubtitleTracks tracks={tracks} />
+          <SubtitleTracks tracks={tracks} preferred={preferredSubtitle} />
         </video>
         <MediaLoadingIndicator slot="centered-chrome" />
         {/* 亮度是叠加层, 由竖直滑动写入. */}

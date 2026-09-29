@@ -1093,6 +1093,51 @@ class TestPlaybackHttp:
             html_server.shutdown()
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_local_sidecar_subtitle_on_stream(
+        self,
+        client: AsyncClient,
+        repo: Repository,
+        app: FastAPI,
+        tmp_path: Path,
+    ) -> None:
+        data_dir = app.state.runtime.config.cold.data_dir
+        write_plugin(data_dir, "acme.play", body=playback_plugin_source("acme.play"))
+        reloaded = await client.post("plugins/reload")
+        assert reloaded.status_code == 200, reloaded.text
+        metadata_id = await _seed_title(repo, number="PLAY-LOCAL-SUB")
+        video = tmp_path / "SSIS-001.mp4"
+        video.write_bytes(b"video")
+        await _attach_file(repo, metadata_id, video, payload=b"video")
+        (tmp_path / "SSIS-001.chs.srt").write_text(
+            "1\n00:00:01,000 --> 00:00:02,000\n你好\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "OTHER-999.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nno\n", encoding="utf-8")
+        enabled = await client.patch(
+            "plugins/acme.play",
+            json={"enabled": True, "config": {"behavior": "upstream", "url": "http://127.0.0.1:9/clip.mp4"}},
+        )
+        assert enabled.status_code == 200, enabled.text
+
+        items = await _streams(client, "acme.play", metadata_id)
+        tracks = items[0]["subtitles"]
+        assert isinstance(tracks, list)
+        assert len(tracks) == 1
+        track = tracks[0]
+        assert isinstance(track["id"], str) and track["id"].startswith("local-")
+        assert track["language"] == "zh"
+        assert track["label"] == "SSIS-001.chs.srt"
+        href = track["href"]
+        assert isinstance(href, str)
+        body = await client.get(href.removeprefix("/api/"))
+        assert body.status_code == 200, body.text
+        assert body.headers.get("content-type", "").startswith("text/vtt")
+        assert "00:00:01.000 --> 00:00:02.000" in body.text
+        assert "你好" in body.text
+        missing = await client.get(f"playback/acme.play/{metadata_id}/streams/main/subtitles/local-1-deadbeefdead")
+        assert missing.status_code == 404
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_hls_bad_uri_fails_only_that_uri(
         self,
         client: AsyncClient,

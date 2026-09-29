@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 from fastapi.responses import JSONResponse
 
+from ...db.repository import Repository
+from ...library.rules import DEFAULT_SUBTITLE_EXTENSIONS
 from ...net.errors import SourceError
 from ...playback.factory import SOURCE_ID_MAX_LEN, ListedSource, PlaybackFactory
 from ...playback.file_response import IndexedFileResponse
 from ...playback.hls import PLAYLIST_CACHE_CONTROL, is_hls_content_type
 from ...playback.href import playlist_href, stream_href, subtitle_href
+from ...playback.local_subtitles import LocalSubtitle, discover_local_subtitles, is_local_track_id, read_webvtt
 from ...playback.proxy import NOSNIFF
 from ...playback.query import playback_query
 from ...plugins.api import PATH_SEGMENT_PATTERN, FilePlaybackTarget, PlaybackQuery, UpstreamPlaybackTarget
@@ -61,7 +65,33 @@ async def _load_query(
     return playback_query(metadata, files, selected_key=selected_key, library_paths=library_paths)
 
 
-def _stream_item(row: ListedSource, metadata_id: int) -> PlaybackStreamItem:
+def _stream_item(
+    row: ListedSource,
+    metadata_id: int,
+    local_subtitles: Sequence[LocalSubtitle] = (),
+) -> PlaybackStreamItem:
+    subtitles = [
+        PlaybackSubtitleItem(
+            id=track.id,
+            label=track.label,
+            language=track.language,
+            href=subtitle_href(row.source_id, metadata_id, row.key, track.id),
+        )
+        for track in row.subtitles
+    ]
+    seen = {item.id for item in subtitles}
+    for track in local_subtitles:
+        if track.track_id in seen:
+            continue
+        seen.add(track.track_id)
+        subtitles.append(
+            PlaybackSubtitleItem(
+                id=track.track_id,
+                label=track.label,
+                language=track.language,
+                href=subtitle_href(row.source_id, metadata_id, row.key, track.track_id),
+            )
+        )
     return PlaybackStreamItem(
         source_id=row.source_id,
         key=row.key,
@@ -71,16 +101,26 @@ def _stream_item(row: ListedSource, metadata_id: int) -> PlaybackStreamItem:
         available=row.available,
         detail=row.detail,
         href=_source_href(row.source_id, metadata_id, row.key, row.content_type),
-        subtitles=[
-            PlaybackSubtitleItem(
-                id=track.id,
-                label=track.label,
-                language=track.language,
-                href=subtitle_href(row.source_id, metadata_id, row.key, track.id),
-            )
-            for track in row.subtitles
-        ],
+        subtitles=subtitles,
     )
+
+
+async def _local_subtitles(repo: Repository, metadata_id: int) -> list[LocalSubtitle]:
+    """已索引视频同目录的外挂字幕. 库不存在时用默认扩展名."""
+    files = await repo.get_media_by_metadata_id(metadata_id)
+    extensions: dict[int, tuple[str, ...]] = {}
+    specs: list[tuple[int, str, tuple[str, ...]]] = []
+    for item in files:
+        if item.id is None:
+            continue
+        if item.library_id not in extensions:
+            library = await repo.get_library(item.library_id)
+            raw = library.subtitle_extensions if library is not None else DEFAULT_SUBTITLE_EXTENSIONS
+            extensions[item.library_id] = tuple(raw)
+        specs.append((item.id, item.path, extensions[item.library_id]))
+    if not specs:
+        return []
+    return await discover_local_subtitles(specs)
 
 
 def _playback_http_error(exc: SourceError) -> HTTPException:
@@ -99,7 +139,6 @@ async def list_playback_sources(runtime: RuntimeDep) -> Response:
         ]
     )
     return JSONResponse(content=body.model_dump(mode="json"), headers={"Cache-Control": "private, no-cache"})
-
 
 
 @router.get("/progress/{metadata_id}", response_model=PlaybackProgressResponse)
@@ -123,6 +162,7 @@ async def put_playback_progress(
         raise HTTPException(status_code=404, detail="元数据不存在")
     return PlaybackProgressResponse(position_seconds=position)
 
+
 @router.get("/{source_id}/{metadata_id}/streams", response_model=PlaybackStreamListResponse)
 async def list_playback_streams(
     source_id: str,
@@ -138,7 +178,8 @@ async def list_playback_streams(
     factory = await _require_factory(source_id, runtime)
     query = await _load_query(repo, metadata_id, None)
     listed = await factory.list_streams(source_id, query)
-    body = PlaybackStreamListResponse(items=[_stream_item(row, metadata_id) for row in listed])
+    local = await _local_subtitles(repo, metadata_id)
+    body = PlaybackStreamListResponse(items=[_stream_item(row, metadata_id, local) for row in listed])
     return JSONResponse(content=body.model_dump(mode="json"), headers={"Cache-Control": "no-store"})
 
 
@@ -369,6 +410,20 @@ async def _subtitle(
 ) -> Response:
     factory = await _require_factory(source_id, runtime)
     query = await _load_query(repo, metadata_id, selected_key)
+    if is_local_track_id(track_id):
+        tracks = await _local_subtitles(repo, metadata_id)
+        found = next((track for track in tracks if track.track_id == track_id), None)
+        if found is None:
+            raise HTTPException(status_code=404, detail="字幕不存在")
+        try:
+            text = await read_webvtt(found.path)
+        except OSError as exc:
+            raise HTTPException(status_code=404, detail="字幕不存在") from exc
+        return Response(
+            content=text.encode("utf-8"),
+            media_type="text/vtt; charset=utf-8",
+            headers={**NOSNIFF, "Cache-Control": PLAYLIST_CACHE_CONTROL},
+        )
     try:
         result = await factory.load_subtitle(source_id, query, track_id)
     except LookupError:
