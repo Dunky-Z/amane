@@ -45,6 +45,7 @@ import {
   listFacetsOptions,
   listFacetsQueryKey,
   listMetadataQueryKey,
+  listPlaybackSourcesOptions,
   submitTaskMutation,
   updateMetadataMutation,
 } from "@/client/@tanstack/react-query.gen";
@@ -64,7 +65,7 @@ import { USER_TAG_FACET_LIST } from "@/lib/facets";
 import { proxyImageUrl } from "@/lib/utils";
 import { ProxyImage } from "@/components/media/proxy-image";
 import { CommentSection } from "@/components/media/comment-section";
-import { PlaybackPanel } from "@/components/media/playback-panel";
+import { PlaybackFloat } from "@/components/media/playback-float";
 import type { SeekRequest } from "@/components/media/playback-player";
 
 /**
@@ -126,6 +127,7 @@ function TitleDetailPage() {
   // 评论时间戳的跳转: 本地请求负责即时响应 (同一秒连点也要重新触发), 地址栏的 `t` 负责分享与刷新定位.
   const [seekRequest, setSeekRequest] = useState<SeekRequest | null>(null);
   const [canSeek, setCanSeek] = useState(false);
+  const [playbackOpen, setPlaybackOpen] = useState(false);
   const seekFromUrlRef = useRef<number | null>(null);
   // 跳转请求在处理之后会被清空, 因此 nonce 不能取自请求本身: 每次都从 1 重新计数时, 播放器会把
   // 新请求当成已处理的那一条而忽略. 计数只增不减, 见 `SeekRequest`.
@@ -138,6 +140,7 @@ function TitleDetailPage() {
     }
     seekFromUrlRef.current = urlSeekSeconds;
     seekNonceRef.current += 1;
+    setPlaybackOpen(true);
     setSeekRequest({ seconds: urlSeekSeconds, nonce: seekNonceRef.current });
   }, [urlSeekSeconds]);
 
@@ -145,6 +148,7 @@ function TitleDetailPage() {
     (seconds: number) => {
       seekFromUrlRef.current = seconds;
       seekNonceRef.current += 1;
+      setPlaybackOpen(true);
       setSeekRequest({ seconds, nonce: seekNonceRef.current });
       // replace: 时间戳是定位而不是导航, 不该在历史里堆一串记录.
       // resetScroll: 路由默认在位置提交后把页面滚动到顶部, 与定位的语义冲突; 滚动由播放器按需调整.
@@ -167,12 +171,21 @@ function TitleDetailPage() {
     setPlayingTrailer(false);
     setThumbBroken(false);
     setPosterBroken(false);
+    setPlaybackOpen(false);
+    setCanSeek(false);
+    setSeekRequest(null);
   }
 
   const { data, isLoading, isError } = useQuery({
     ...getMetadataOptions({ path: { metadata_id: id } }),
     enabled: validId,
   });
+
+  const playbackSourcesQuery = useQuery({
+    ...listPlaybackSourcesOptions(),
+    enabled: validId,
+  });
+  const hasPlaybackSources = (playbackSourcesQuery.data?.items?.length ?? 0) > 0;
 
   const invalidateDetail = () => {
     void queryClient.invalidateQueries({
@@ -486,19 +499,31 @@ function TitleDetailPage() {
               </div>
             )}
           </div>
-          <Tooltip label={t("detail.cropPoster.noThumb")} disabled={thumbSrc != null}>
-            <Box display="inline-block">
+          <Group gap="xs" wrap="wrap">
+            {hasPlaybackSources ? (
               <Button
                 size="xs"
-                variant="light"
-                leftSection={<IconCrop size={14} />}
-                disabled={!thumbSrc}
-                onClick={() => setCropOpen(true)}
+                variant="filled"
+                leftSection={<IconPlayerPlay size={14} />}
+                onClick={() => setPlaybackOpen(true)}
               >
-                {t("detail.cropPoster.action")}
+                {t("detail.playback")}
               </Button>
-            </Box>
-          </Tooltip>
+            ) : null}
+            <Tooltip label={t("detail.cropPoster.noThumb")} disabled={thumbSrc != null}>
+              <Box display="inline-block">
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconCrop size={14} />}
+                  disabled={!thumbSrc}
+                  onClick={() => setCropOpen(true)}
+                >
+                  {t("detail.cropPoster.action")}
+                </Button>
+              </Box>
+            </Tooltip>
+          </Group>
         </Stack>
 
         <Stack gap="sm" style={{ flex: "2 1 280px", minWidth: 260 }}>
@@ -709,13 +734,6 @@ function TitleDetailPage() {
         </Stack>
       </Group>
 
-      <PlaybackPanel
-        metadataId={id}
-        seekRequest={seekRequest}
-        onSeekHandled={() => setSeekRequest(null)}
-        onCanSeekChange={setCanSeek}
-      />
-
       {/* 宽屏下并排, 窄屏落回上下叠放; 各自保持自然高度, 拉平会把空白挪进较短的一栏. */}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" style={{ alignItems: "start" }}>
         <Card withBorder radius="md" p="md">
@@ -752,6 +770,20 @@ function TitleDetailPage() {
           onSeek={requestSeek}
         />
       </SimpleGrid>
+
+      <PlaybackFloat
+        opened={playbackOpen}
+        onClose={() => {
+          setPlaybackOpen(false);
+          setCanSeek(false);
+          setSeekRequest(null);
+        }}
+        metadataId={id}
+        title={item.number}
+        seekRequest={seekRequest}
+        onSeekHandled={() => setSeekRequest(null)}
+        onCanSeekChange={setCanSeek}
+      />
 
       <Modal
         opened={editOpen}
