@@ -51,6 +51,8 @@ from .metadata import (
 )
 from .network import ConnectivityCheckRequest, ConnectivityItemResponse, ConnectivityReportResponse
 from .playback import (
+    PlaybackProgressPutRequest,
+    PlaybackProgressResponse,
     PlaybackSourceListResponse,
     PlaybackSourceOption,
     PlaybackStreamItem,
@@ -139,6 +141,8 @@ __all__ = [
     "PartialMetadata",
     "PathTemplatePlaceholder",
     "PathTemplateSchemaResponse",
+    "PlaybackProgressPutRequest",
+    "PlaybackProgressResponse",
     "PlaybackSourceListResponse",
     "PlaybackSourceOption",
     "PlaybackStreamItem",

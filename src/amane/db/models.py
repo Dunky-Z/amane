@@ -593,6 +593,16 @@ class Comment(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow)
 
 
+class PlaybackProgress(SQLModel, table=True):
+    """按影片持久化的播放位置; 与来源 / 码流无关."""
+
+    __tablename__ = "playback_progress"  # type: ignore[assignment]
+
+    metadata_id: int = Field(foreign_key="metadata.id", primary_key=True, ondelete="CASCADE")
+    position_seconds: float = Field(nullable=False)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class AgentSessionStatus(StrEnum):
     ACTIVE = "active"
     AWAITING_APPROVAL = "awaiting_approval"

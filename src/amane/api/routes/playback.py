@@ -15,6 +15,8 @@ from ...playback.query import playback_query
 from ...plugins.api import PATH_SEGMENT_PATTERN, FilePlaybackTarget, PlaybackQuery, UpstreamPlaybackTarget
 from ..deps import RepoDep, RuntimeDep
 from ..models.playback import (
+    PlaybackProgressPutRequest,
+    PlaybackProgressResponse,
     PlaybackSourceListResponse,
     PlaybackSourceOption,
     PlaybackStreamItem,
@@ -98,6 +100,28 @@ async def list_playback_sources(runtime: RuntimeDep) -> Response:
     )
     return JSONResponse(content=body.model_dump(mode="json"), headers={"Cache-Control": "private, no-cache"})
 
+
+
+@router.get("/progress/{metadata_id}", response_model=PlaybackProgressResponse)
+async def get_playback_progress(metadata_id: int, repo: RepoDep) -> PlaybackProgressResponse:
+    """按影片读取播放进度; 无记录时 ``position_seconds`` 为 null."""
+    if await repo.get_metadata(metadata_id) is None:
+        raise HTTPException(status_code=404, detail="元数据不存在")
+    position = await repo.get_playback_progress(metadata_id)
+    return PlaybackProgressResponse(position_seconds=position)
+
+
+@router.put("/progress/{metadata_id}", response_model=PlaybackProgressResponse)
+async def put_playback_progress(
+    metadata_id: int,
+    body: PlaybackProgressPutRequest,
+    repo: RepoDep,
+) -> PlaybackProgressResponse:
+    """按影片写入播放进度 (upsert)."""
+    position = await repo.upsert_playback_progress(metadata_id, body.position_seconds)
+    if position is None:
+        raise HTTPException(status_code=404, detail="元数据不存在")
+    return PlaybackProgressResponse(position_seconds=position)
 
 @router.get("/{source_id}/{metadata_id}/streams", response_model=PlaybackStreamListResponse)
 async def list_playback_streams(

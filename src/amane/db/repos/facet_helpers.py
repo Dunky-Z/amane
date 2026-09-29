@@ -34,6 +34,7 @@ from ..models import (
     MetadataDirector,
     MetadataTag,
     MetadataUserTag,
+    PlaybackProgress,
     Publisher,
     Series,
     SortOrder,
@@ -646,7 +647,7 @@ def _replace_names_in_list(values: list[str], old_names: set[str], new_name: str
 
 async def cascade_delete_metadata(session: AsyncSession, metadata: Metadata) -> None:
     """不提交事务. 必须 nullify MediaFile.metadata_id 并回 PENDING, 否则留下悬空 FK;
-    文件记录本身保留. 分类关联 / 评论 / 用户 tag 须显式删除 (不依赖 FK pragma);
+    文件记录本身保留. 分类关联 / 评论 / 用户 tag / 播放进度须显式删除 (不依赖 FK pragma);
     Actor/Director 等目录实体本身保留.
     """
     assert metadata.id is not None
@@ -663,6 +664,7 @@ async def cascade_delete_metadata(session: AsyncSession, metadata: Metadata) -> 
     await session.exec(sqla_delete(MetadataTag).where(col(MetadataTag.metadata_id) == metadata_id))
     await session.exec(sqla_delete(MetadataUserTag).where(col(MetadataUserTag.metadata_id) == metadata_id))
     await session.exec(sqla_delete(Comment).where(col(Comment.metadata_id) == metadata_id))
+    await session.exec(sqla_delete(PlaybackProgress).where(col(PlaybackProgress.metadata_id) == metadata_id))
     await session.delete(metadata)
 
 

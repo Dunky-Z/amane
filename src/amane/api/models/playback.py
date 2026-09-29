@@ -48,3 +48,16 @@ class PlaybackStreamListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[PlaybackStreamItem] = Field(default_factory=list)
+
+
+class PlaybackProgressResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    position_seconds: float | None = None
+
+
+class PlaybackProgressPutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    position_seconds: float = Field(ge=0)
+

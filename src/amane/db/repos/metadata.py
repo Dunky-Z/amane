@@ -18,6 +18,7 @@ from ..models import (
     MetadataSortField,
     MetadataTag,
     MetadataUserTag,
+    PlaybackProgress,
     Publisher,
     Series,
     SortOrder,
@@ -300,3 +301,32 @@ class MetadataRepoMixin(RepositoryMixinBase):
                 deleted += 1
             await session.commit()
             return deleted, missing
+
+    async def get_playback_progress(self, metadata_id: int) -> float | None:
+        """无进度行返回 None. 调用方须先确认 metadata 存在再区分 404."""
+        async with self._session() as session:
+            row = await session.get(PlaybackProgress, metadata_id)
+            if row is None:
+                return None
+            return float(row.position_seconds)
+
+    async def upsert_playback_progress(self, metadata_id: int, position_seconds: float) -> float | None:
+        """影片不存在返回 None; 否则 upsert 并返回写入后的位置."""
+        async with self._session() as session:
+            metadata = await session.get(Metadata, metadata_id)
+            if metadata is None:
+                return None
+            row = await session.get(PlaybackProgress, metadata_id)
+            now = _utcnow()
+            if row is None:
+                row = PlaybackProgress(
+                    metadata_id=metadata_id,
+                    position_seconds=position_seconds,
+                    updated_at=now,
+                )
+            else:
+                row.position_seconds = position_seconds
+                row.updated_at = now
+            session.add(row)
+            await session.commit()
+            return float(row.position_seconds)
