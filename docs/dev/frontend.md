@@ -10,7 +10,7 @@
 |----|------|---------|-------------|
 | **Browse** | `/` | `routes/index.tsx` | `components/agent/` (`agent-home.tsx` 为对话主体), `lib/agent/` |
 | **Browse** | `/meta` | `routes/meta.tsx` + `meta.index.tsx` | `components/media/` (`poster-grid` / `meta-table` / `facet-filter-controls`), `lib/media/browse.ts` |
-| **Browse** | `/meta/$metadataId` | `routes/meta.$metadataId.tsx` | `components/media/playback-panel.tsx` → `playback-player.tsx`, `comment-section.tsx` → `comment-body.tsx`, `lib/media/comment-segments.ts` |
+| **Browse** | `/meta/$metadataId` | `routes/meta.$metadataId.tsx` | `components/media/playback-float.tsx` → `playback-panel.tsx` → `playback-player.tsx`, `comment-section.tsx` → `comment-body.tsx`, `lib/media/comment-segments.ts` |
 | **Browse** | `/actors` | `routes/actors.tsx` + `actors.index.tsx` | `components/media/actor-grid.tsx` / `actor-table.tsx`, `lib/actors/browse.ts` |
 | **Browse** | `/actors/$actorId` | `routes/actors.$actorId.tsx` | `components/media/actor-card.tsx` / `actor-edit-dialog.tsx`, `hooks/use-facet-identity-actions.ts` |
 | **Browse** | `/catalog/...` | `routes/catalog.tsx` + `catalog.index.tsx` + `catalog.$kind.tsx` + `catalog.$kind_.$facetId.tsx` | `components/media/catalog-facet-table.tsx`, `facet-rules-panel.tsx` |
@@ -36,7 +36,7 @@
 
 **评论**: 排序与编辑态只在组件内, 不写地址栏. 影片详情与演员详情的用户标签与刮削标签分栏; 加减菜单一次提交多名, 但固定为两次请求 — 待新建的名称先经 `POST /api/facets/user_tag` 换成 id, 再与已选 id 一起交给所在页的挂载端点 (影片 `/api/metadata/batch/user-tags`, 演员 `/api/actors/batch/user-tags`), 端点语义见 [api.md](api.md). 演员浏览经由 `/api/actors`, 身份治理仍调用 `/api/facets/actor`, 筛选字段的单一事实源是 `lib/actors/browse.ts`; 演员详情出演作品的排序项与片库同源 (`lib/media/browse.ts` 的 `METADATA_SORT_OPTIONS`), 记忆落在 ui store 的 `actorWorksSort`.
 
-**播放**: 面板先取来源列表 (不调用插件因此立刻渲染), 流列表按需加载; 两级选择经 `EnumToggle` 平铺, 失败信息条给出重试入口. 来源顺序由用户在插件页 `PlaybackOrderSection` 维护, 面板按它重排, **位置 0 即默认探测的来源**. 主机侧契约见 [plugins.md](plugins.md), 手势、全屏与浮层的约定见 `components/media/playback-panel.tsx` 与 `playback-player.tsx` 的文件注释.
+**播放**: 详情封面下的入口打开可拖动 / 改尺寸的浮层 (`playback-float.tsx`), 内嵌原面板逻辑; 无启用播放源时不显示入口. 面板先取来源列表 (不调用插件), 流列表按需加载; 来源顺序由插件页维护, **位置 0 即默认探测**. 右键复制时间戳经 `lib/copy-text.ts`: Clipboard API 失败 (局域网 `http://` 等非安全上下文) 时回退 `execCommand`. 主机契约见 [plugins.md](plugins.md); 手势与全屏见 `playback-player.tsx` 注释.
 
 ## 列表分页
 
