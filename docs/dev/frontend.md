@@ -40,7 +40,7 @@
 
 ## 列表分页
 
-**list** 视图与订阅源、库文件表采用 `BrowsePageShell fill`: 标题 / 搜索不滚, 剩余高度交给 children; 视口高度取 `APP_SHELL_MAIN_HEIGHT` (`components/layout/app-shell-metrics.ts`), 不允许再手写一份 calc. `ListToolbar` 是表体壳, **唯一**分页固定于视口底; `grid` / `cloud` 禁止 fill.
+**list** 视图与订阅源、库文件表采用 `BrowsePageShell fill`: 标题 / 搜索不滚, 剩余高度交给 children; 视口高度取 `APP_SHELL_MAIN_HEIGHT` (`components/layout/app-shell-metrics.ts`), 不允许再手写一份 calc. `ListToolbar` 是表体壳, 列表分页固定于视口底. 片库海报墙与列表共用 URL `page`, 每页 50 条, 分页在墙体上下并带页码输入; 演员墙与分类墙仍无限加载. `grid` / `cloud` 禁止 fill.
 
 窄屏 (md 以下) 的 `BrowsePageShell` 只剩一行: 标题 + 视图切换 + 筛选入口, 摘要 / 搜索 / 高级筛选面板 / 附属控件 / 右侧动作全进底部面板; 带高级筛选的列表页必须把面板经 `filterPanel` 槽传入, 不允许把 `<Collapse>` 放进 children — 否则开关与面板会分处两地. 同一批控件只渲染一处: 两个断点各一份会让搜索框在 DOM 里存在两个. `SelectionBar` 无选中时在窄屏整条不渲染; 订阅浏览页的 `FeedReader` 用同一形态.
 

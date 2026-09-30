@@ -80,7 +80,8 @@
     "range": "{{start}}–{{end}} of {{total}}",
     "pageSizeShort": "{{size}}/page",
     "loadedOfTotal": "Loaded {{loaded}} / {{total}}",
-    "pageOf": "Page {{page}} of {{total}}"
+    "pageOf": "Page {{page}} of {{total}}",
+    "jumpTo": "Go to page"
   },
   "validation": {
     "invalid": "Invalid value",

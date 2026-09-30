@@ -1,18 +1,13 @@
 import { ActionIcon, Badge, Group, SegmentedControl, Text, TextInput, Title } from "@mantine/core";
 import { IconFilter, IconSearch, IconTable, IconX } from "@tabler/icons-react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  getFacetOptions,
-  listMetadataInfiniteOptions,
-  listMetadataOptions,
-} from "@/client/@tanstack/react-query.gen";
+import { getFacetOptions, listMetadataOptions } from "@/client/@tanstack/react-query.gen";
 import type { FacetKind, MetadataSortField } from "@/client/types.gen";
 import { BrowsePageShell } from "@/components/common/browse-page-shell";
 import { HintedActionIcon } from "@/components/common/hinted-action-icon";
-import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { ListDefaultActions } from "@/components/common/list-default-actions";
 import { PageSizeSelect } from "@/components/common/page-size-select";
 import { SortMenu } from "@/components/common/sort-menu";
@@ -24,14 +19,15 @@ import {
 } from "@/components/media/facet-filter-controls";
 import { MetaTable } from "@/components/media/meta-table";
 import { PosterGrid } from "@/components/media/poster-grid";
+import { PosterPagination } from "@/components/media/poster-pagination";
 import { activeFacetFilters, addFacetId, type FacetFilters, removeFacetId } from "@/lib/facets";
 import { useNarrowViewport } from "@/hooks/use-narrow-viewport";
-import { nextOffsetPageParam } from "@/lib/infinite-list";
 import { metaSearchSchema, METADATA_SORT_OPTIONS } from "@/lib/media/browse";
 import { metaListDefaults } from "@/lib/nav-defaults";
 import { useUIStore } from "@/stores/ui";
 
-const CHUNK = 30;
+/** 海报墙固定每页条数, 与列表的每页条数无关. */
+const POSTER_PAGE_SIZE = 50;
 
 export const Route = createFileRoute("/meta/")({
   validateSearch: metaSearchSchema,
@@ -149,15 +145,18 @@ function MetaIndexPage() {
 
   const isList = search.view === "list";
 
-  const gridQuery = useInfiniteQuery({
-    ...listMetadataInfiniteOptions({
+  const gridOffset = (search.page - 1) * POSTER_PAGE_SIZE;
+  const gridQuery = useQuery({
+    ...listMetadataOptions({
       query: {
         ...listQueryParams,
-        limit: CHUNK,
+        offset: gridOffset,
+        limit: POSTER_PAGE_SIZE,
+        sort_by: search.sort_by ?? "updated_at",
+        order: search.order ?? "desc",
       },
     }),
-    initialPageParam: 0,
-    getNextPageParam: nextOffsetPageParam,
+    placeholderData: keepPreviousData,
     enabled: !isList,
   });
 
@@ -175,11 +174,19 @@ function MetaIndexPage() {
     enabled: isList,
   });
 
-  const gridItems = useMemo(
-    () => gridQuery.data?.pages.flatMap((p) => p.items) ?? [],
-    [gridQuery.data],
-  );
-  const total = isList ? (listQuery.data?.total ?? 0) : (gridQuery.data?.pages[0]?.total ?? 0);
+  const gridItems = gridQuery.data?.items ?? [];
+  const total = isList ? (listQuery.data?.total ?? 0) : (gridQuery.data?.total ?? 0);
+  const gridTotalPages = Math.max(1, Math.ceil(total / POSTER_PAGE_SIZE));
+
+  useEffect(() => {
+    if (isList || !gridQuery.isSuccess) return;
+    if (search.page > gridTotalPages) {
+      void navigate({
+        search: (prev) => ({ ...prev, page: gridTotalPages }),
+        replace: true,
+      });
+    }
+  }, [gridQuery.isSuccess, gridTotalPages, isList, navigate, search.page]);
 
   function handleSearchChange(v: string) {
     setSearchInput(v);
@@ -449,22 +456,21 @@ function MetaIndexPage() {
         />
       ) : (
         <>
+          <PosterPagination
+            page={search.page}
+            totalPages={gridTotalPages}
+            onChange={(page) => void navigate({ search: (prev) => ({ ...prev, page }) })}
+          />
           <PosterGrid
             items={gridItems}
             loading={gridQuery.isLoading && gridItems.length === 0}
             emptyMessage={t("empty")}
           />
-          {gridItems.length > 0 && (
-            <InfiniteScrollSentinel
-              hasNextPage={Boolean(gridQuery.hasNextPage)}
-              isFetchingNextPage={gridQuery.isFetchingNextPage}
-              fetchNextPage={() => void gridQuery.fetchNextPage()}
-              loadedLabel={t("common:pagination.loadedOfTotal", {
-                loaded: gridItems.length,
-                total,
-              })}
-            />
-          )}
+          <PosterPagination
+            page={search.page}
+            totalPages={gridTotalPages}
+            onChange={(page) => void navigate({ search: (prev) => ({ ...prev, page }) })}
+          />
         </>
       )}
     </BrowsePageShell>

@@ -78,7 +78,8 @@
     "range": "第 {{start}}–{{end}} 条，共 {{total}} 条",
     "pageSizeShort": "{{size}}/页",
     "loadedOfTotal": "已加载 {{loaded}} / {{total}}",
-    "pageOf": "第 {{page}} / {{total}} 页"
+    "pageOf": "第 {{page}} / {{total}} 页",
+    "jumpTo": "跳转到指定页"
   },
   "validation": {
     "invalid": "无效值",
