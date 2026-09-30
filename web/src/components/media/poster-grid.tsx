@@ -2,8 +2,8 @@ import { AspectRatio, Center, SimpleGrid, Skeleton, Stack, Text } from "@mantine
 import type { MetadataResponse } from "@/client/types.gen";
 import { PosterCard } from "./poster-card";
 
-// sm/md 收窄一列: 48em 起导航栏展开, 内容区反而变窄, 沿用桌面列数会让缩略图小一档.
-const GRID_COLS = { base: 2, xs: 3, sm: 3, md: 4, lg: 6, xl: 7 };
+// 手机宽度每行三张. sm/md 不再加列: 48em 起导航栏展开, 内容区反而变窄.
+const GRID_COLS = { base: 3, xs: 3, sm: 3, md: 4, lg: 6, xl: 7 };
 
 interface PosterGridProps {
   items: MetadataResponse[];
