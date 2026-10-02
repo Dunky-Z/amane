@@ -17,6 +17,7 @@ from amane.db.models import (
     FacetSortField,
     Metadata,
     MetadataActor,
+    MetadataSortField,
     SortOrder,
     UserTag,
 )
@@ -173,6 +174,32 @@ class TestUserTagsAndComments:
         updated = await repo.get_user_tag(tag.id)
         assert updated is not None and updated.name == "favorite"
         assert await repo.delete_user_tag(tag.id) is True
+
+    async def test_list_metadata_watched_filter(self, repo: Repository) -> None:
+        """watched 按固定名用户标签「已播放」筛选; 标签不存在时 True 空、False 全量."""
+        from amane.db.user_tag_names import WATCHED_USER_TAG
+
+        watched_meta = await repo.upsert_metadata(number="WATCH-1")
+        plain_meta = await repo.upsert_metadata(number="WATCH-0")
+        assert watched_meta.id is not None and plain_meta.id is not None
+
+        items, total = await repo.list_metadata(watched=True)
+        assert total == 0 and items == []
+        items, total = await repo.list_metadata(watched=False, sort_by=MetadataSortField.NUMBER, order=SortOrder.ASC)
+        assert total == 2
+        assert [m.number for m in items] == ["WATCH-0", "WATCH-1"]
+
+        tags, _ = await repo.ensure_user_tags([WATCHED_USER_TAG])
+        tag = tags[0]
+        assert tag.id is not None
+        assert await repo.apply_metadata_user_tags([watched_meta.id], [tag.id], action="attach") == (1, 0, 0)
+
+        items, total = await repo.list_metadata(watched=True)
+        assert total == 1 and items[0].number == "WATCH-1"
+        items, total = await repo.list_metadata(watched=False)
+        assert total == 1 and items[0].number == "WATCH-0"
+        items, total = await repo.list_metadata()
+        assert total == 2
 
     async def test_ensure_user_tags_reuses_existing(self, repo: Repository) -> None:
         """名称已存在时复用原行, 不新建也不报错; 返回与入参同序."""

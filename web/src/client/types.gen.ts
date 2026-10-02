@@ -4172,6 +4172,12 @@ export type ListMetadataData = {
          */
         user_tag_id?: Array<number> | null;
         /**
+         * Watched
+         *
+         * Filter by watched mark (fixed user tag 已播放)
+         */
+        watched?: boolean | null;
+        /**
          * Has Files
          *
          * Filter by presence of linked MediaFile(s)

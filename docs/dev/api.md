@@ -37,7 +37,7 @@ HTTP 宿主与 DI 在 `app.py` / `deps.py` / `middleware.py` / `spa.py`; `routes
 
 OpenAPI 列出参数, 不表达组合语义:
 
-- metadata 同 kind 的筛选: 关联类 AND / 标量类 OR; 跨 kind 始终 AND. `saved_query_id` 与其它筛选项 AND; `data` 实体不可作列表筛选 (400). 关联文件相位筛选与 `has_files` 一样 AND (布尔项 True = 至少一份具备, False = 没有任何一份具备), 列表项带聚合 `file_phase`. 见 [data-model.md](data-model.md) / [agent.md](agent.md).
+- metadata 同 kind 的筛选: 关联类 AND / 标量类 OR; 跨 kind 始终 AND. `saved_query_id` 与其它筛选项 AND; `data` 实体不可作列表筛选 (400). 关联文件相位筛选与 `has_files` 一样 AND (布尔项 True = 至少一份具备, False = 没有任何一份具备), 列表项带聚合 `file_phase`. `watched` 按是否挂载固定名用户标签 `已播放` 筛选 (True / False / 省略), 与其它筛选项 AND. 见 [data-model.md](data-model.md) / [agent.md](agent.md).
 - GET `/media` 的相位 query 作用在单行列上: 布尔 False 是 `col = false`, 不是 metadata 那种 NOT EXISTS. 未知 `definition` → 422; 相位列不纳入 PATCH.
 - 裁切海报基准是 `thumb_urls[0]` **当前本地文件**像素, 不修改库路径海报; locator 见 [data-model.md](data-model.md).
 - 注册顺序有约束的五处: `/facets/{kind}/rules` 先于 `/{facet_id}`; `/plugins/reload` 先于 `/plugins/{plugin_id}` (否则 `reload` 被当成插件 ID); `/tasks/batch` 与 `/tasks/worker*` 先于 `/{task_id}` (否则被当成非法整数 id); `/feeds/items` 先于 `/{feed_id}`; `/playback/sources` 与 `/playback/progress/{metadata_id}` 先于 `/{source_id}`.

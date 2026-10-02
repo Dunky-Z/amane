@@ -774,6 +774,24 @@
             "description": "Filter by user tag id(s); AND"
           },
           {
+            "name": "watched",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by watched mark (fixed user tag 已播放)",
+              "title": "Watched"
+            },
+            "description": "Filter by watched mark (fixed user tag 已播放)"
+          },
+          {
             "name": "has_files",
             "in": "query",
             "required": false,

@@ -1,6 +1,6 @@
 /**
  * 片库列表的高级 facet 筛选: 展开后每个 kind 独立短搜索框, 选中即追加到 URL search.
- * 另含关联文件与文件相位筛选.
+ * 另含观看状态、关联文件与文件相位筛选.
  */
 
 import { Collapse, Select, SimpleGrid, Stack, Text } from "@mantine/core";
@@ -34,6 +34,9 @@ interface FacetFilterControlsProps {
   /** 当前关联文件筛选; null = 不限. */
   hasFiles: HasFilesFilter;
   onHasFilesChange: (value: HasFilesFilter) => void;
+  /** 观看状态; null = 不限. 按固定名用户标签「已播放」. */
+  watched: HasFilesFilter;
+  onWatchedChange: (value: HasFilesFilter) => void;
   filePhase: FilePhaseFilters;
   onFilePhaseChange: (value: FilePhaseFilters) => void;
 }
@@ -131,6 +134,8 @@ export function FacetFilterControls({
   onSelect,
   hasFiles,
   onHasFilesChange,
+  watched,
+  onWatchedChange,
   filePhase,
   onFilePhaseChange,
 }: FacetFilterControlsProps) {
@@ -156,6 +161,18 @@ export function FacetFilterControls({
               enabled={opened}
             />
           ))}
+          <Select
+            label={t("search.watched")}
+            placeholder={t("search.watchedAny")}
+            data={[
+              { value: "true", label: t("search.watchedYes") },
+              { value: "false", label: t("search.watchedNo") },
+            ]}
+            value={triSelectValue(watched)}
+            onChange={(v) => onWatchedChange(parseTriSelect(v))}
+            clearable
+            size="sm"
+          />
           <Select
             label={t("search.hasFiles")}
             placeholder={t("search.hasFilesAny")}

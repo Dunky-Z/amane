@@ -80,6 +80,9 @@ async def list_metadata(
     publisher_id: Annotated[list[int] | None, Query(description="Filter by publisher facet id(s); OR")] = None,
     series_id: Annotated[list[int] | None, Query(description="Filter by series facet id(s); OR")] = None,
     user_tag_id: Annotated[list[int] | None, Query(description="Filter by user tag id(s); AND")] = None,
+    watched: Annotated[
+        bool | None, Query(description="Filter by watched mark (fixed user tag 已播放)")
+    ] = None,
     has_files: Annotated[bool | None, Query(description="Filter by presence of linked MediaFile(s)")] = None,
     has_subtitle: Annotated[bool | None, Query(description="Filter by linked file subtitle marker")] = None,
     mosaic: Annotated[Mosaic | None, Query(description="Filter by linked file mosaic marker")] = None,
@@ -109,6 +112,7 @@ async def list_metadata(
         publisher_ids=publisher_id,
         series_ids=series_id,
         user_tag_ids=user_tag_id,
+        watched=watched,
         has_files=has_files,
         has_subtitle=has_subtitle,
         mosaic=mosaic,

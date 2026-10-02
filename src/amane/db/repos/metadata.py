@@ -23,7 +23,9 @@ from ..models import (
     Series,
     SortOrder,
     Studio,
+    UserTag,
 )
+from ..user_tag_names import WATCHED_USER_TAG
 from ..repo_types import (
     MetadataFields,
     _media_file_uncensored_predicate,
@@ -69,6 +71,7 @@ class MetadataRepoMixin(RepositoryMixinBase):
         publisher_ids: Sequence[int] | None = None,
         series_ids: Sequence[int] | None = None,
         user_tag_ids: Sequence[int] | None = None,
+        watched: bool | None = None,
         has_files: bool | None = None,
         has_subtitle: bool | None = None,
         mosaic: Mosaic | None = None,
@@ -81,6 +84,7 @@ class MetadataRepoMixin(RepositoryMixinBase):
     ) -> tuple[list[Metadata], int]:
         """关联类 facet 同 kind 多 id 为 AND; 标量类同 kind 多 id 为 OR (未知 id 忽略, 全部未知则空).
         跨 kind 始终 AND. 相位筛选项: 布尔 True=至少一份具备, False=没有任何一份具备.
+        ``watched`` 按是否挂载固定名用户标签 ``已播放`` 筛选, 与其它筛选项 AND.
         """
         async with self._session() as session:
             base = select(Metadata)
@@ -116,6 +120,16 @@ class MetadataRepoMixin(RepositoryMixinBase):
                         select(MetadataUserTag.metadata_id).where(MetadataUserTag.user_tag_id == user_tag_id)
                     )
                 )
+            if watched is not None:
+                watched_ids = (
+                    select(MetadataUserTag.metadata_id)
+                    .join(UserTag, col(UserTag.id) == col(MetadataUserTag.user_tag_id))
+                    .where(col(UserTag.name) == WATCHED_USER_TAG)
+                )
+                if watched:
+                    base = base.where(col(Metadata.id).in_(watched_ids))
+                else:
+                    base = base.where(~col(Metadata.id).in_(watched_ids))
             studio_names = await resolve_scalar_facet_names(session, Studio, studio_ids)
             if studio_ids and not studio_names:
                 return [], 0
