@@ -6,10 +6,11 @@ from pydantic import TypeAdapter
 
 from ...aggregate import compute_merge_updates
 from ...db.models import MetadataSortField, SavedQueryEntity, SortOrder, TaskType
+from ...db.repo_types import WriteMode
 from ...db.repos.media import file_phase_of
 from ...handlers import ScrapePayload
 from ...library.source_delete import SourceDeleteError, unlink_indexed_files
-from ...media import manual_crop_poster
+from ...media import manual_crop_image
 from ...parsing import DEFINITION_VALUES, ContentType, Mosaic, infer_content_type, summarize_file_phases
 from ...parsing import FilePhaseSummary as ParsedFilePhase
 from ...utils.dates import normalize_calendar_date
@@ -27,13 +28,14 @@ from ..models import (
     MetadataBatchScrapeResponse,
     MetadataDetailResponse,
     MetadataListResponse,
+    MetadataLocksRequest,
     MetadataResponse,
     MetadataUserTagsRequest,
     PartialMetadata,
     UserTagLinksResponse,
     UserTagResponse,
 )
-from .agent import resolve_saved_query_id_subquery
+from .saved_queries import resolve_saved_query_id_subquery
 
 if TYPE_CHECKING:
     from ...db.repo_types import MetadataFields
@@ -56,7 +58,7 @@ def _require_known_definition(definition: str | None) -> str | None:
     if definition is None:
         return None
     if definition not in DEFINITION_VALUES:
-        raise HTTPException(status_code=422, detail=f"未知清晰度: {definition}")
+        raise HTTPException(status_code=422, detail=f"未知分辨率: {definition}")
     return definition
 
 
@@ -218,7 +220,7 @@ async def batch_metadata_user_tags(req: MetadataUserTagsRequest, repo: RepoDep) 
 async def get_metadata(metadata_id: int, repo: RepoDep) -> MetadataDetailResponse:
     metadata = await repo.get_metadata(metadata_id)
     if metadata is None:
-        raise HTTPException(status_code=404, detail="Metadata not found")
+        raise HTTPException(status_code=404, detail="影片不存在")
     # 关联文件 / 用户 tag / 评论 / 分类 id
     files = await repo.get_media_by_metadata_id(metadata_id)
     user_tags = await repo.list_metadata_user_tags(metadata_id)
@@ -256,20 +258,30 @@ async def get_metadata(metadata_id: int, repo: RepoDep) -> MetadataDetailRespons
 async def update_metadata(metadata_id: int, req: PartialMetadata, repo: RepoDep) -> MetadataResponse:
     updates = cast("MetadataFields", {k: v for k, v in req.model_dump().items() if v is not None})
     if not updates:
-        raise HTTPException(status_code=422, detail="No fields to update")
+        raise HTTPException(status_code=422, detail="没有需要修改的字段")
     if "release" in updates:
         raw_release = updates["release"]
         if isinstance(raw_release, str):
             normalized = normalize_calendar_date(raw_release)
             if normalized is None:
-                raise HTTPException(status_code=422, detail="release must be YYYY-MM-DD")
+                raise HTTPException(status_code=422, detail="发行日期必须为 YYYY-MM-DD")
             updates["release"] = normalized
         else:
-            raise HTTPException(status_code=422, detail="release must be YYYY-MM-DD")
-    metadata = await repo.update_metadata(metadata_id, **updates)
+            raise HTTPException(status_code=422, detail="发行日期必须为 YYYY-MM-DD")
+    metadata = await repo.update_metadata(metadata_id, mode=WriteMode.MANUAL, **updates)
     if metadata is None:
-        raise HTTPException(status_code=404, detail="Metadata not found")
+        raise HTTPException(status_code=404, detail="影片不存在")
     logger.info("metadata updated", metadata_id=metadata_id, fields=list(updates.keys()))
+    return to_resp(MetadataResponse, metadata)
+
+
+@router.put("/{metadata_id}/locks")
+async def set_metadata_locks(metadata_id: int, req: MetadataLocksRequest, repo: RepoDep) -> MetadataResponse:
+    """整体替换锁定字段集合."""
+    metadata = await repo.set_metadata_locks(metadata_id, req.fields)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="影片不存在")
+    logger.info("metadata locks updated", metadata_id=metadata_id, fields=[str(field) for field in req.fields])
     return to_resp(MetadataResponse, metadata)
 
 
@@ -285,7 +297,7 @@ async def delete_metadata(
     """
     if delete_files:
         if await repo.get_metadata(metadata_id) is None:
-            raise HTTPException(status_code=404, detail="Metadata not found")
+            raise HTTPException(status_code=404, detail="影片不存在")
         files = await repo.get_media_by_metadata_id(metadata_id)
         try:
             await unlink_indexed_files([item.path for item in files])
@@ -294,7 +306,7 @@ async def delete_metadata(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
     deleted = await repo.delete_metadata(metadata_id, remove_files=delete_files)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Metadata not found")
+        raise HTTPException(status_code=404, detail="影片不存在")
     logger.info("metadata deleted", metadata_id=metadata_id, delete_files=delete_files)
 
 
@@ -308,7 +320,7 @@ async def crop_poster_from_thumb(
     """从封面 (thumb) 按像素框裁切海报, 写入派生 Resource 并更新 poster_urls."""
     metadata = await repo.get_metadata(metadata_id)
     if metadata is None:
-        raise HTTPException(status_code=404, detail="Metadata not found")
+        raise HTTPException(status_code=404, detail="影片不存在")
     if not metadata.thumb_urls:
         raise HTTPException(status_code=400, detail="无封面图可裁切")
 
@@ -316,19 +328,20 @@ async def crop_poster_from_thumb(
     thumb_url = metadata.thumb_urls[0]
     box = (req.left, req.top, req.right, req.bottom)
     try:
-        poster_url = await manual_crop_poster(
+        poster_url = await manual_crop_image(
             thumb_url,
             box,
             runtime.resource_store,
             runtime.web_client,
             runtime.config.hot,
             runtime.config.cold.data_dir,
+            subject="封面图",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     # 写回 poster_urls
-    updated = await repo.update_metadata(metadata_id, poster_urls=[poster_url])
+    updated = await repo.update_metadata(metadata_id, mode=WriteMode.MANUAL, poster_urls=[poster_url])
     assert updated is not None
     logger.info(
         "poster cropped",
@@ -342,11 +355,11 @@ async def crop_poster_from_thumb(
 @router.post("/{metadata_id}/merge")
 async def merge_metadata(metadata_id: int, req: MergeRequest, repo: RepoDep) -> MetadataResponse:
     if not req.selections:
-        raise HTTPException(status_code=400, detail="no selections provided")
+        raise HTTPException(status_code=400, detail="未提供选择项")
 
     metadata = await repo.get_metadata(metadata_id)
     if metadata is None:
-        raise HTTPException(status_code=404, detail="Metadata not found")
+        raise HTTPException(status_code=404, detail="影片不存在")
 
     # 按 selections 从 raw 合并字段
     try:
@@ -355,10 +368,10 @@ async def merge_metadata(metadata_id: int, req: MergeRequest, repo: RepoDep) -> 
         raise HTTPException(status_code=422, detail=str(e)) from e
 
     if not updates:
-        raise HTTPException(status_code=400, detail="no valid selections")
+        raise HTTPException(status_code=400, detail="没有有效的选择项")
 
     # 写回元数据
-    updated = await repo.update_metadata(metadata_id, **cast("MetadataFields", updates))
+    updated = await repo.update_metadata(metadata_id, mode=WriteMode.MANUAL, **cast("MetadataFields", updates))
     assert updated is not None
     logger.info("metadata merged", metadata_id=metadata_id, selections=req.selections)
     return to_resp(MetadataResponse, updated)

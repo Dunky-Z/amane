@@ -3,19 +3,30 @@ from enum import StrEnum
 from typing import Annotated, Literal, Self
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 
 from ...db import Repository, TaskStatus, TaskType
 from ...handlers import (
+    ActorScrapeResult,
     CacheKind,
     CleanupPayload,
+    CleanupResult,
+    DeletePayload,
+    DeleteResult,
     OrganizePayload,
+    OrganizeResult,
     R18ImportPayload,
+    R18ImportResult,
     RefreshPayload,
+    RefreshResult,
     RescrapePayload,
+    RescrapeResult,
+    ScanInvalidPayload,
+    ScanInvalidResult,
     ScrapePayload,
-    TrashPayload,
+    ScrapeResult,
     UpscalePayload,
+    UpscaleResult,
 )
 from ...parsing import ContentType, infer_content_type, parse_file_info
 
@@ -29,14 +40,32 @@ class TaskChildStatusCounts(BaseModel):
     failed: int = 0
 
 
-class TaskResponse(BaseModel):
+TaskResultPayload = Annotated[
+    RefreshResult
+    | OrganizeResult
+    | ScanInvalidResult
+    | DeleteResult
+    | ScrapeResult
+    | CleanupResult
+    | UpscaleResult
+    | R18ImportResult
+    | ActorScrapeResult
+    | RescrapeResult,
+    Field(discriminator="type"),
+]
+"""任务结果按任务类型判别; 各成员自带 `type` 字面量, 前端据此收窄."""
+
+_RESULT_ADAPTER: TypeAdapter[TaskResultPayload] = TypeAdapter(TaskResultPayload)
+
+
+class TaskListItem(BaseModel):
+    """列表与树: 不含 payload 与 result 等重字段, 展开时再取详情."""
+
     id: int
     type: TaskType
     status: TaskStatus
     title: str | None = None
     """scrape→番号, actor_scrape→演员名, refresh/organize/trash→库名."""
-    payload: dict = Field(default_factory=dict)
-    result: dict | None = None
     error: str | None = None
     log_file: str | None = None
     retries: int = 0
@@ -52,18 +81,36 @@ class TaskResponse(BaseModel):
     finished_at: datetime | None = None
 
 
-class TaskChildResponse(TaskResponse):
+class TaskChildItem(TaskListItem):
     link_key: str
     """父节点内后继语义键 (如 scrape:{media_file_id})."""
 
 
+class TaskResponse(TaskListItem):
+    """详情: 额外带 payload 与按类型的 result."""
+
+    payload: dict = Field(default_factory=dict)
+    result: TaskResultPayload | None = None
+
+    @field_validator("result", mode="before")
+    @classmethod
+    def _validated_result(cls, value: object) -> object:
+        """结果按判别联合校验; 旧行与坏数据读不出来时置空, 不做迁移."""
+        if value is None or isinstance(value, BaseModel):
+            return value
+        try:
+            return _RESULT_ADAPTER.validate_python(value)
+        except ValueError:
+            return None
+
+
 class TaskListResponse(BaseModel):
-    items: list[TaskResponse]
+    items: list[TaskListItem]
     total: int
 
 
 class TaskChildListResponse(BaseModel):
-    items: list[TaskChildResponse]
+    items: list[TaskChildItem]
     total: int
     """不受本页 limit/offset 截断."""
 
@@ -133,7 +180,7 @@ class ScrapeRequest(BaseModel):
         if self.media_id is not None:
             media = await repo.get_media_file(self.media_id)
             if media is None:
-                raise HTTPException(status_code=404, detail=f"Media file {self.media_id} not found")
+                raise HTTPException(status_code=404, detail=f"媒体文件 {self.media_id} 不存在")
             if self.number is not None:
                 return ScrapePayload(
                     number=self.number,
@@ -165,8 +212,12 @@ class OrganizeSubmission(OrganizePayload):
     type: Literal["organize"]
 
 
-class TrashSubmission(TrashPayload):
-    type: Literal["trash"]
+class ScanInvalidSubmission(ScanInvalidPayload):
+    type: Literal["scan_invalid"]
+
+
+class DeleteSubmission(DeletePayload):
+    type: Literal["delete"]
 
 
 class ScrapeSubmission(ScrapeRequest):
@@ -201,7 +252,8 @@ class ActorScrapeSubmission(BaseModel):
 TaskSubmission = Annotated[
     RefreshSubmission
     | OrganizeSubmission
-    | TrashSubmission
+    | ScanInvalidSubmission
+    | DeleteSubmission
     | ScrapeSubmission
     | CleanupSubmission
     | UpscaleSubmission

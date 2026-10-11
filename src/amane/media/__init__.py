@@ -11,7 +11,7 @@ from .images import (
 )
 from .nfo import write_nfo
 from .nfo_read import ParsedNfo, parse_nfo, read_nfo
-from .pipeline import MaterializedImages, manual_crop_poster, materialize_images
+from .pipeline import MaterializedImages, manual_crop_image, materialize_images
 from .resource_store import AcquireResult, ResourceStore, derived_locator
 
 __all__ = [
@@ -24,7 +24,7 @@ __all__ = [
     "crop_poster",
     "derived_locator",
     "format_crop_box_args",
-    "manual_crop_poster",
+    "manual_crop_image",
     "materialize_images",
     "needs_upscale",
     "probe_size",

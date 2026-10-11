@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, NoReturn
 
-from sqlalchemy import Column, Index, String, Text, UniqueConstraint, text
-from sqlmodel import JSON, Field, SQLModel
+from sqlalchemy import Boolean, Column, Index, String, Text, UniqueConstraint, or_, text
+from sqlalchemy.sql.elements import ColumnElement
+from sqlmodel import JSON, Field, SQLModel, col
 
 from ..enums import ActorGender, DownloadableResource, LibraryAutomation, LibraryIngest, LinkMode, MoveMode
 from ..library import (
@@ -33,13 +34,14 @@ class MediaFileStatus(StrEnum):
 class TaskType(StrEnum):
     SCRAPE = "scrape"
     ORGANIZE = "organize"
-    TRASH = "trash"
     REFRESH = "refresh"
     CLEANUP = "cleanup"
     UPSCALE = "upscale"
     R18_IMPORT = "r18_import"
     ACTOR_SCRAPE = "actor_scrape"
     RESCRAPE = "rescrape"
+    SCAN_INVALID = "scan_invalid"
+    DELETE = "delete"
 
 
 class RoutineType(StrEnum):
@@ -150,6 +152,29 @@ SCRAPE_FACET_KINDS: frozenset[FacetKind] = frozenset(
 )
 
 
+class _HasSubtitleProperty(property):
+    """``MediaFile.has_subtitle`` 的实现, 只允许实例访问.
+
+    类属性访问得到的是描述符本身, 与布尔值比较恒不相等: 该名字写进 SQL 表达式
+    (例如 ``MediaFile.has_subtitle == True``) 不报错, 会静默编译出 ``WHERE false`` 并返回空集.
+    因此比较与真值判断直接报错, 该误用无法静默通过; SQL 判定中字一律用 ``has_subtitle_predicate()``.
+    """
+
+    __hash__ = property.__hash__
+
+    def _reject(self) -> NoReturn:
+        raise TypeError("MediaFile.has_subtitle 只可用于实例; SQL 判定请用 has_subtitle_predicate()")
+
+    def __eq__(self, other: object) -> bool:
+        self._reject()
+
+    def __ne__(self, other: object) -> bool:
+        self._reject()
+
+    def __bool__(self) -> bool:
+        self._reject()
+
+
 class MediaFile(SQLModel, table=True):
     __tablename__ = "media_files"  # type: ignore[assignment]
 
@@ -165,12 +190,28 @@ class MediaFile(SQLModel, table=True):
     # 文件相位: path 的投影, 随 path 写入/更新; 不进对外 PATCH.
     content_type: ContentType = Field(default=ContentType.WESTERN, index=True)
     mosaic: Mosaic | None = Field(default=None, index=True)
-    has_subtitle: bool = Field(default=False, index=True)
+    #: 文件名带中字标记, 只由 path 派生.
+    has_subtitle_in_name: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, index=True))
+    #: 同目录存在库 `subtitle_extensions` 命中的字幕; 只有登记与修改 path 时会重新检查.
+    has_external_subtitle: bool = Field(default=False, index=True)
     definition: str | None = Field(default=None, index=True)
     metadata_id: int | None = Field(default=None, foreign_key="metadata.id", index=True)
     library_id: int = Field(foreign_key="libraries.id", index=True)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
+
+    @_HasSubtitleProperty
+    def has_subtitle(self) -> bool:
+        """文件名标记与同目录字幕命中任一即真."""
+        return self.has_subtitle_in_name or self.has_external_subtitle
+
+
+def has_subtitle_predicate() -> ColumnElement[bool]:
+    """`MediaFile.has_subtitle` 的 SQL 等价式: 文件名标记或同目录字幕命中.
+
+    判定中字的查询与筛选一律走这里, 与实例属性口径必须一致.
+    """
+    return or_(col(MediaFile.has_subtitle_in_name).is_(True), col(MediaFile.has_external_subtitle).is_(True))
 
 
 class Metadata(SQLModel, table=True):
@@ -207,6 +248,10 @@ class Metadata(SQLModel, table=True):
     field_sources: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON))
     # 各站原始快照, 供离线重新聚合.
     raw: dict[str, dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
+    # 字段级锁定; 契约见 docs/dev/data-model.md.
+    locked_fields: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False, server_default=text("'[]'"))
+    )
 
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -289,9 +334,9 @@ class Library(SQLModel, table=True):
     move_mode: MoveMode = Field(default=MoveMode.MOVE)
     video_template: PathTemplate = Field(default=VIDEO_TEMPLATE_DEFAULT)
     link_template: PathTemplate | None = None
-    """空则不创建链接. 非空时 ORGANIZE 在视频就位后按此模板写 strm 或软链接, 必须在库外."""
+    """空则不创建链接. 非空时 ORGANIZE 在视频就位后按此模板写 strm 或符号链接, 必须在库外."""
     link_mode: LinkMode = Field(default=LinkMode.STRM)
-    """link_template 非空时: strm 写 .strm 文本; symlink 做文件系统软链接."""
+    """link_template 非空时: strm 写 .strm 文本; symlink 做文件系统符号链接."""
     strm_content_template: StrmContentTemplate | None = None
     """仅 link_mode=strm: .strm 正文模板. 空则写视频绝对路径. 占位符与路径模板相同."""
     thumb_template: PathTemplate | None = None
@@ -313,9 +358,9 @@ class Library(SQLModel, table=True):
     trailer_pattern: TrailerPattern = Field(default=DEFAULT_TRAILER_PATTERN, sa_column=Column(String, nullable=False))
     """匹配文件名 (含扩展名) 的正则; 命中则扫描/监控跳过. 空串关闭."""
     blacklist_patterns: list[BlacklistPattern] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
-    """文件名正则列表, 命中任一则扫描/监控跳过, 且 TRASH 时移入本库 `.amane_trash`. 空列表关闭."""
+    """文件名正则列表, 命中任一则扫描/监控跳过, 并作为无效文件进入清理清单. 空列表关闭."""
     min_file_size: MinFileSize = Field(default=0)
-    """视频体积下限 (字节). 小于此值的扫描视频在 REFRESH/监控跳过, TRASH 时进 `.amane_trash`. 0 关闭.
+    """最小视频大小 (字节). 小于此值的扫描视频在 REFRESH/监控跳过, 并作为无效文件进入清理清单. 0 关闭.
 
     只对扫描视频扩展名生效 (与 watcher.media_extensions / MEDIA_EXTENSIONS 同一套);
     图片、NFO、字幕、`.strm` 指针都不参与.
@@ -442,6 +487,10 @@ class Actor(SQLModel, table=True):
     source_urls: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON))
     field_sources: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON))
     raw: dict[str, dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
+    # 人物字段级锁定; 契约见 docs/dev/data-model.md.
+    locked_fields: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False, server_default=text("'[]'"))
+    )
 
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -470,6 +519,7 @@ class Director(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, nullable=False, index=True)
+    is_favorite: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -481,6 +531,8 @@ class Tag(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, nullable=False, index=True)
+    # 用户手工状态, 与刮削投影正交: 投影重建只按 name get-or-create.
+    is_favorite: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -490,6 +542,7 @@ class Studio(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, nullable=False, index=True)
+    is_favorite: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -499,6 +552,7 @@ class Publisher(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, nullable=False, index=True)
+    is_favorite: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -508,8 +562,22 @@ class Series(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, nullable=False, index=True)
+    is_favorite: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
+
+
+#: 可收藏的分类种类 → 实体模型. 新增可收藏的分类时在此登记, 并在该实体表加 ``is_favorite`` 列;
+#: 路由的 400 判定与 repo 的列表达式一律从这里派生, 不另写 kind 名单.
+FAVORITE_FACET_ENTITIES: dict[FacetKind, type[Director] | type[Tag] | type[Studio] | type[Publisher] | type[Series]] = {
+    FacetKind.DIRECTOR: Director,
+    FacetKind.TAG: Tag,
+    FacetKind.STUDIO: Studio,
+    FacetKind.PUBLISHER: Publisher,
+    FacetKind.SERIES: Series,
+}
+
+FAVORITE_FACET_KINDS: frozenset[FacetKind] = frozenset(FAVORITE_FACET_ENTITIES)
 
 
 class FacetRule(SQLModel, table=True):
@@ -617,13 +685,17 @@ class SavedQueryEntity(StrEnum):
     DATA = "data"
 
 
+DEFAULT_SESSION_TITLE = "新会话"
+"""会话标题默认值; 建表、创建请求与标题生成失败的回退共用."""
+
+
 class AgentSession(SQLModel, table=True):
     """会话索引; 完整 trace 落盘, 不在本表."""
 
     __tablename__ = "agent_sessions"  # type: ignore[assignment]
 
     id: int | None = Field(default=None, primary_key=True)
-    title: str = Field(default="新会话", nullable=False)
+    title: str = Field(default=DEFAULT_SESSION_TITLE, nullable=False)
     status: AgentSessionStatus = Field(default=AgentSessionStatus.ACTIVE, index=True)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -636,6 +708,7 @@ class SavedQuery(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False)
+    description: str = Field(default="", nullable=False)
     sql: str = Field(nullable=False)
     entity: SavedQueryEntity = Field(index=True)
     session_id: int | None = Field(default=None, foreign_key="agent_sessions.id", index=True)

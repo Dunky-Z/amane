@@ -5,6 +5,13 @@ export type ClientOptions = {
 };
 
 /**
+ * ActorField
+ *
+ * 演员人物档案的可锁字段; 除 ``ALIASES`` 外取值与 Actor 列名同形.
+ */
+export type ActorField = 'gender' | 'birthday' | 'birthplace' | 'height' | 'bust' | 'waist' | 'hip' | 'cup' | 'overview' | 'tagline' | 'image_urls' | 'aliases';
+
+/**
  * ActorGender
  *
  * 演员性别 - 用于展示与按站裁剪刮削源.
@@ -26,9 +33,23 @@ export type ActorListResponse = {
 };
 
 /**
+ * ActorLocksRequest
+ *
+ * 整体替换锁定字段集合.
+ */
+export type ActorLocksRequest = {
+    /**
+     * Fields
+     *
+     * 锁定的字段集合; 空集解除全部锁定
+     */
+    fields?: Array<ActorField>;
+};
+
+/**
  * ActorResponse
  *
- * 详情填全量; 列表 (`GET /actors`) 只填卡片/表格字段, 简介/别名/标签/源字典/raw 为空.
+ * 详情填全量; 列表 (`GET /actors`) 只填卡片/表格字段, 其余 (简介/别名/标签/源字典/raw/锁) 为空.
  */
 export type ActorResponse = {
     /**
@@ -123,6 +144,10 @@ export type ActorResponse = {
         };
     };
     /**
+     * Locked Fields
+     */
+    locked_fields?: Array<ActorField>;
+    /**
      * Updated At
      */
     updated_at?: string | null;
@@ -138,6 +163,38 @@ export type ActorScrapeRequest = {
      * 启用的缓存种类 (metadata: 复用 Actor.raw; trans: 预留译文). 空集 = 全部强制刷新
      */
     use_cache?: Array<CacheKind>;
+};
+
+/**
+ * ActorScrapeResult
+ */
+export type ActorScrapeResult = {
+    /**
+     * Type
+     */
+    type?: 'actor_scrape';
+    /**
+     * Actor Id
+     */
+    actor_id: number;
+    /**
+     * Field Sources
+     */
+    field_sources: {
+        [key: string]: string;
+    };
+    /**
+     * Failed Sites
+     */
+    failed_sites: Array<string>;
+    /**
+     * Image Count
+     */
+    image_count: number;
+    /**
+     * Outcomes
+     */
+    outcomes?: Array<SiteOutcomeRecord>;
 };
 
 /**
@@ -165,19 +222,19 @@ export type ActorScrapeSubmission = {
 /**
  * ActorScrapingConfig
  *
- * 档案站顺序填空, 头像站优先.
+ * 资料来源顺序填空, 头像来源优先.
  */
 export type ActorScrapingConfig = {
     /**
      * Profile Sites
      *
-     * 档案源顺序 (标量填空优先级); 仅演员档案站
+     * 资料来源顺序 (单源字段填空优先级); 仅演员资料来源
      */
-    profile_sites?: Array<'minnano' | 'javdb' | 'wikipedia' | 'theporndb'>;
+    profile_sites?: Array<'minnano' | 'javdb' | 'wikipedia' | 'theporndb' | 'avbase'>;
     /**
      * Image Sites
      *
-     * 头像源顺序 (优先于档案站附图); 仅演员头像站
+     * 头像来源顺序 (优先于资料来源附图); 仅演员头像来源
      */
     image_sites?: Array<'gfriends'>;
     /**
@@ -291,22 +348,6 @@ export type ActorUserTagsRequest = {
 };
 
 /**
- * AgentApproveRequest
- *
- * 一次可批多项; 服务端顺序执行后只开一轮模型 follow-up.
- */
-export type AgentApproveRequest = {
-    /**
-     * Approval Ids
-     */
-    approval_ids: Array<string>;
-    /**
-     * Slow Timeout Ms
-     */
-    slow_timeout_ms?: number;
-};
-
-/**
  * AgentCancelResponse
  */
 export type AgentCancelResponse = {
@@ -367,26 +408,6 @@ export type AgentConfig = {
 };
 
 /**
- * AgentMessageRequest
- */
-export type AgentMessageRequest = {
-    /**
-     * Content
-     */
-    content: string;
-};
-
-/**
- * AgentRejectRequest
- */
-export type AgentRejectRequest = {
-    /**
-     * Approval Id
-     */
-    approval_id: string;
-};
-
-/**
  * AgentSessionCreateRequest
  */
 export type AgentSessionCreateRequest = {
@@ -436,6 +457,28 @@ export type AgentSessionResponse = {
 export type AgentSessionStatus = 'active' | 'awaiting_approval' | 'closed';
 
 /**
+ * AgentSessionTitleRequest
+ *
+ * 首条用户输入: 标题只依据它生成.
+ */
+export type AgentSessionTitleRequest = {
+    /**
+     * Prompt
+     */
+    prompt: string;
+};
+
+/**
+ * AgentSessionTitleResponse
+ */
+export type AgentSessionTitleResponse = {
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
  * AgentSessionUpdateRequest
  *
  * title / thinking 均可选; thinking=null 表示取消覆盖, 继承全局默认.
@@ -468,9 +511,7 @@ export type AgentTraceResponse = {
     /**
      * Events
      */
-    events: Array<{
-        [key: string]: unknown;
-    }>;
+    events: Array<UserMessageRow | ReasoningDeltaRow | TextDeltaRow | ToolCallRow | ToolResultRow | RequestUsageRow | TurnUsageRow | ApprovalsRow | ErrorRow | CancelledRow>;
     /**
      * Turn Running
      */
@@ -485,6 +526,32 @@ export type AgentTraceResponse = {
  * ApiType
  */
 export type ApiType = 'chat' | 'response' | 'anthropic';
+
+/**
+ * ApprovalsRow
+ *
+ * 未决审批快照. 每个回合结束发一条, **空列表表示已无未决**, 后者覆盖前者.
+ *
+ * 原样携带 AG-UI 中断: 前端既用它渲染审批入口, 也把它交给 runtime 完成 `resume`.
+ */
+export type ApprovalsRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'approvals';
+    /**
+     * Interrupts
+     */
+    interrupts: Array<Interrupt>;
+};
 
 /**
  * Body_install_plugin
@@ -505,11 +572,74 @@ export type BodyInstallPlugin = {
 };
 
 /**
+ * BrowserBackendName
+ */
+export type BrowserBackendName = 'off' | 'patchright' | 'camoufox' | 'solver';
+
+/**
+ * BrowserConfig
+ */
+export type BrowserConfig = {
+    backend?: BrowserBackendName;
+    /**
+     * Timeout
+     */
+    timeout?: number;
+    /**
+     * Solver Url
+     */
+    solver_url?: string;
+};
+
+/**
+ * BrowserMode
+ */
+export type BrowserMode = 'off' | 'auto' | 'always';
+
+/**
  * CacheKind
  *
  * 刮削可复用的缓存种类. use_cache 为其集合: 含某项 = 该缓存生效, 不含 = 强制刷新该项.
  */
 export type CacheKind = 'metadata' | 'trans';
+
+/**
+ * CancelledRow
+ *
+ * 回合被显式终止.
+ */
+export type CancelledRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'cancelled';
+};
+
+/**
+ * CleanupResult
+ */
+export type CleanupResult = {
+    /**
+     * Type
+     */
+    type?: 'cleanup';
+    /**
+     * Files Removed
+     */
+    files_removed: number;
+    /**
+     * Resources Removed
+     */
+    resources_removed: number;
+};
 
 /**
  * CleanupSubmission
@@ -687,6 +817,38 @@ export type ConnectivityStatus = 'ok' | 'failed' | 'skipped';
 export type ContentType = 'censored' | 'uncensored' | 'chinese' | 'western' | 'fc2' | 'amateur' | 'hentai';
 
 /**
+ * CropAvatarRequest
+ *
+ * 从当前主图按像素框裁切头像 (相对 image_urls[0] 当前本地文件像素; 含就地超分后尺寸).
+ */
+export type CropAvatarRequest = {
+    /**
+     * Left
+     *
+     * 裁切框左边界 (含)
+     */
+    left: number;
+    /**
+     * Top
+     *
+     * 裁切框上边界 (含)
+     */
+    top: number;
+    /**
+     * Right
+     *
+     * 裁切框右边界 (不含)
+     */
+    right: number;
+    /**
+     * Bottom
+     *
+     * 裁切框下边界 (不含)
+     */
+    bottom: number;
+};
+
+/**
  * CropPosterRequest
  *
  * 从封面图按像素框裁切海报 (相对 thumb 当前本地文件像素; 含就地超分后尺寸).
@@ -719,6 +881,92 @@ export type CropPosterRequest = {
 };
 
 /**
+ * DeleteResult
+ */
+export type DeleteResult = {
+    /**
+     * Type
+     */
+    type?: 'delete';
+    /**
+     * Deleted
+     */
+    deleted: number;
+    /**
+     * Changed
+     */
+    changed: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Freed Bytes
+     */
+    freed_bytes?: number;
+    /**
+     * Hardlink Items
+     */
+    hardlink_items?: number;
+    /**
+     * Pruned Dirs
+     */
+    pruned_dirs?: number;
+    /**
+     * Excluded
+     */
+    excluded?: number;
+    /**
+     * Indexed
+     */
+    indexed?: number;
+    /**
+     * Reverify Rejected
+     */
+    reverify_rejected?: number;
+};
+
+/**
+ * DeleteSubmission
+ */
+export type DeleteSubmission = {
+    /**
+     * Library Id
+     *
+     * 清单所属 Library ID
+     */
+    library_id: number;
+    /**
+     * Inventory Id
+     *
+     * 后端生成的清单标识; 不存在或已过期则失败
+     */
+    inventory_id: string;
+    /**
+     * Exclude
+     *
+     * 排除项: 库内为清单库根下的相对路径, 库外为绝对路径; 按路径分量匹配
+     */
+    exclude?: Array<string>;
+    /**
+     * Include
+     *
+     * 在排除项内重新纳入的路径 (路径约定同 exclude); 与排除项互为祖先时按最深的一条判定, 同一路径同时命中两组时按纳入处理
+     */
+    include?: Array<string>;
+    /**
+     * Prune Empty Dirs
+     *
+     * 删除本次腾空的目录 (库根与 .amane_trash 除外)
+     */
+    prune_empty_dirs?: boolean;
+    /**
+     * Type
+     */
+    type: 'delete';
+};
+
+/**
  * DesktopResponse
  */
 export type DesktopResponse = {
@@ -742,6 +990,84 @@ export type DesktopResponse = {
  * 影片附属资源类型: 刮削写入 Resource, 整理时按库配置复制到库路径.
  */
 export type DownloadableResource = 'thumb' | 'poster' | 'extrafanart' | 'trailer';
+
+/**
+ * ErrorRow
+ *
+ * 回合异常; 文案直接进助手气泡.
+ */
+export type ErrorRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'error';
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * FacetBatchAction
+ *
+ * 分类批量动作; 两个动作都是整体赋值且幂等.
+ *
+ * 不设逐项取反 (toggle): 多选混合态下点「收藏」必须保持收藏, 取反会取消已收藏的条目. 枚举是
+ * 动作信封的扩展位, 新增动作 (如批量删除) 时 ``FacetBatchResponse`` 的字段按动作解释.
+ */
+export type FacetBatchAction = 'favorite' | 'unfavorite';
+
+/**
+ * FacetBatchRequest
+ *
+ * 对一批分类执行同一个动作; 重复 id 去重, 使结果计数以去重后的条目数为准.
+ */
+export type FacetBatchRequest = {
+    /**
+     * Facet Ids
+     *
+     * 分类 ID 列表
+     */
+    facet_ids: Array<number>;
+    /**
+     * favorite 置为已收藏, unfavorite 置为未收藏; 两者均幂等
+     */
+    action: FacetBatchAction;
+};
+
+/**
+ * FacetBatchResponse
+ *
+ * 批量动作的结果计数, 字段按 action 解释; 两个已实现动作下三者之和等于去重后的条目数.
+ */
+export type FacetBatchResponse = {
+    /**
+     * Changed
+     *
+     * 收藏位确实发生写入的分类数
+     */
+    changed: number;
+    /**
+     * Unchanged
+     *
+     * 已处于目标取值的分类数
+     */
+    unchanged: number;
+    /**
+     * Missing
+     *
+     * 不存在的分类 id 数
+     */
+    missing: number;
+};
 
 /**
  * FacetKind
@@ -806,6 +1132,10 @@ export type FacetResponse = {
      * Count
      */
     count: number;
+    /**
+     * Is Favorite
+     */
+    is_favorite: boolean;
 };
 
 /**
@@ -1236,6 +1566,13 @@ export type FilePhaseSummary = {
 };
 
 /**
+ * FootprintNoticeKind
+ *
+ * 未能纳入清单的项. 只给码与参数, 文案由面板按界面语言给出.
+ */
+export type FootprintNoticeKind = 'missing' | 'outside_root' | 'work_dir_is_root' | 'work_dir_multiple' | 'template_error';
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -1283,6 +1620,203 @@ export type HotSettings = {
         [key: string]: PluginConfig;
     };
 };
+
+/**
+ * Interrupt
+ *
+ * A pause carried inside ``RunFinishedEvent.outcome`` when the outcome is
+ * ``RunFinishedInterruptOutcome``. The client resumes
+ * by addressing this interrupt in the resume array of the next RunAgentInput.
+ */
+export type Interrupt = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Message
+     */
+    message?: string | null;
+    /**
+     * Toolcallid
+     */
+    toolCallId?: string | null;
+    /**
+     * Responseschema
+     */
+    responseSchema?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Expiresat
+     */
+    expiresAt?: string | null;
+    /**
+     * Metadata
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Subagentrunid
+     */
+    subagentRunId?: string | null;
+    [key: string]: unknown;
+};
+
+/**
+ * InventoryEntryKind
+ */
+export type InventoryEntryKind = 'file' | 'dir' | 'symlink';
+
+/**
+ * InventoryNodePage
+ *
+ * 一个目录的子节点切片. 面板只渲染 ``items``, 滚到底再按 ``offset`` 取下一页.
+ */
+export type InventoryNodePage = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Items
+     */
+    items: Array<InventoryNodeResponse>;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Entry Count
+     */
+    entry_count: number;
+    /**
+     * Entry Bytes
+     */
+    entry_bytes: number;
+};
+
+/**
+ * InventoryNodeResponse
+ *
+ * 树节点. ``path`` 库内为相对路径, 库外为绝对路径, 一律 `/` 分隔; 子节点按需再取.
+ */
+export type InventoryNodeResponse = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Name
+     */
+    name: string;
+    kind: InventoryEntryKind;
+    reason?: InventoryReason | null;
+    /**
+     * Size
+     */
+    size?: number | null;
+    /**
+     * Hardlink
+     */
+    hardlink?: boolean;
+    /**
+     * Entry Count
+     */
+    entry_count: number;
+    /**
+     * Entry Bytes
+     */
+    entry_bytes: number;
+    /**
+     * Will Be Empty
+     */
+    will_be_empty?: boolean;
+    /**
+     * Noise
+     */
+    noise?: boolean;
+    /**
+     * Has Children
+     */
+    has_children?: boolean;
+    /**
+     * Children
+     */
+    children?: Array<InventoryNodeResponse> | null;
+};
+
+/**
+ * InventoryReason
+ */
+export type InventoryReason = 'blacklist' | 'undersized' | 'empty_dir' | 'explicit' | 'orphan';
+
+/**
+ * InventorySummaryResponse
+ *
+ * 面板入口: 状态与范围. ``exists`` 为假时其余字段无意义; 节点一律经分页接口另取.
+ */
+export type InventorySummaryResponse = {
+    /**
+     * Exists
+     */
+    exists: boolean;
+    /**
+     * Inventory Id
+     */
+    inventory_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Scope Path
+     */
+    scope_path?: string | null;
+    /**
+     * Truncated
+     */
+    truncated?: boolean;
+    /**
+     * Dropped
+     */
+    dropped?: number;
+    /**
+     * Skipped Dirs
+     */
+    skipped_dirs?: number;
+    /**
+     * Skipped Files
+     */
+    skipped_files?: number;
+    /**
+     * Blocked Dirs
+     */
+    blocked_dirs?: number;
+    /**
+     * Scan Running
+     */
+    scan_running?: boolean;
+    /**
+     * Last Scan Error
+     */
+    last_scan_error?: string | null;
+};
+
+export type JsonValue = unknown;
 
 /**
  * LLMConfig
@@ -1681,6 +2215,10 @@ export type MediaFileResponse = {
      */
     id: number;
     /**
+     * Library Id
+     */
+    library_id: number;
+    /**
      * Path
      */
     path: string;
@@ -1949,6 +2487,20 @@ export type MetadataListResponse = {
 };
 
 /**
+ * MetadataLocksRequest
+ *
+ * 整体替换锁定字段集合.
+ */
+export type MetadataLocksRequest = {
+    /**
+     * Fields
+     *
+     * 锁定的字段集合; 空集解除全部锁定
+     */
+    fields?: Array<MetadataField>;
+};
+
+/**
  * MetadataPartial
  */
 export type MetadataPartial = {
@@ -2151,6 +2703,10 @@ export type MetadataResponse = {
         [key: string]: unknown;
     };
     /**
+     * Locked Fields
+     */
+    locked_fields?: Array<MetadataField>;
+    /**
      * File Count
      */
     file_count?: number;
@@ -2232,10 +2788,7 @@ export type NetworkConfig = {
      * Max Clients
      */
     max_clients?: number;
-    /**
-     * Browser Timeout
-     */
-    browser_timeout?: number;
+    browser?: BrowserConfig;
     /**
      * Chunked Threshold
      */
@@ -2297,6 +2850,64 @@ export type OptionalPathTemplateDefaults = {
 };
 
 /**
+ * OrganizeConflict
+ *
+ * 一条未落盘的整理项: 源路径 + 被占用的目标路径.
+ */
+export type OrganizeConflict = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Target
+     */
+    target: string;
+    reason: OrganizeConflictReason;
+};
+
+/**
+ * OrganizeConflictReason
+ *
+ * 整理未处理的原因.
+ */
+export type OrganizeConflictReason = 'target_exists' | 'subtitle_target_exists';
+
+/**
+ * OrganizeResult
+ */
+export type OrganizeResult = {
+    /**
+     * Type
+     */
+    type?: 'organize';
+    /**
+     * Organized
+     */
+    organized: number;
+    /**
+     * Skipped
+     */
+    skipped: number;
+    /**
+     * Conflicted
+     */
+    conflicted: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Pruned Dirs
+     */
+    pruned_dirs: number;
+    /**
+     * Conflicts
+     */
+    conflicts: Array<OrganizeConflict>;
+};
+
+/**
  * OrganizeSubmission
  */
 export type OrganizeSubmission = {
@@ -2330,6 +2941,12 @@ export type OrganizeSubmission = {
      * 勾选快照; 与 path 不能同时指定. None 表示 path 范围内的全部索引
      */
     media_file_ids?: Array<number> | null;
+    /**
+     * Prune Empty Dirs
+     *
+     * 移动后删除本次腾空的目录 (库根与 .amane_trash 除外); 复制 / 硬链接 / 符号链接方式不移走源文件, 该开关无效
+     */
+    prune_empty_dirs?: boolean;
     /**
      * Type
      */
@@ -2586,7 +3203,7 @@ export type PluginResponse = {
 /**
  * R18Config
  *
- * 放 Hot: 修改 dsn 经 AppRuntime.rebuild() 重建只读引擎. 未配置 dsn 时整个数据源禁用.
+ * 放 Hot: 修改 dsn 经 AppRuntime.apply_rebuild() 重建只读引擎. 未配置 dsn 时整个数据源禁用.
  * 定时导入不在此节, 须经 Schedule API 创建 r18_import.
  */
 export type R18Config = {
@@ -2621,6 +3238,24 @@ export type R18Config = {
 };
 
 /**
+ * R18ImportResult
+ */
+export type R18ImportResult = {
+    /**
+     * Type
+     */
+    type?: 'r18_import';
+    /**
+     * Imported
+     */
+    imported: boolean;
+    /**
+     * Etag
+     */
+    etag?: string | null;
+};
+
+/**
  * R18ImportSubmission
  */
 export type R18ImportSubmission = {
@@ -2632,6 +3267,56 @@ export type R18ImportSubmission = {
      * Type
      */
     type: 'r18_import';
+};
+
+/**
+ * ReasoningDeltaRow
+ *
+ * 思考增量; `block_id` 取自协议的消息 id, 前端据此归块而不靠相邻关系.
+ */
+export type ReasoningDeltaRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'reasoning_delta';
+    /**
+     * Block Id
+     */
+    block_id: string;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * RefreshResult
+ */
+export type RefreshResult = {
+    /**
+     * Type
+     */
+    type?: 'refresh';
+    /**
+     * Added
+     */
+    added: number;
+    /**
+     * Removed
+     */
+    removed: number;
+    /**
+     * Scrape
+     */
+    scrape: number;
 };
 
 /**
@@ -2703,6 +3388,77 @@ export type ReleaseResponse = {
 };
 
 /**
+ * RequestTokenUsage
+ *
+ * 单次模型请求的用量. `duration_ms` 是请求发出到响应收到的本地时间差, 不含工具执行.
+ */
+export type RequestTokenUsage = {
+    /**
+     * Input
+     */
+    input: number;
+    /**
+     * Cache Read
+     */
+    cache_read: number;
+    /**
+     * Cache Write
+     */
+    cache_write: number;
+    /**
+     * Output
+     */
+    output: number;
+    /**
+     * Duration Ms
+     */
+    duration_ms?: number | null;
+};
+
+/**
+ * RequestUsageRow
+ *
+ * 单次模型请求的用量; 该次响应一到即写行, 到达顺序即它在回合里的位置 (这次响应的正文与工具调用之后).
+ */
+export type RequestUsageRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'request_usage';
+    usage: RequestTokenUsage;
+};
+
+/**
+ * RescrapeResult
+ */
+export type RescrapeResult = {
+    /**
+     * Type
+     */
+    type?: 'rescrape';
+    /**
+     * Submitted
+     */
+    submitted: number;
+    /**
+     * Metadata
+     */
+    metadata?: number;
+    /**
+     * Actors
+     */
+    actors?: number;
+};
+
+/**
  * RescrapeSubmission
  */
 export type RescrapeSubmission = {
@@ -2743,6 +3499,63 @@ export type RescrapeTarget = 'metadata' | 'actor';
 export type RoutineType = 'cleanup' | 'upscale' | 'r18_import' | 'rescrape';
 
 /**
+ * SavedQueryBatchAction
+ */
+export type SavedQueryBatchAction = 'delete' | 'persist';
+
+/**
+ * SavedQueryBatchRequest
+ */
+export type SavedQueryBatchRequest = {
+    action: SavedQueryBatchAction;
+    /**
+     * Ids
+     *
+     * 查询预设 ID 列表
+     */
+    ids: Array<number>;
+};
+
+/**
+ * SavedQueryBatchResponse
+ */
+export type SavedQueryBatchResponse = {
+    /**
+     * Affected
+     *
+     * 成功处理的数量; delete 为实际删除的数量, persist 为找到并置为已保留的数量 (幂等, 已保留的也计入)
+     */
+    affected: number;
+    /**
+     * Missing
+     *
+     * 不存在的 id 数量
+     */
+    missing: number;
+};
+
+/**
+ * SavedQueryCreateRequest
+ *
+ * 手动创建: 名称 / 描述 / SQL 与类型; 归属与保留态由服务端固定 (无会话, 已保留).
+ */
+export type SavedQueryCreateRequest = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Sql
+     */
+    sql: string;
+    entity: SavedQueryEntity;
+};
+
+/**
  * SavedQueryEntity
  *
  * 交付目标, 决定 Browse 深链与主键语义.
@@ -2771,6 +3584,10 @@ export type SavedQueryResponse = {
      * Name
      */
     name: string;
+    /**
+     * Description
+     */
+    description: string;
     /**
      * Sql
      */
@@ -2826,6 +3643,11 @@ export type SavedQueryResultResponse = {
 
 /**
  * SavedQueryUpdateRequest
+ *
+ * 仅名称 / 描述 / SQL 三项, 未知键被忽略; 显式 null 一律 422, 省略键才是「不更新」.
+ *
+ * 字段不从 DB 模型派生: ``create_partial_model`` 会丢弃 ``StringConstraints``;
+ * 约束别名与创建请求共用.
  */
 export type SavedQueryUpdateRequest = {
     /**
@@ -2833,9 +3655,89 @@ export type SavedQueryUpdateRequest = {
      */
     name?: string | null;
     /**
-     * Persisted
+     * Description
      */
-    persisted?: boolean | null;
+    description?: string | null;
+    /**
+     * Sql
+     */
+    sql?: string | null;
+};
+
+/**
+ * ScanInvalidResult
+ */
+export type ScanInvalidResult = {
+    /**
+     * Type
+     */
+    type?: 'scan_invalid';
+    /**
+     * Inventory Id
+     */
+    inventory_id: string;
+    /**
+     * Entries
+     */
+    entries: number;
+    /**
+     * Dirs
+     */
+    dirs: number;
+    /**
+     * Scope Path
+     */
+    scope_path?: string | null;
+    /**
+     * Truncated
+     */
+    truncated?: boolean;
+    /**
+     * Skipped Dirs
+     */
+    skipped_dirs?: number;
+    /**
+     * Skipped Files
+     */
+    skipped_files?: number;
+    /**
+     * Blocked Dirs
+     */
+    blocked_dirs?: number;
+};
+
+/**
+ * ScanInvalidSubmission
+ */
+export type ScanInvalidSubmission = {
+    /**
+     * Library Id
+     *
+     * 所属 Library ID; 扫描/整理在该媒体库下进行
+     */
+    library_id: number;
+    /**
+     * Path
+     *
+     * 要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).
+     */
+    path?: string;
+    /**
+     * Recursive
+     *
+     * 覆盖 Library 的 recursive; None 沿用库设置
+     */
+    recursive?: boolean | null;
+    /**
+     * Patterns
+     *
+     * 覆盖 Library 的 patterns; None 沿用库设置
+     */
+    patterns?: Array<string> | null;
+    /**
+     * Type
+     */
+    type: 'scan_invalid';
 };
 
 /**
@@ -2949,6 +3851,34 @@ export type ScheduleUpdateRequest = {
 };
 
 /**
+ * ScrapeResult
+ */
+export type ScrapeResult = {
+    /**
+     * Type
+     */
+    type?: 'scrape';
+    /**
+     * Metadata Id
+     */
+    metadata_id?: number | null;
+    /**
+     * Field Sources
+     */
+    field_sources: {
+        [key: string]: string;
+    };
+    /**
+     * Failed Sites
+     */
+    failed_sites: Array<string>;
+    /**
+     * Outcomes
+     */
+    outcomes?: Array<SiteOutcomeRecord>;
+};
+
+/**
  * ScrapeSubmission
  */
 export type ScrapeSubmission = {
@@ -3014,19 +3944,19 @@ export type ScrapingConfig = {
      * Content Routes
      */
     content_routes?: {
-        [key in ContentType]?: Array<'airav' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'xcity'>;
+        [key in ContentType]?: Array<'airav' | 'avbase' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'xcity'>;
     };
     /**
      * Field Priority
      */
     field_priority?: {
-        [key in MetadataField]?: Array<'airav' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'xcity'>;
+        [key in MetadataField]?: Array<'airav' | 'avbase' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'xcity'>;
     };
     /**
      * Field Blacklist
      */
     field_blacklist?: {
-        [key in MetadataField]?: Array<'airav' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'xcity'>;
+        [key in MetadataField]?: Array<'airav' | 'avbase' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'xcity'>;
     };
     /**
      * Field Language
@@ -3043,6 +3973,75 @@ export type ScrapingConfig = {
 };
 
 /**
+ * SelectionNoticeResponse
+ *
+ * 展开时未能纳入清单的项. 面板按 ``kind`` 用界面语言给出文案, 因此服务端不带文案.
+ */
+export type SelectionNoticeResponse = {
+    kind: FootprintNoticeKind;
+    /**
+     * Path
+     */
+    path?: string | null;
+    /**
+     * Count
+     */
+    count?: number | null;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+};
+
+/**
+ * SelectionRequest
+ *
+ * 由选中的媒体文件展开显式来源清单.
+ */
+export type SelectionRequest = {
+    /**
+     * Media File Ids
+     *
+     * 选中的媒体文件 ID; 必须属于该库
+     */
+    media_file_ids: Array<number>;
+    /**
+     * Include Work Dir
+     *
+     * 连同作品文件夹一起删除; 仅在该目录只含这一条媒体索引且不是库根时提供
+     */
+    include_work_dir?: boolean;
+};
+
+/**
+ * SelectionSummaryResponse
+ *
+ * 展开结果. 条目自库根展开 (库外产物挂在根下), 面板按分页接口读取.
+ */
+export type SelectionSummaryResponse = {
+    /**
+     * Exists
+     */
+    exists: boolean;
+    /**
+     * Inventory Id
+     */
+    inventory_id?: string | null;
+    /**
+     * Notices
+     */
+    notices?: Array<SelectionNoticeResponse>;
+    /**
+     * Truncated
+     */
+    truncated?: boolean;
+    /**
+     * Dropped
+     */
+    dropped?: number;
+};
+
+/**
  * SiteConfig
  */
 export type SiteConfig = {
@@ -3055,9 +4054,11 @@ export type SiteConfig = {
      */
     use_proxy?: boolean;
     /**
-     * Use Browser
+     * Proxy
      */
-    use_browser?: boolean;
+    proxy?: string | null;
+    use_browser?: BrowserMode;
+    browser_backend?: BrowserBackendName | null;
     /**
      * Cookie
      */
@@ -3085,7 +4086,7 @@ export type SiteConfig = {
  *
  * 爬虫站点名称 (影片与演员源共用).
  */
-export type SiteName = 'airav' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'gfriends' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'minnano' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'wikipedia' | 'xcity';
+export type SiteName = 'airav' | 'avbase' | 'avsox' | 'dahlia' | 'dmm' | 'faleno' | 'fc2' | 'fc2club' | 'fc2ppvdb' | 'freejavbt' | 'getchu' | 'gfriends' | 'giga' | 'iqqtv' | 'jav321' | 'javbus' | 'javdb' | 'javlibrary' | 'kin8' | 'local' | 'mgstage' | 'minnano' | 'official' | 'prestige' | 'r18dev' | 'theporndb' | 'wikipedia' | 'xcity';
 
 /**
  * SiteOutcomeKind
@@ -3112,6 +4113,10 @@ export type SiteOutcomeRecord = {
      * Detail
      */
     detail?: string | null;
+    /**
+     * Detail Truncated
+     */
+    detail_truncated?: boolean;
 };
 
 /**
@@ -3119,7 +4124,7 @@ export type SiteOutcomeRecord = {
  *
  * ``SKIPPED`` 的原因.
  *
- * 与 ``FailureReason`` 分开: 这一档不是失败, 文案也不进任务报告. 界面按它本地化, 因此每种原因
+ * 与 ``FailureReason`` 分开: 这一档不是失败, 文案也不进站点明细. 界面按它本地化, 因此每种原因
  * 都要能独立读懂, 不依赖 ``detail``.
  */
 export type SkipReason = 'unknown_source' | 'no_http_upstream' | 'missing_credential' | 'undeclared' | 'no_url';
@@ -3176,9 +4181,9 @@ export type SourceDescriptor = {
      */
     urls?: Array<string>;
     /**
-     * Multi Language
+     * Traits
      */
-    multi_language?: boolean;
+    traits?: Array<string>;
     /**
      * Rate Limit
      */
@@ -3275,23 +4280,9 @@ export type TaskBatchResponse = {
 };
 
 /**
- * TaskChildListResponse
+ * TaskChildItem
  */
-export type TaskChildListResponse = {
-    /**
-     * Items
-     */
-    items: Array<TaskChildResponse>;
-    /**
-     * Total
-     */
-    total: number;
-};
-
-/**
- * TaskChildResponse
- */
-export type TaskChildResponse = {
+export type TaskChildItem = {
     /**
      * Id
      */
@@ -3302,18 +4293,6 @@ export type TaskChildResponse = {
      * Title
      */
     title?: string | null;
-    /**
-     * Payload
-     */
-    payload?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Result
-     */
-    result?: {
-        [key: string]: unknown;
-    } | null;
     /**
      * Error
      */
@@ -3358,6 +4337,20 @@ export type TaskChildResponse = {
 };
 
 /**
+ * TaskChildListResponse
+ */
+export type TaskChildListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TaskChildItem>;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * TaskChildStatusCounts
  *
  * 直接后继按状态计数. 四字段之和等于 child_count.
@@ -3382,47 +4375,11 @@ export type TaskChildStatusCounts = {
 };
 
 /**
- * TaskListResponse
- */
-export type TaskListResponse = {
-    /**
-     * Items
-     */
-    items: Array<TaskResponse>;
-    /**
-     * Total
-     */
-    total: number;
-};
-
-/**
- * TaskReport
+ * TaskListItem
  *
- * outcomes 与 summary.json 同一结构.
+ * 列表与树: 不含 payload 与 result 等重字段, 展开时再取详情.
  */
-export type TaskReport = {
-    /**
-     * Headline
-     */
-    headline?: string | null;
-    /**
-     * Metadata Id
-     */
-    metadata_id?: number | null;
-    /**
-     * Actor Id
-     */
-    actor_id?: number | null;
-    /**
-     * Outcomes
-     */
-    outcomes?: Array<SiteOutcomeRecord>;
-};
-
-/**
- * TaskResponse
- */
-export type TaskResponse = {
+export type TaskListItem = {
     /**
      * Id
      */
@@ -3433,18 +4390,6 @@ export type TaskResponse = {
      * Title
      */
     title?: string | null;
-    /**
-     * Payload
-     */
-    payload?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Result
-     */
-    result?: {
-        [key: string]: unknown;
-    } | null;
     /**
      * Error
      */
@@ -3485,6 +4430,105 @@ export type TaskResponse = {
 };
 
 /**
+ * TaskListResponse
+ */
+export type TaskListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TaskListItem>;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * TaskResponse
+ *
+ * 详情: 额外带 payload 与按类型的 result.
+ */
+export type TaskResponse = {
+    /**
+     * Id
+     */
+    id: number;
+    type: TaskType;
+    status: TaskStatus;
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Log File
+     */
+    log_file?: string | null;
+    /**
+     * Retries
+     */
+    retries?: number;
+    /**
+     * Priority
+     */
+    priority?: number;
+    /**
+     * Root Task Id
+     */
+    root_task_id?: number | null;
+    /**
+     * Child Count
+     */
+    child_count?: number;
+    child_status?: TaskChildStatusCounts;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Started At
+     */
+    started_at?: string | null;
+    /**
+     * Finished At
+     */
+    finished_at?: string | null;
+    /**
+     * Payload
+     */
+    payload?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Result
+     */
+    result?: ({
+        type: 'refresh';
+    } & RefreshResult) | ({
+        type: 'organize';
+    } & OrganizeResult) | ({
+        type: 'scan_invalid';
+    } & ScanInvalidResult) | ({
+        type: 'delete';
+    } & DeleteResult) | ({
+        type: 'scrape';
+    } & ScrapeResult) | ({
+        type: 'cleanup';
+    } & CleanupResult) | ({
+        type: 'upscale';
+    } & UpscaleResult) | ({
+        type: 'r18_import';
+    } & R18ImportResult) | ({
+        type: 'actor_scrape';
+    } & ActorScrapeResult) | ({
+        type: 'rescrape';
+    } & RescrapeResult) | null;
+};
+
+/**
  * TaskSortField
  */
 export type TaskSortField = 'type' | 'status' | 'priority' | 'created_at' | 'started_at' | 'finished_at';
@@ -3497,7 +4541,7 @@ export type TaskStatus = 'queued' | 'running' | 'done' | 'failed';
 /**
  * TaskType
  */
-export type TaskType = 'scrape' | 'organize' | 'trash' | 'refresh' | 'cleanup' | 'upscale' | 'r18_import' | 'actor_scrape' | 'rescrape';
+export type TaskType = 'scrape' | 'organize' | 'refresh' | 'cleanup' | 'upscale' | 'r18_import' | 'actor_scrape' | 'rescrape' | 'scan_invalid' | 'delete';
 
 /**
  * TaskWorkerResponse
@@ -3507,6 +4551,91 @@ export type TaskWorkerResponse = {
      * Paused
      */
     paused: boolean;
+};
+
+/**
+ * TextDeltaRow
+ *
+ * 正文增量; 归块同 `ReasoningDeltaRow`.
+ */
+export type TextDeltaRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'text_delta';
+    /**
+     * Block Id
+     */
+    block_id: string;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * ToolCallRow
+ *
+ * 工具调用成形 (协议按增量传参, 这里已解析). 卡片的名字与参数由此行给出.
+ *
+ * `args` 在生成的 TS 类型里退化为 `unknown` (pydantic 的 `JsonValue` 无法表达到 schema),
+ * 类型层面的保证到后端为止.
+ */
+export type ToolCallRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'tool_call';
+    /**
+     * Tool Call Id
+     */
+    tool_call_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    args: JsonValue;
+};
+
+/**
+ * ToolResultRow
+ *
+ * 工具回执. 名字与参数在同 id 的 `ToolCallRow`, 故本行只带结果 (续批的回合不会再报调用名).
+ */
+export type ToolResultRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'tool_result';
+    /**
+     * Tool Call Id
+     */
+    tool_call_id: string;
+    result: JsonValue;
 };
 
 /**
@@ -3546,37 +4675,111 @@ export type TranslateResponse = {
 };
 
 /**
- * TrashSubmission
+ * TrashSummaryResponse
+ *
+ * 回收目录历史内容: 展开即产出清单, 面板套用同一套审查与删除.
  */
-export type TrashSubmission = {
+export type TrashSummaryResponse = {
     /**
-     * Library Id
-     *
-     * 所属 Library ID; 扫描/整理在该媒体库下进行
+     * Exists
      */
-    library_id: number;
+    exists: boolean;
+    /**
+     * Inventory Id
+     */
+    inventory_id?: string | null;
     /**
      * Path
-     *
-     * 要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).
      */
-    path?: string;
+    path?: string | null;
     /**
-     * Recursive
-     *
-     * 覆盖 Library 的 recursive; None 沿用库设置
+     * Truncated
      */
-    recursive?: boolean | null;
+    truncated?: boolean;
     /**
-     * Patterns
-     *
-     * 覆盖 Library 的 patterns; None 沿用库设置
+     * Dropped
      */
-    patterns?: Array<string> | null;
+    dropped?: number;
+};
+
+/**
+ * TurnTokenUsage
+ *
+ * `input` 是非缓存输入 (总量减去 cache_read/cache_write). pydantic-ai 的 `input_tokens` 含缓存, 此处拆开.
+ *
+ * 字段不给默认值: 回放行里的用量总是全字段, 前端因此可以直接参与算术.
+ */
+export type TurnTokenUsage = {
+    /**
+     * Input
+     */
+    input: number;
+    /**
+     * Cache Read
+     */
+    cache_read: number;
+    /**
+     * Cache Write
+     */
+    cache_write: number;
+    /**
+     * Output
+     */
+    output: number;
+    /**
+     * Requests
+     */
+    requests: number;
+};
+
+/**
+ * TurnUsageRow
+ *
+ * 回合收尾: 聚合用量归属当前助手消息, 同时标志本轮结束.
+ *
+ * 正文不在此行重复: 适配器对每段正文都发 `TEXT_MESSAGE_CONTENT`, 故正文必然已由
+ * `TextDeltaRow` 落盘, 无须回退到整段文本.
+ */
+export type TurnUsageRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
     /**
      * Type
      */
-    type: 'trash';
+    type: 'turn_usage';
+    usage: TurnTokenUsage;
+};
+
+/**
+ * UpscaleResult
+ */
+export type UpscaleResult = {
+    /**
+     * Type
+     */
+    type?: 'upscale';
+    /**
+     * Scanned
+     */
+    scanned: number;
+    /**
+     * Upscaled
+     */
+    upscaled: number;
+    /**
+     * Skipped
+     */
+    skipped: number;
+    /**
+     * Failed
+     */
+    failed: number;
 };
 
 /**
@@ -3599,6 +4802,30 @@ export type UpscaleSubmission = {
      * Type
      */
     type: 'upscale';
+};
+
+/**
+ * UserMessageRow
+ *
+ * 用户输入. 批准 / 拒绝只以 tool return 进模型上下文, 不产生此行的附加说明.
+ */
+export type UserMessageRow = {
+    /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
+     * At
+     */
+    at?: string;
+    /**
+     * Type
+     */
+    type: 'user_message';
+    /**
+     * Text
+     */
+    text: string;
 };
 
 /**
@@ -3757,7 +4984,7 @@ export type WatermarkCorner = 'top_left' | 'top_right' | 'bottom_left' | 'bottom
 /**
  * WatermarkKind
  *
- * 整理落盘封面角标类别. 清晰度共用 definition, 不论 4K/1080p.
+ * 整理落盘封面角标类别. 分辨率共用 definition, 不论 4K/1080p.
  */
 export type WatermarkKind = 'subtitle' | 'uncensored' | 'cracked' | 'leaked' | 'definition';
 
@@ -3860,6 +5087,157 @@ export type GetConfigSchemaResponses = {
 };
 
 export type GetConfigSchemaResponse = GetConfigSchemaResponses[keyof GetConfigSchemaResponses];
+
+export type GetCleanupInventoryData = {
+    body?: never;
+    path: {
+        /**
+         * Library Id
+         */
+        library_id: number;
+    };
+    query?: never;
+    url: '/api/libraries/{library_id}/cleanup/inventory';
+};
+
+export type GetCleanupInventoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCleanupInventoryError = GetCleanupInventoryErrors[keyof GetCleanupInventoryErrors];
+
+export type GetCleanupInventoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: InventorySummaryResponse;
+};
+
+export type GetCleanupInventoryResponse = GetCleanupInventoryResponses[keyof GetCleanupInventoryResponses];
+
+export type GetCleanupInventoryNodesData = {
+    body?: never;
+    path: {
+        /**
+         * Library Id
+         */
+        library_id: number;
+    };
+    query?: {
+        /**
+         * Path
+         *
+         * 节点路径: 库内相对库根, 库外为绝对路径; 空串取根
+         */
+        path?: string;
+        /**
+         * Inventory Id
+         *
+         * 指定清单; 缺省用规则来源的最新一份
+         */
+        inventory_id?: string | null;
+        /**
+         * Offset
+         *
+         * 从第几个子节点开始
+         */
+        offset?: number;
+        /**
+         * Limit
+         *
+         * 本页最多返回多少个子节点
+         */
+        limit?: number;
+        /**
+         * Noise
+         *
+         * 是否列出系统与同步工具的产物
+         */
+        noise?: boolean;
+    };
+    url: '/api/libraries/{library_id}/cleanup/inventory/nodes';
+};
+
+export type GetCleanupInventoryNodesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCleanupInventoryNodesError = GetCleanupInventoryNodesErrors[keyof GetCleanupInventoryNodesErrors];
+
+export type GetCleanupInventoryNodesResponses = {
+    /**
+     * Successful Response
+     */
+    200: InventoryNodePage;
+};
+
+export type GetCleanupInventoryNodesResponse = GetCleanupInventoryNodesResponses[keyof GetCleanupInventoryNodesResponses];
+
+export type GetCleanupTrashData = {
+    body?: never;
+    path: {
+        /**
+         * Library Id
+         */
+        library_id: number;
+    };
+    query?: never;
+    url: '/api/libraries/{library_id}/cleanup/trash';
+};
+
+export type GetCleanupTrashErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCleanupTrashError = GetCleanupTrashErrors[keyof GetCleanupTrashErrors];
+
+export type GetCleanupTrashResponses = {
+    /**
+     * Successful Response
+     */
+    200: TrashSummaryResponse;
+};
+
+export type GetCleanupTrashResponse = GetCleanupTrashResponses[keyof GetCleanupTrashResponses];
+
+export type ExpandCleanupSelectionData = {
+    body: SelectionRequest;
+    path: {
+        /**
+         * Library Id
+         */
+        library_id: number;
+    };
+    query?: never;
+    url: '/api/libraries/{library_id}/cleanup/selection';
+};
+
+export type ExpandCleanupSelectionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExpandCleanupSelectionError = ExpandCleanupSelectionErrors[keyof ExpandCleanupSelectionErrors];
+
+export type ExpandCleanupSelectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: SelectionSummaryResponse;
+};
+
+export type ExpandCleanupSelectionResponse = ExpandCleanupSelectionResponses[keyof ExpandCleanupSelectionResponses];
 
 export type ListFilesData = {
     body?: never;
@@ -4404,6 +5782,36 @@ export type UpdateMetadataResponses = {
 };
 
 export type UpdateMetadataResponse = UpdateMetadataResponses[keyof UpdateMetadataResponses];
+
+export type SetMetadataLocksData = {
+    body: MetadataLocksRequest;
+    path: {
+        /**
+         * Metadata Id
+         */
+        metadata_id: number;
+    };
+    query?: never;
+    url: '/api/metadata/{metadata_id}/locks';
+};
+
+export type SetMetadataLocksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetMetadataLocksError = SetMetadataLocksErrors[keyof SetMetadataLocksErrors];
+
+export type SetMetadataLocksResponses = {
+    /**
+     * Successful Response
+     */
+    200: MetadataResponse;
+};
+
+export type SetMetadataLocksResponse = SetMetadataLocksResponses[keyof SetMetadataLocksResponses];
 
 export type CropPosterFromThumbData = {
     body: CropPosterRequest;
@@ -5302,6 +6710,96 @@ export type UpdateActorResponses = {
 
 export type UpdateActorResponse = UpdateActorResponses[keyof UpdateActorResponses];
 
+export type SetActorLocksData = {
+    body: ActorLocksRequest;
+    path: {
+        /**
+         * Actor Id
+         */
+        actor_id: number;
+    };
+    query?: never;
+    url: '/api/actors/{actor_id}/locks';
+};
+
+export type SetActorLocksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetActorLocksError = SetActorLocksErrors[keyof SetActorLocksErrors];
+
+export type SetActorLocksResponses = {
+    /**
+     * Successful Response
+     */
+    200: ActorResponse;
+};
+
+export type SetActorLocksResponse = SetActorLocksResponses[keyof SetActorLocksResponses];
+
+export type ClearActorPersonData = {
+    body?: never;
+    path: {
+        /**
+         * Actor Id
+         */
+        actor_id: number;
+    };
+    query?: never;
+    url: '/api/actors/{actor_id}/clear-person';
+};
+
+export type ClearActorPersonErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ClearActorPersonError = ClearActorPersonErrors[keyof ClearActorPersonErrors];
+
+export type ClearActorPersonResponses = {
+    /**
+     * Successful Response
+     */
+    200: ActorResponse;
+};
+
+export type ClearActorPersonResponse = ClearActorPersonResponses[keyof ClearActorPersonResponses];
+
+export type CropActorAvatarData = {
+    body: CropAvatarRequest;
+    path: {
+        /**
+         * Actor Id
+         */
+        actor_id: number;
+    };
+    query?: never;
+    url: '/api/actors/{actor_id}/crop-avatar';
+};
+
+export type CropActorAvatarErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CropActorAvatarError = CropActorAvatarErrors[keyof CropActorAvatarErrors];
+
+export type CropActorAvatarResponses = {
+    /**
+     * Successful Response
+     */
+    200: ActorResponse;
+};
+
+export type CropActorAvatarResponse = CropActorAvatarResponses[keyof CropActorAvatarResponses];
+
 export type ScrapeActorData = {
     /**
      * Req
@@ -5370,6 +6868,12 @@ export type ListFacetsData = {
          * Search
          */
         search?: string | null;
+        /**
+         * Favorite
+         *
+         * Filter by favorite marker
+         */
+        favorite?: boolean | null;
         /**
          * Offset
          */
@@ -5465,6 +6969,33 @@ export type DeleteFacetRuleResponses = {
 };
 
 export type DeleteFacetRuleResponse = DeleteFacetRuleResponses[keyof DeleteFacetRuleResponses];
+
+export type BatchFacetsData = {
+    body: FacetBatchRequest;
+    path: {
+        kind: FacetKind;
+    };
+    query?: never;
+    url: '/api/facets/{kind}/batch';
+};
+
+export type BatchFacetsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BatchFacetsError = BatchFacetsErrors[keyof BatchFacetsErrors];
+
+export type BatchFacetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FacetBatchResponse;
+};
+
+export type BatchFacetsResponse = BatchFacetsResponses[keyof BatchFacetsResponses];
 
 export type DeleteFacetData = {
     body?: never;
@@ -6309,7 +7840,7 @@ export type SubmitTaskData = {
     /**
      * Req
      */
-    body: RefreshSubmission | OrganizeSubmission | TrashSubmission | ScrapeSubmission | CleanupSubmission | UpscaleSubmission | R18ImportSubmission | ActorScrapeSubmission | RescrapeSubmission;
+    body: RefreshSubmission | OrganizeSubmission | ScanInvalidSubmission | DeleteSubmission | ScrapeSubmission | CleanupSubmission | UpscaleSubmission | R18ImportSubmission | ActorScrapeSubmission | RescrapeSubmission;
     path?: never;
     query?: never;
     url: '/api/tasks';
@@ -6494,36 +8025,6 @@ export type GetTaskResponses = {
 };
 
 export type GetTaskResponse = GetTaskResponses[keyof GetTaskResponses];
-
-export type GetTaskReportData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: number;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/report';
-};
-
-export type GetTaskReportErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetTaskReportError = GetTaskReportErrors[keyof GetTaskReportErrors];
-
-export type GetTaskReportResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskReport;
-};
-
-export type GetTaskReportResponse = GetTaskReportResponses[keyof GetTaskReportResponses];
 
 export type GetTaskRecordData = {
     body?: never;
@@ -6836,8 +8337,8 @@ export type UpdateAgentSessionResponses = {
 
 export type UpdateAgentSessionResponse = UpdateAgentSessionResponses[keyof UpdateAgentSessionResponses];
 
-export type StreamAgentMessageData = {
-    body: AgentMessageRequest;
+export type GenerateAgentSessionTitleData = {
+    body: AgentSessionTitleRequest;
     path: {
         /**
          * Session Id
@@ -6845,143 +8346,26 @@ export type StreamAgentMessageData = {
         session_id: number;
     };
     query?: never;
-    url: '/api/agent/sessions/{session_id}/messages/stream';
+    url: '/api/agent/sessions/{session_id}/title';
 };
 
-export type StreamAgentMessageErrors = {
+export type GenerateAgentSessionTitleErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type StreamAgentMessageError = StreamAgentMessageErrors[keyof StreamAgentMessageErrors];
+export type GenerateAgentSessionTitleError = GenerateAgentSessionTitleErrors[keyof GenerateAgentSessionTitleErrors];
 
-export type StreamAgentMessageResponses = {
+export type GenerateAgentSessionTitleResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: AgentSessionTitleResponse;
 };
 
-export type StreamAgentEventsData = {
-    body?: never;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: number;
-    };
-    query?: {
-        /**
-         * After
-         */
-        after?: number;
-    };
-    url: '/api/agent/sessions/{session_id}/events/stream';
-};
-
-export type StreamAgentEventsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamAgentEventsError = StreamAgentEventsErrors[keyof StreamAgentEventsErrors];
-
-export type StreamAgentEventsResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
-export type StreamApproveAgentSqlData = {
-    body: AgentApproveRequest;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: number;
-    };
-    query?: never;
-    url: '/api/agent/sessions/{session_id}/approve/stream';
-};
-
-export type StreamApproveAgentSqlErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamApproveAgentSqlError = StreamApproveAgentSqlErrors[keyof StreamApproveAgentSqlErrors];
-
-export type StreamApproveAgentSqlResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
-export type StreamRejectAgentApprovalData = {
-    body: AgentRejectRequest;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: number;
-    };
-    query?: never;
-    url: '/api/agent/sessions/{session_id}/reject/stream';
-};
-
-export type StreamRejectAgentApprovalErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamRejectAgentApprovalError = StreamRejectAgentApprovalErrors[keyof StreamRejectAgentApprovalErrors];
-
-export type StreamRejectAgentApprovalResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
-export type CancelAgentTurnData = {
-    body?: never;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: number;
-    };
-    query?: never;
-    url: '/api/agent/sessions/{session_id}/cancel';
-};
-
-export type CancelAgentTurnErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CancelAgentTurnError = CancelAgentTurnErrors[keyof CancelAgentTurnErrors];
-
-export type CancelAgentTurnResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentCancelResponse;
-};
-
-export type CancelAgentTurnResponse = CancelAgentTurnResponses[keyof CancelAgentTurnResponses];
+export type GenerateAgentSessionTitleResponse = GenerateAgentSessionTitleResponses[keyof GenerateAgentSessionTitleResponses];
 
 export type GetAgentTraceData = {
     body?: never;
@@ -7012,6 +8396,97 @@ export type GetAgentTraceResponses = {
 };
 
 export type GetAgentTraceResponse = GetAgentTraceResponses[keyof GetAgentTraceResponses];
+
+export type RunAgentAguiData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: number;
+    };
+    query?: never;
+    url: '/api/agent/sessions/{session_id}/agui';
+};
+
+export type RunAgentAguiErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RunAgentAguiError = RunAgentAguiErrors[keyof RunAgentAguiErrors];
+
+export type RunAgentAguiResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type FollowAgentEventsData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: number;
+    };
+    query?: {
+        /**
+         * After Seq
+         */
+        after_seq?: number;
+    };
+    url: '/api/agent/sessions/{session_id}/agui/events';
+};
+
+export type FollowAgentEventsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type FollowAgentEventsError = FollowAgentEventsErrors[keyof FollowAgentEventsErrors];
+
+export type FollowAgentEventsResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type CancelAguiTurnData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: number;
+    };
+    query?: never;
+    url: '/api/agent/sessions/{session_id}/agui/cancel';
+};
+
+export type CancelAguiTurnErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CancelAguiTurnError = CancelAguiTurnErrors[keyof CancelAguiTurnErrors];
+
+export type CancelAguiTurnResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentCancelResponse;
+};
+
+export type CancelAguiTurnResponse = CancelAguiTurnResponses[keyof CancelAguiTurnResponses];
 
 export type ListSavedQueriesData = {
     body?: never;
@@ -7051,35 +8526,30 @@ export type ListSavedQueriesResponses = {
 
 export type ListSavedQueriesResponse = ListSavedQueriesResponses[keyof ListSavedQueriesResponses];
 
-export type DeleteSavedQueryData = {
-    body?: never;
-    path: {
-        /**
-         * Query Id
-         */
-        query_id: number;
-    };
+export type CreateSavedQueryData = {
+    body: SavedQueryCreateRequest;
+    path?: never;
     query?: never;
-    url: '/api/saved-queries/{query_id}';
+    url: '/api/saved-queries';
 };
 
-export type DeleteSavedQueryErrors = {
+export type CreateSavedQueryErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DeleteSavedQueryError = DeleteSavedQueryErrors[keyof DeleteSavedQueryErrors];
+export type CreateSavedQueryError = CreateSavedQueryErrors[keyof CreateSavedQueryErrors];
 
-export type DeleteSavedQueryResponses = {
+export type CreateSavedQueryResponses = {
     /**
      * Successful Response
      */
-    204: void;
+    201: SavedQueryResponse;
 };
 
-export type DeleteSavedQueryResponse = DeleteSavedQueryResponses[keyof DeleteSavedQueryResponses];
+export type CreateSavedQueryResponse = CreateSavedQueryResponses[keyof CreateSavedQueryResponses];
 
 export type GetSavedQueryData = {
     body?: never;
@@ -7140,6 +8610,31 @@ export type UpdateSavedQueryResponses = {
 };
 
 export type UpdateSavedQueryResponse = UpdateSavedQueryResponses[keyof UpdateSavedQueryResponses];
+
+export type BatchSavedQueriesData = {
+    body: SavedQueryBatchRequest;
+    path?: never;
+    query?: never;
+    url: '/api/saved-queries/batch';
+};
+
+export type BatchSavedQueriesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BatchSavedQueriesError = BatchSavedQueriesErrors[keyof BatchSavedQueriesErrors];
+
+export type BatchSavedQueriesResponses = {
+    /**
+     * Successful Response
+     */
+    200: SavedQueryBatchResponse;
+};
+
+export type BatchSavedQueriesResponse = BatchSavedQueriesResponses[keyof BatchSavedQueriesResponses];
 
 export type GetSavedQueryResultData = {
     body?: never;

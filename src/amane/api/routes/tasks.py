@@ -7,14 +7,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import TypeAdapter
 
 from ...db.models import SortOrder, Task, TaskSortField, TaskStatus, TaskType
-from ...observability import build_record_zip, build_task_report
-from ...observability.report import TaskReport
+from ...observability import build_record_zip
 from ...utils.model import to_resp
 from ..deps import ConfigDep, RepoDep, RuntimeDep
 from ..models import (
+    TaskChildItem,
     TaskChildListResponse,
-    TaskChildResponse,
     TaskChildStatusCounts,
+    TaskListItem,
     TaskListResponse,
     TaskResponse,
     TaskSubmission,
@@ -27,9 +27,12 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
+# 标题取库名的任务类型: payload 带 `library_id` 的库内任务.
+_LIBRARY_TASK_TYPES = (TaskType.REFRESH, TaskType.ORGANIZE, TaskType.SCAN_INVALID, TaskType.DELETE)
+
 
 async def _task_titles(repo: RepoDep, tasks: Sequence[Task]) -> dict[int, str | None]:
-    """scrape→番号, actor_scrape→演员名, refresh/organize/trash→库名. 批量查库, 避免列表 N+1."""
+    """scrape→番号, actor_scrape→演员名, 库内任务→库名. 批量查库, 避免列表 N+1."""
     actor_ids = {
         int(p["actor_id"])
         for t in tasks
@@ -38,8 +41,7 @@ async def _task_titles(repo: RepoDep, tasks: Sequence[Task]) -> dict[int, str | 
     library_ids = {
         int(p["library_id"])
         for t in tasks
-        if t.type in (TaskType.REFRESH, TaskType.ORGANIZE, TaskType.TRASH)
-        and isinstance((p := t.payload or {}).get("library_id"), int)
+        if t.type in _LIBRARY_TASK_TYPES and isinstance((p := t.payload or {}).get("library_id"), int)
     }
     actor_names = await repo.get_actor_names(list(actor_ids))
     library_names = await repo.get_library_names(list(library_ids))
@@ -55,7 +57,7 @@ async def _task_titles(repo: RepoDep, tasks: Sequence[Task]) -> dict[int, str | 
         elif t.type == TaskType.ACTOR_SCRAPE:
             actor_id = payload.get("actor_id")
             title = actor_names.get(int(actor_id)) if isinstance(actor_id, int) else None
-        elif t.type in (TaskType.REFRESH, TaskType.ORGANIZE, TaskType.TRASH):
+        elif t.type in _LIBRARY_TASK_TYPES:
             library_id = payload.get("library_id")
             title = library_names.get(int(library_id)) if isinstance(library_id, int) else None
         out[t.id] = title
@@ -72,15 +74,18 @@ def _child_status(counts: dict[TaskStatus, int] | None) -> TaskChildStatusCounts
     )
 
 
-async def _decorate_tasks(repo: RepoDep, tasks: Sequence[Task]) -> list[TaskResponse]:
-    """展示标题 + 直接后继计数. 一次批量, 避免列表 N+1."""
+async def _decorate_tasks[T: TaskListItem](repo: RepoDep, tasks: Sequence[Task], model: type[T]) -> list[T]:
+    """展示标题 + 直接后继计数. 一次批量, 避免列表 N+1.
+
+    传 `TaskListItem` 得列表用的精简形状; 传 `TaskResponse` 时结果按判别联合校验.
+    """
     titles = await _task_titles(repo, tasks)
     status_map = await repo.child_status_counts([t.id for t in tasks if t.id is not None])
-    items: list[TaskResponse] = []
+    items: list[T] = []
     for t in tasks:
         child_status = _child_status(status_map.get(t.id) if t.id is not None else None)
         items.append(
-            to_resp(TaskResponse, t).model_copy(
+            to_resp(model, t).model_copy(
                 update={
                     "title": titles.get(t.id) if t.id is not None else None,
                     "child_count": child_status.queued + child_status.running + child_status.done + child_status.failed,
@@ -92,7 +97,23 @@ async def _decorate_tasks(repo: RepoDep, tasks: Sequence[Task]) -> list[TaskResp
 
 
 async def _to_resp(repo: RepoDep, task: Task) -> TaskResponse:
-    return (await _decorate_tasks(repo, [task]))[0]
+    """详情: 结果按判别联合校验, 并核对成员类型与任务类型; 读不出来或不一致时置空."""
+    resp = (await _decorate_tasks(repo, [task], TaskResponse))[0]
+    if task.result is None:
+        return resp
+    # 缺 type 的行属预期状态 (每次展开都会命中), 降到 debug; 真的写坏了要靠记录目录排查.
+    if resp.result is None:
+        logger.debug("task result unreadable", task_id=task.id, task_type=str(task.type))
+        return resp
+    if resp.result.type != task.type:
+        logger.debug(
+            "task result type mismatch",
+            task_id=task.id,
+            task_type=str(task.type),
+            result_type=str(resp.result.type),
+        )
+        return resp.model_copy(update={"result": None})
+    return resp
 
 
 @router.get("")
@@ -122,7 +143,7 @@ async def list_tasks(
         if root_task_id is not None
         else await repo.count_tasks(statuses=status, task_types=type, roots_only=True)
     )
-    return TaskListResponse(items=await _decorate_tasks(repo, items), total=total)
+    return TaskListResponse(items=await _decorate_tasks(repo, items, TaskListItem), total=total)
 
 
 @router.get("/{task_id}/children")
@@ -134,14 +155,14 @@ async def get_task_children(
 ) -> TaskChildListResponse:
     """直接后继 (TaskLink 出边). total 为出边总数, 不受本页截断."""
     if await repo.get_task(task_id) is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="任务不存在")
     pairs = await repo.list_children(task_id, limit=limit, offset=offset)
-    decorated = await _decorate_tasks(repo, [task for task, _ in pairs])
+    decorated = await _decorate_tasks(repo, [task for task, _ in pairs], TaskListItem)
     parent_counts = await repo.child_status_counts([task_id])
     total = sum(parent_counts.get(task_id, {}).values())
     return TaskChildListResponse(
         items=[
-            TaskChildResponse.model_validate({**resp.model_dump(), "link_key": key})
+            TaskChildItem.model_validate({**resp.model_dump(), "link_key": key})
             for resp, (_, key) in zip(decorated, pairs, strict=True)
         ],
         total=total,
@@ -190,7 +211,7 @@ async def batch_tasks(
     result = await execute_task_batch(
         action=req.action,
         repo=repo,
-        worker=runtime.worker,
+        cancel_task=runtime.cancel_task,
         log_dir=config.cold.log_dir,
         task_ids=req.task_ids,
         statuses=req.status,
@@ -211,19 +232,8 @@ async def batch_tasks(
 async def get_task(task_id: int, repo: RepoDep) -> TaskResponse:
     task = await repo.get_task(task_id)
     if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="任务不存在")
     return await _to_resp(repo, task)
-
-
-@router.get("/{task_id}/report")
-async def get_task_report(task_id: int, repo: RepoDep, config: ConfigDep) -> TaskReport:
-    """面向 UI 的投影, 非完整记录导出. 仅终态可用."""
-    task = await repo.get_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task.status not in (TaskStatus.DONE, TaskStatus.FAILED):
-        raise HTTPException(status_code=409, detail="Report is only available for finished tasks")
-    return build_task_report(config.cold.log_dir, task)
 
 
 @router.get("/{task_id}/record")
@@ -238,14 +248,14 @@ async def get_task_record(
     """导出任务记录 (zip). 默认脱敏; include_secrets=true 需本地存在 .secrets.hot.json."""
     task = await repo.get_task(task_id)
     if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="任务不存在")
     if task.status not in (TaskStatus.DONE, TaskStatus.FAILED):
-        raise HTTPException(status_code=409, detail="Record is only available for finished tasks")
+        raise HTTPException(status_code=409, detail="只有已结束的任务才能导出任务记录")
 
     try:
         data = build_record_zip(config.cold.log_dir, task_id, include_secrets=include_secrets)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Record not found for this task") from None
+        raise HTTPException(status_code=404, detail="该任务没有任务记录") from None
     except PermissionError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 

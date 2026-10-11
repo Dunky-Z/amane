@@ -4,7 +4,18 @@ from pathlib import Path
 
 import pytest
 
-from amane.utils.path import existing_disk_path, is_descendant, nfc_path, path_forms, path_is_under
+from amane.utils.path import (
+    existing_disk_path,
+    is_descendant,
+    is_name_surrogate,
+    is_name_surrogate_dir,
+    is_resolved_path,
+    nfc_path,
+    path_forms,
+    path_is_under,
+    resolved_path,
+)
+from tests.helpers import make_junction
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="此测试不适用于 Windows")
@@ -144,3 +155,66 @@ def test_existing_disk_path_tries_nfd(tmp_path: Path) -> None:
     assert found is not None
     assert found.read_bytes() == b"x"
     assert existing_disk_path(tmp_path / "missing.mp4") is None
+
+
+class TestResolvedPath:
+    def test_alias_resolves_to_target(self, tmp_path: Path) -> None:
+        real = tmp_path / "real"
+        real.mkdir()
+        alias = tmp_path / "alias"
+        alias.symlink_to(real, target_is_directory=True)
+
+        assert resolved_path(alias) == real
+        assert is_resolved_path(alias) is False
+        assert is_resolved_path(real) is True
+
+    def test_missing_path_folds_literal_segments(self, tmp_path: Path) -> None:
+        """缺失路径仍做字面归一: ``..`` 被折叠, 不抛异常."""
+        missing = tmp_path / "gone" / ".." / "gone"
+
+        assert resolved_path(missing) == tmp_path / "gone"
+        assert is_resolved_path(missing) is True
+
+    def test_resolution_error_falls_back_to_literal(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """规范化查询失败 (断连网络盘 / 虚拟卷) 时按字面绝对路径回退, 不抛异常."""
+        # 路径须是平台绝对路径: 回退用 ``abspath``, 而 Windows 的 ntpath 会给 ``/vault/...`` 补上当前盘符.
+        literal = tmp_path / "vault" / "media" / "gone"
+
+        def fake_realpath(path, *, strict=False):
+            raise OSError(1, "Incorrect function")
+
+        monkeypatch.setattr(os.path, "realpath", fake_realpath)
+
+        assert resolved_path(literal) == literal
+        assert is_resolved_path(literal) is True
+
+
+class TestNameSurrogate:
+    def test_plain_directory_is_not_surrogate(self, tmp_path: Path) -> None:
+        directory = tmp_path / "dir"
+        directory.mkdir()
+
+        assert is_name_surrogate(directory.lstat()) is False
+        assert is_name_surrogate_dir(directory) is False
+
+    def test_symlinked_directory_is_not_surrogate(self, tmp_path: Path) -> None:
+        """目录符号链接由 ``S_ISLNK`` 覆盖, 不走这一支."""
+        real = tmp_path / "real"
+        real.mkdir()
+        link = tmp_path / "link"
+        link.symlink_to(real, target_is_directory=True)
+
+        assert is_name_surrogate_dir(link) is False
+
+    def test_missing_path_is_not_surrogate(self, tmp_path: Path) -> None:
+        assert is_name_surrogate_dir(tmp_path / "gone") is False
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="junction 是 Windows 专有")
+    def test_junction_is_surrogate(self, tmp_path: Path) -> None:
+        real = tmp_path / "real"
+        real.mkdir()
+        link = tmp_path / "junction"
+        make_junction(link, real)
+
+        assert is_name_surrogate(link.lstat()) is True
+        assert is_name_surrogate_dir(link) is True

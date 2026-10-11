@@ -1,43 +1,44 @@
 {
-  "title": "Tasks",
   "actions": {
     "cancelTask": "Cancel Task",
     "record": "Task record",
     "submit": "Submit Task"
   },
-  "status": {
-    "queued": "Queued",
-    "running": "Running",
-    "done": "Done",
-    "failed": "Failed"
+  "batch": {
+    "cancel": "Cancelled {{count}}",
+    "cancel_one": "Cancelled {{count}}",
+    "cancel_other": "Cancelled {{count}}",
+    "retry": "Retried {{count}}",
+    "retry_one": "Retried {{count}}",
+    "retry_other": "Retried {{count}}",
+    "delete": "Deleted {{count}}",
+    "delete_one": "Deleted {{count}}",
+    "delete_other": "Deleted {{count}}"
   },
-  "empty": "No tasks",
-  "total": "{{count}} total",
-  "total_one": "{{count}} total",
-  "total_other": "{{count}} total",
+  "batchScrape": {
+    "toggle": "Batch Scrape",
+    "templateLabel": "Template",
+    "previewLabel": "Preview",
+    "previewEmpty": "Enter a template to see preview",
+    "submit": "Submit {{count}} task(s)",
+    "submit_one": "Submit {{count}} task",
+    "submit_other": "Submit {{count}} tasks",
+    "templateDescription": "Write numbers in Liquid syntax; loops and filters are supported"
+  },
   "childrenCount": "{{count}} subtasks",
-  "loadMoreChildren": "Load more ({{count}})",
-  "tree": {
-    "loading": "Loading subtasks…",
-    "loadError": "Could not load subtasks",
-    "retry": "Retry",
-    "linkKey": "Subtask"
-  },
-  "filters": {
-    "all": "All",
-    "queued": "Queued",
-    "running": "Running",
-    "done": "Done",
-    "failed": "Failed",
-    "scrape": "Scrape",
-    "organize": "Organize",
-    "trash": "Trash",
-    "cleanup": "Cleanup",
-    "upscale": "Upscale",
-    "refresh": "Refresh",
-    "r18_import": "R18 Import",
-    "actor_scrape": "Actor Scrape",
-    "rescrape": "Rescrape"
+  "childrenCount_one": "{{count}} subtask",
+  "childrenCount_other": "{{count}} subtasks",
+  "confirm": {
+    "deleteTitle": "Delete task",
+    "deleteMessage": "Delete this task record?",
+    "cancelTitle": "Cancel tasks",
+    "cancelFilterMessage": "Cancel queued and running tasks in the current filter?",
+    "retryFilterTitle": "Retry failed",
+    "retryFilterMessage": "Retry failed tasks in the current filter?",
+    "clearDoneTitle": "Clear completed",
+    "clearDoneMessage": "Delete completed tasks in the current filter?",
+    "clearFailedTitle": "Clear failed",
+    "clearFailedMessage": "Delete failed tasks in the current filter?"
   },
   "detail": {
     "status": "Status",
@@ -54,15 +55,57 @@
     "liveLogs": "Live Logs",
     "progress": "Progress"
   },
-  "report": {
+  "empty": "No tasks",
+  "filters": {
+    "all": "All",
+    "queued": "Queued",
+    "running": "Running",
+    "done": "Done",
+    "failed": "Failed",
+    "scrape": "Scrape",
+    "organize": "Organize",
+    "cleanup": "Cleanup",
+    "upscale": "Upscale",
+    "refresh": "Refresh",
+    "r18_import": "R18 Import",
+    "actor_scrape": "Actor Scrape",
+    "rescrape": "Rescrape",
+    "scan_invalid": "Scan unwanted",
+    "delete": "Delete"
+  },
+  "loadMoreChildren": "Load more ({{count}})",
+  "loadMoreChildren_one": "Load more ({{count}})",
+  "loadMoreChildren_other": "Load more ({{count}})",
+  "logView": {
+    "empty": "No logs"
+  },
+  "reason": {
+    "http_error": "Request rejected by the site",
+    "api_error": "Upstream API error",
+    "not_found": "Content not found on the site",
+    "rate_limited": "Rate limited",
+    "server_error": "Site server error",
+    "timeout": "Request timed out",
+    "network": "Network error",
+    "cloudflare_challenge": "Cloudflare challenge",
+    "cloudflare_blocked": "Blocked by Cloudflare",
+    "ip_banned": "IP banned",
+    "geo_restricted": "Not available in your region",
+    "age_verification": "Age verification required",
+    "empty_response": "Empty response",
+    "no_usable_metadata": "No usable metadata",
+    "parse_error": "Failed to parse the site response",
+    "crawler_unavailable": "Source unavailable",
+    "unexpected": "Unexpected error"
+  },
+  "result": {
     "headline": "Failure",
-    "metadata": "Metadata",
+    "metadata": "Film",
     "viewMetadata": "Open #{{id}}",
     "actor": "Actor",
     "viewActor": "Open #{{id}}",
     "loading": "Loading summary…",
-    "unavailable": "No summary available.",
-    "successEmpty": "Task completed.",
+    "successEmpty": "Task completed",
     "group": {
       "failed": "Failed",
       "ok": "Succeeded",
@@ -71,72 +114,39 @@
     "detail": {
       "unknown": "Unknown reason"
     },
-    "reason": {
-      "http_error": "Request rejected by the site",
-      "api_error": "Upstream API error",
-      "not_found": "Content not found on the site",
-      "rate_limited": "Rate limited",
-      "server_error": "Site server error",
-      "timeout": "Request timed out",
-      "network": "Network error",
-      "cloudflare_challenge": "Cloudflare challenge",
-      "cloudflare_blocked": "Blocked by Cloudflare",
-      "ip_banned": "IP banned",
-      "geo_restricted": "Not available in your region",
-      "age_verification": "Age verification required",
-      "empty_response": "Empty response",
-      "no_usable_metadata": "No usable metadata",
-      "parse_error": "Failed to parse the site response",
-      "crawler_unavailable": "Source unavailable",
-      "unexpected": "Unexpected error"
-    }
+    "organize": {
+      "organized": "Organized {{count}}",
+      "organized_one": "Organized {{count}}",
+      "organized_other": "Organized {{count}}",
+      "skipped": "Skipped {{count}}",
+      "skipped_one": "Skipped {{count}}",
+      "skipped_other": "Skipped {{count}}",
+      "conflicted": "Conflicts {{count}}",
+      "conflicted_one": "Conflicts {{count}}",
+      "conflicted_other": "Conflicts {{count}}",
+      "failed": "Failed {{count}}",
+      "failed_one": "Failed {{count}}",
+      "failed_other": "Failed {{count}}",
+      "prunedDirs": "Pruned dirs {{count}}",
+      "prunedDirs_one": "Pruned dirs {{count}}",
+      "prunedDirs_other": "Pruned dirs {{count}}",
+      "conflicts": "Unresolved conflicts",
+      "reason": {
+        "target_exists": "Target path already holds another file",
+        "subtitle_target_exists": "Subtitle target path already holds another file"
+      },
+      "conflictsTruncated_one": "{{count}} more not listed — see the task log",
+      "conflictsTruncated_other": "{{count}} more not listed — see the task log"
+    },
+    "detailTruncated": "Truncated",
+    "loadFailed": "Failed to load details",
+    "noResultHint": "No result payload for this task; the task record keeps the full detail"
   },
-  "logView": {
-    "empty": "No logs"
-  },
-  "toolbar": {
-    "cancel": "Cancel",
-    "retryFailed": "Retry failed",
-    "clearDone": "Clear done",
-    "clearFailed": "Clear failed",
-    "collapseAll": "Collapse All",
-    "expandAll": "Expand All"
-  },
-  "worker": {
-    "pause": "Pause",
-    "resume": "Resume"
-  },
-  "batch": {
-    "cancel": "Cancelled {{count}}",
-    "cancel_one": "Cancelled {{count}}",
-    "cancel_other": "Cancelled {{count}}",
-    "retry": "Retried {{count}}",
-    "retry_one": "Retried {{count}}",
-    "retry_other": "Retried {{count}}",
-    "delete": "Deleted {{count}}",
-    "delete_one": "Deleted {{count}}",
-    "delete_other": "Deleted {{count}}"
-  },
-  "confirm": {
-    "deleteTitle": "Delete task",
-    "deleteMessage": "Delete this task record?",
-    "cancelTitle": "Cancel tasks",
-    "cancelFilterMessage": "Cancel queued and running tasks in the current filter?",
-    "retryFilterTitle": "Retry failed",
-    "retryFilterMessage": "Retry failed tasks in the current filter?",
-    "clearDoneTitle": "Clear completed",
-    "clearDoneMessage": "Delete completed tasks in the current filter?",
-    "clearFailedTitle": "Clear failed",
-    "clearFailedMessage": "Delete failed tasks in the current filter?"
-  },
-  "batchScrape": {
-    "toggle": "Batch Scrape",
-    "templateLabel": "Liquid Template",
-    "previewLabel": "Preview",
-    "previewEmpty": "Enter a template to see preview",
-    "submit": "Submit {{count}} task(s)",
-    "submit_one": "Submit {{count}} task",
-    "submit_other": "Submit {{count}} tasks"
+  "status": {
+    "queued": "Queued",
+    "running": "Running",
+    "done": "Done",
+    "failed": "Failed"
   },
   "submit": {
     "toggle": "Submit Task",
@@ -144,26 +154,28 @@
     "types": {
       "scrape": "Scrape",
       "organize": "Organize",
-      "trash": "Trash",
       "cleanup": "Cleanup",
       "upscale": "Upscale",
       "refresh": "Refresh",
       "r18_import": "R18 Import",
       "actor_scrape": "Actor Scrape",
-      "rescrape": "Rescrape"
+      "rescrape": "Rescrape",
+      "scan_invalid": "Scan unwanted",
+      "delete": "Delete"
     },
     "cleanup": {
       "remove_missing_files": {
         "label": "Remove Missing Files"
       },
       "remove_unreferenced_resources": {
-        "label": "Remove Unreferenced Resources"
+        "label": "Remove unreferenced resources",
+        "description": "Delete resource files that no film references"
       }
     },
     "organize": {
       "library_id": {
         "label": "Library",
-        "description": ""
+        "description": "Files under this library are organized"
       },
       "path": {
         "label": "Path",
@@ -194,24 +206,10 @@
             "trailer": "Trailer"
           }
         }
-      }
-    },
-    "trash": {
-      "library_id": {
-        "label": "Library",
-        "description": ""
       },
-      "recursive": {
-        "label": "Recursive",
-        "description": "Overrides library setting"
-      },
-      "patterns": {
-        "label": "Patterns",
-        "description": "Overrides library setting"
-      },
-      "path": {
-        "label": "Path",
-        "description": "Trash only a subdirectory of the library"
+      "prune_empty_dirs": {
+        "label": "Prune emptied directories",
+        "description": "Removes directories emptied by this run; no effect on copy / hardlink / symbolic link"
       }
     },
     "scrape": {
@@ -219,7 +217,7 @@
         "label": "Number"
       },
       "media_id": {
-        "label": "Media ID",
+        "label": "File ID",
         "description": "Not needed for manual scrape"
       },
       "content_type": {
@@ -249,21 +247,21 @@
     "upscale": {
       "max_dim_threshold": {
         "label": "Max Dimension Threshold",
-        "description": "Only upscale images whose longest side is below this value."
+        "description": "Only upscale images whose longest side is below this value"
       },
       "max_bytes_threshold": {
         "label": "Max File Size Threshold (bytes)",
-        "description": "Files larger than this skip upscaling (treated as sharp enough)."
+        "description": "Files larger than this skip upscaling (treated as sharp enough)"
       },
       "limit": {
         "label": "Limit",
-        "description": "Maximum number of images to upscale."
+        "description": "Maximum number of images to upscale"
       }
     },
     "refresh": {
       "library_id": {
         "label": "Library",
-        "description": ""
+        "description": "Scan this library"
       },
       "recursive": {
         "label": "Recursive",
@@ -281,8 +279,8 @@
         "label": "Scan Mode",
         "$": {
           "options": {
-            "add": "Add New Files",
-            "remove": "Remove Missing"
+            "add": "Scan for new files",
+            "remove": "Remove dead entries"
           }
         }
       },
@@ -310,13 +308,13 @@
     "r18_import": {
       "force": {
         "label": "Force Reimport",
-        "description": "Ignore the stored dump ETag and force re-download and import"
+        "description": "Ignore the stored data package version and force re-download and import"
       }
     },
     "actor_scrape": {
       "actor_id": {
         "label": "Actor ID",
-        "description": "Primary key of the Actor entity."
+        "description": "Actor ID"
       },
       "use_cache": {
         "label": "Use cache",
@@ -329,11 +327,11 @@
         }
       }
     },
-    "number": "",
+    "number": "Number",
     "rescrape": {
       "limit": {
         "label": "Limit",
-        "description": ""
+        "description": "Maximum entries per selected target in one run"
       },
       "min_age_days": {
         "label": "Min age (days)",
@@ -349,10 +347,68 @@
           }
         }
       }
+    },
+    "scan_invalid": {
+      "library_id": {
+        "label": "Library",
+        "description": "Walk unwanted files and empty folders under this library"
+      },
+      "path": {
+        "label": "Path",
+        "description": "Scan only a subdirectory of the library"
+      },
+      "recursive": {
+        "label": "Recursive",
+        "description": "Overrides library setting"
+      },
+      "patterns": {
+        "label": "Patterns",
+        "description": "Overrides library setting"
+      }
+    },
+    "delete": {
+      "library_id": {
+        "label": "Library",
+        "description": "Library the inventory belongs to"
+      },
+      "inventory_id": {
+        "label": "Inventory ID",
+        "description": "Produced by the panel; a manual value matches no inventory"
+      },
+      "exclude": {
+        "label": "Excluded",
+        "description": "Paths under the inventory's library root, matched by path component (subtree included); or absolute paths outside the library"
+      },
+      "include": {
+        "label": "Include",
+        "description": "Paths restored inside the excluded ones; the deepest match wins, ties count as included"
+      },
+      "prune_empty_dirs": {
+        "label": "Prune emptied directories",
+        "description": "Library root and .amane_trash excluded"
+      }
     }
   },
-  "loadMoreChildren_one": "Load more ({{count}})",
-  "loadMoreChildren_other": "Load more ({{count}})",
-  "childrenCount_one": "{{count}} subtask",
-  "childrenCount_other": "{{count}} subtasks"
+  "title": "Tasks",
+  "toolbar": {
+    "cancel": "Cancel",
+    "retryFailed": "Retry failed",
+    "clearDone": "Clear done",
+    "clearFailed": "Clear failed",
+    "collapseAll": "Collapse All",
+    "expandAll": "Expand All"
+  },
+  "total": "{{count}} total",
+  "total_one": "{{count}} total",
+  "total_other": "{{count}} total",
+  "tree": {
+    "loading": "Loading subtasks…",
+    "loadError": "Could not load subtasks",
+    "retry": "Retry",
+    "linkKey": "Subtask"
+  },
+  "worker": {
+    "pause": "Pause",
+    "resume": "Resume"
+  }
 }

@@ -26,6 +26,7 @@ import type {
   Mosaic,
   RescrapeTarget,
   RoutineType,
+  SavedQueryEntity,
   ScanMode,
   SiteOutcomeKind,
   SortOrder,
@@ -39,6 +40,11 @@ export type TaskPayload = SubmitTaskData["body"];
 
 export type SubmittableTaskType = TaskPayload["type"];
 
+/** 面板专用类型: 只能由清理面板连同清单标识提交, 不出现在手动提交入口. */
+export type PanelOnlyTaskType = "delete";
+
+export type ManualTaskType = Exclude<SubmittableTaskType, PanelOnlyTaskType>;
+
 export type PayloadFor<K extends SubmittableTaskType> = Extract<TaskPayload, { type: K }>;
 
 /** 与 `LoggingConfig.level` / WS 日志事件同源. */
@@ -49,6 +55,13 @@ export const SCAN_MODES = exhaustiveTuple<ScanMode>()("add", "remove");
 export const CACHE_KINDS = exhaustiveTuple<CacheKind>()("metadata", "trans");
 
 export const RESCRAPE_TARGETS = exhaustiveTuple<RescrapeTarget>()("metadata", "actor");
+
+/** 查询预设的交付类型; 顺序即创建表单与筛选的选项顺序. */
+export const SAVED_QUERY_ENTITIES = exhaustiveTuple<SavedQueryEntity>()(
+  "metadata",
+  "actor",
+  "data",
+);
 
 export const CONTENT_TYPES = exhaustiveTuple<ContentType>()(
   "censored",
@@ -72,13 +85,14 @@ export const TASK_STATUSES = exhaustiveTuple<TaskStatus>()("queued", "running", 
 export const TASK_TYPES = exhaustiveTuple<TaskType>()(
   "refresh",
   "organize",
-  "trash",
   "cleanup",
   "scrape",
   "upscale",
   "r18_import",
   "actor_scrape",
   "rescrape",
+  "scan_invalid",
+  "delete",
 );
 
 export const DOWNLOADABLE_RESOURCES = exhaustiveTuple<DownloadableResource>()(
@@ -141,6 +155,15 @@ export const CATALOG_FACET_KINDS = exhaustiveTuple<Exclude<FacetKind, "actor">>(
   "user_tag",
 );
 
+/** 支持收藏的分类; 与后端 `FAVORITE_FACET_KINDS` 对应, 缺成员在此编译失败. */
+export const FAVORITE_FACET_KINDS = exhaustiveTuple<Exclude<FacetKind, "actor" | "user_tag">>()(
+  "director",
+  "tag",
+  "studio",
+  "publisher",
+  "series",
+);
+
 export const ACTOR_SORT_FIELDS = exhaustiveTuple<ActorSortField>()(
   "name",
   "count",
@@ -154,11 +177,11 @@ export const ACTOR_SORT_FIELDS = exhaustiveTuple<ActorSortField>()(
   "cup",
 );
 
-export const SUBMITTABLE_TASK_TYPES = exhaustiveTuple<SubmittableTaskType>()(
+export const MANUAL_TASK_TYPES = exhaustiveTuple<ManualTaskType>()(
   "scrape",
   "refresh",
   "organize",
-  "trash",
+  "scan_invalid",
   "cleanup",
   "upscale",
   "r18_import",

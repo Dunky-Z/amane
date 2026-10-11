@@ -1,16 +1,22 @@
 """tests for amane.handlers._common -- handler 间共享单元."""
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 from amane.db import MediaFileStatus
-from amane.handlers._common import ensure_oshash, finalize_media_file, mark_media_file_failed, scan_library
+from amane.handlers._common import (
+    ensure_oshash,
+    finalize_media_file,
+    mark_media_file_failed,
+    refresh_external_subtitle,
+    register_media_file,
+    scan_library,
+)
 from amane.library import LibraryFileKind, LibraryHit, LibraryScan
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from amane.db.repository import Repository
 
 
@@ -38,7 +44,7 @@ class TestScanLibrary:
         hits = scan_library.sync(tree, recursive=True, scan=LibraryScan())
         assert _names(hits, LibraryFileKind.MEDIA) == {"a.mp4", "c.mkv", "e.avi"}
         assert _names(hits, LibraryFileKind.SKIP) == set()
-        assert _names(hits, LibraryFileKind.TRASH) == set()
+        assert _names(hits, LibraryFileKind.UNWANTED) == set()
 
     def test_non_recursive_top_level(self, tree: Path):
         hits = scan_library.sync(tree, recursive=False, scan=LibraryScan())
@@ -54,7 +60,7 @@ class TestScanLibrary:
         )
         assert _names(hits, LibraryFileKind.MEDIA) == {"b.txt", "d.nfo"}
         assert _names(hits, LibraryFileKind.SKIP) == {"trailer.mp4"}
-        assert _names(hits, LibraryFileKind.TRASH) == {"广告.html"}
+        assert _names(hits, LibraryFileKind.UNWANTED) == {"广告.html"}
 
     def test_empty_dir(self, tmp_path: Path):
         assert scan_library.sync(tmp_path, recursive=True, scan=LibraryScan()) == []
@@ -74,7 +80,7 @@ class TestScanLibrary:
         (tree / "sub" / "deep" / "e.avi").write_bytes(b"x" * 100)
         hits = scan_library.sync(tree, recursive=True, scan=LibraryScan(min_file_size=50))
         assert _names(hits, LibraryFileKind.MEDIA) == {"c.mkv", "e.avi"}
-        assert _names(hits, LibraryFileKind.TRASH) == {"a.mp4"}
+        assert _names(hits, LibraryFileKind.UNWANTED) == {"a.mp4"}
 
     @pytest.mark.asyncio
     async def test_in_thread_matches_sync(self, tree: Path):
@@ -163,3 +169,66 @@ class TestMarkMediaFileFailed:
     @pytest.mark.asyncio
     async def test_none_media_file_id_is_noop(self, repo: Repository):
         await mark_media_file_failed(repo, None)
+
+
+class TestExternalSubtitle:
+    """登记与改 path 时的同目录字幕检查."""
+
+    @pytest.mark.asyncio
+    async def test_register_media_file_reads_library_extensions(self, repo: Repository, tmp_path: Path):
+        (tmp_path / "MIDV-001.mp4").touch()
+        (tmp_path / "MIDV-001.chs.srt").touch()
+        library = await repo.create_library(name="t", path=str(tmp_path), subtitle_extensions=[".srt"])
+        assert library.id is not None
+
+        media = await register_media_file(repo, library.id, tmp_path / "MIDV-001.mp4", library=library)
+        assert media.has_subtitle is True
+        assert media.has_external_subtitle is True
+        assert media.has_subtitle_in_name is False
+        assert media.id is not None
+        stored = await repo.get_media_file(media.id)
+        assert stored is not None
+        assert stored.has_external_subtitle is True
+
+    @pytest.mark.asyncio
+    async def test_register_media_file_without_library_leaves_flag(self, repo: Repository, tmp_path: Path):
+        (tmp_path / "MIDV-002.mp4").touch()
+        (tmp_path / "MIDV-002.srt").touch()
+
+        media = await register_media_file(repo, 1, tmp_path / "MIDV-002.mp4")
+        assert media.has_external_subtitle is False
+
+    @pytest.mark.asyncio
+    async def test_refresh_clears_stale_flag(self, repo: Repository, tmp_path: Path):
+        video = tmp_path / "MIDV-003.mp4"
+        video.touch()
+        subtitle = tmp_path / "MIDV-003.srt"
+        subtitle.touch()
+        library = await repo.create_library(name="t", path=str(tmp_path), subtitle_extensions=[".srt"])
+        assert library.id is not None
+
+        media = await register_media_file(repo, library.id, video, library=library)
+        assert media.id is not None
+        assert media.has_external_subtitle is True
+
+        await refresh_external_subtitle(repo, media, library)
+        assert media.has_external_subtitle is True
+
+        subtitle.unlink()
+        await refresh_external_subtitle(repo, media, library)
+        assert media.has_external_subtitle is False
+        stored = await repo.get_media_file(media.id)
+        assert stored is not None
+        assert stored.has_subtitle is False
+
+    @pytest.mark.asyncio
+    async def test_refresh_without_path_change_keeps_name_marker(self, repo: Repository, tmp_path: Path):
+        video = tmp_path / "MIDV-004-C.mp4"
+        video.touch()
+        library = await repo.create_library(name="t", path=str(tmp_path), subtitle_extensions=[])
+        assert library.id is not None
+
+        media = await register_media_file(repo, library.id, video, library=library)
+        assert media.has_subtitle_in_name is True
+        assert media.has_external_subtitle is False
+        assert media.has_subtitle is True

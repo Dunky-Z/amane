@@ -1,7 +1,7 @@
 """playback_progress
 
 Revision ID: 1978695e8014
-Revises: f08a70df4a51
+Revises: 82643a46d07a
 Create Date: 2026-09-29 23:03:38.016026
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "1978695e8014"
-down_revision: str | None = "f08a70df4a51"
+down_revision: str | None = "82643a46d07a"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

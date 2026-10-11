@@ -118,6 +118,29 @@ async def test_scrape_skips_all_when_all_scraped(repo: Repository, tmp_path: Pat
 
 
 @pytest.mark.asyncio(loop_scope="function")
+async def test_scrape_reenqueues_actor_after_person_cleared(repo: Repository, tmp_path: Path):
+    """清空人物档案连带清空 raw → 该演员重新进入链式自动刮削 (不再是「已刮过」)."""
+    handler = _make_handler(repo, ["Actor A"], auto_scrape=True)
+    await handler.handle(ScrapePayload(number="MIDV-123", media_file_id=None, content_type=ContentType.CENSORED))
+    actor = (await repo.get_actors_by_names(["Actor A"]))[0]
+    assert actor.id is not None
+    await repo.update_actor(actor.id, raw={"minnano": {"gender": "female"}})
+
+    skipped = await handler.handle(
+        ScrapePayload(number="MIDV-123", media_file_id=None, content_type=ContentType.CENSORED)
+    )
+    assert [f for f in (skipped.followups or []) if f.task_type == TaskType.ACTOR_SCRAPE] == []
+
+    assert await repo.clear_actor_person(actor.id) is not None
+
+    requeued = await handler.handle(
+        ScrapePayload(number="MIDV-123", media_file_id=None, content_type=ContentType.CENSORED)
+    )
+    actor_scrapes = [f for f in (requeued.followups or []) if f.task_type == TaskType.ACTOR_SCRAPE]
+    assert [f.payload["actor_id"] for f in actor_scrapes] == [actor.id]
+
+
+@pytest.mark.asyncio(loop_scope="function")
 async def test_scrape_no_chain_when_disabled(repo: Repository, tmp_path: Path):
     """auto_scrape=False → 无 ACTOR_SCRAPE followup."""
     handler = _make_handler(repo, ["Actor A"], auto_scrape=False)
@@ -141,7 +164,7 @@ async def test_scrape_no_chain_without_actors(repo: Repository, tmp_path: Path):
 
 @pytest.mark.asyncio(loop_scope="function")
 async def test_chain_failure_does_not_fail_scrape(repo: Repository, tmp_path: Path, monkeypatch):
-    """链式描述异常被吞掉, 不阻断刮削主流程 (机会主义)."""
+    """链式描述异常被忽略, 不阻断刮削主流程 (失败即跳过)."""
 
     async def _boom(names):
         raise RuntimeError("enqueue boom")
@@ -197,4 +220,6 @@ async def test_second_scrape_reuses_active_actor_task(repo: Repository, tmp_path
 
     tasks = await _list_actor_tasks(repo)
     assert len(tasks) == 1
-    await worker.stop()
+    worker.retire()
+    await worker.wait_stopped()
+    await worker.shutdown_active()

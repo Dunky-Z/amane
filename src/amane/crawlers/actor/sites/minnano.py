@@ -9,12 +9,13 @@ from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 from parsel import Selector
 
 from amane.enums import ActorGender, SiteName
+from amane.net.connectivity import ConnectivityOutcome
 from amane.parsing import split_actor_aliases
 from amane.plugins.models import SourceCapability
 from amane.utils.dates import normalize_calendar_date
 
 from ...base import CrawlerProfile
-from ...parsing import extract_text
+from ...parsing import extract_text, is_same_name, normalize_name
 from ..base import ActorCrawler
 from ..models import ActorMetadata
 
@@ -38,11 +39,12 @@ class MinnanoActorCrawler(ActorCrawler):
             base_url="https://www.minnano-av.com",
             capabilities=frozenset({SourceCapability.ACTOR_PROFILE}),
             genders=frozenset({ActorGender.FEMALE}),
+            # 站点用 JS 注入年龄确认弹层, 仅在缺 cookie 时出现; 预置后页面不再被拦截判定命中.
+            cookies={"age_verified": "1"},
         )
 
     async def _search(self, name: str) -> str | None:
-        q = quote(name)
-        search_url = f"{self.base_url}/search_result.php?search_scope=actress&search_word={q}&search=Go"
+        search_url = self._search_url(name)
         text = await self.client.get_html(search_url, cookies=self.cookies)
         html = Selector(text=text)
 
@@ -63,24 +65,26 @@ class MinnanoActorCrawler(ActorCrawler):
 
         return self._pick_search_hit(html, name)
 
+    def _search_url(self, name: str) -> str:
+        return f"{self.base_url}/search_result.php?search_scope=actress&search_word={quote(name)}&search=Go"
+
+    async def check_connectivity(self) -> ConnectivityOutcome:
+        """探测检索入口: 首页可达不代表 ``search_result.php`` 可达, 后者处于挑战保护."""
+        return await self.client.check(self._search_url("あ"), cookies=self.cookies)
+
     def _pick_search_hit(self, html: Selector, name: str) -> str | None:
-        # 精确名优先; 否则取首条演员行.
+        """行标题与查找名 (去掉注记括号后) 相等才算命中; 确认不了返回 None."""
+        if not name.strip():
+            return None
         rows = html.xpath('//table[contains(@class,"tbllist") and contains(@class,"actress")]//tr[td]')
-        exact: str | None = None
-        first: str | None = None
         for row in rows:
             title = extract_text(row, './/h2[contains(@class,"ttl")]/a/text()')
             href = extract_text(row, './/h2[contains(@class,"ttl")]/a/@href')
-            if not href or not _ACTRESS_HREF_RE.search(href):
+            if not title or not href or not _ACTRESS_HREF_RE.search(href):
                 continue
-            clean_href = href.split("?", 1)[0]
-            url = urljoin(self.base_url + "/", clean_href)
-            if first is None:
-                first = url
-            if title and title.strip() == name:
-                exact = url
-                break
-        return exact or first
+            if is_same_name(_strip_annotations(title), name):
+                return urljoin(self.base_url + "/", href.split("?", 1)[0])
+        return None
 
     async def _scrape(self, url: str) -> ActorMetadata | None:
         text = await self.client.get_html(url, cookies=self.cookies)
@@ -143,7 +147,7 @@ def parse_minnano_detail(html_text: str, *, page_url: str, base_url: str) -> Act
 
 
 def _parse_name_line(raw: str) -> tuple[str, list[str]]:
-    text = unicodedata.normalize("NFKC", raw).strip()
+    text = normalize_name(raw)
     m = _NAME_RE.match(text)
     if not m:
         return text, []

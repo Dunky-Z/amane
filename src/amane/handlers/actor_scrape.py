@@ -3,10 +3,15 @@ from typing import TYPE_CHECKING, Protocol
 from pydantic import ValidationError
 from structlog.contextvars import bind_contextvars
 
-from ..aggregate import merge_actor_metadata, merge_actor_rows_fill_empty
+from ..aggregate import merge_actor_metadata, merge_actor_scrape_result
 from ..crawlers.actor import ActorFetcher, ActorMetadata, filter_sites_for_gender
 from ..crawlers.site_roles import is_actor_image_site, is_actor_profile_site
-from ..db.actor_person import actor_to_aggregated, apply_aggregated_to_actor
+from ..db.actor_person import (
+    actor_to_aggregated,
+    apply_aggregated_to_actor,
+    filter_locked_person_data,
+    locked_fields_of,
+)
 from ..enums import SiteName
 from ..net.errors import FailureReason, SourceError
 from ..observability import current, invoke_source
@@ -28,7 +33,7 @@ class ActorCrawlerFactoryLike(Protocol):
 
 
 class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
-    """按 Actor 查找名顺序访问档案站 / 头像站, 填空合并后写回."""
+    """按 Actor 查找名顺序访问资料来源 / 头像来源, 以本次结果写回."""
 
     def __init__(
         self,
@@ -45,6 +50,19 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
         self._resource_store = resource_store
         self._web_client = web_client
 
+    def failure_result(self, payload: ActorScrapePayload) -> ActorScrapeResult | None:
+        """抓取之后崩掉时, 站点明细仍要能看到."""
+        outcomes = current().site_outcomes(include_unqueried=True)
+        if not outcomes:
+            return None
+        return ActorScrapeResult(
+            actor_id=payload.actor_id,
+            field_sources={},
+            failed_sites=[row.site for row in outcomes if row.outcome is SiteOutcomeKind.FAILED],
+            image_count=0,
+            outcomes=outcomes,
+        )
+
     async def handle(self, payload: ActorScrapePayload) -> TaskResult[ActorScrapeResult]:
         bind_contextvars(actor_id=payload.actor_id)
         rec = current()
@@ -52,11 +70,11 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
         # 校验 Actor 与站点资格.
         actor = await self._repo.get_actor(payload.actor_id)
         if actor is None:
-            return TaskResult(success=False, error=f"Actor {payload.actor_id} not found")
+            return TaskResult(success=False, error=f"演员 {payload.actor_id} 不存在")
 
         names = await self._repo.get_actor_lookup_names(payload.actor_id)
         if not names:
-            return TaskResult(success=False, error=f"Actor {payload.actor_id} has no lookup names")
+            return TaskResult(success=False, error=f"演员 {payload.actor_id} 没有可用于查找的名字")
 
         bind_contextvars(actor_name=actor.name)
         cfg = self._config.actor_scraping
@@ -70,7 +88,7 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
             rec.warning("actor scrape ignored sites lacking capability", sites=list(ignored))
         configured = _unique_sites([*profile_sites, *image_sites])
         if not configured:
-            return TaskResult(success=False, error="No actor scraping sites configured")
+            return TaskResult(success=False, error="尚未配置演员刮削站点")
 
         gender = actor.gender
         sites, skipped_by_gender = filter_sites_for_gender(configured, gender)
@@ -78,7 +96,7 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
         image_sites = [s for s in image_sites if s in sites]
 
         if not sites:
-            return TaskResult(success=False, error=f"No actor scraping sites eligible for gender={gender}")
+            return TaskResult(success=False, error=f"没有适用于性别 {gender} 的演员刮削站点")
 
         use_metadata_cache = CacheKind.metadata in payload.use_cache
         # CacheKind.trans 写入 payload 但不改变本任务行为.
@@ -101,7 +119,7 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
         progress_total = len(sites) + 2
         rec.update_summary(eligible_sites=list(sites), sites_queried=list(sites))
 
-        # 出站: 按查找名逐站抓取; 缓存命中则跳过请求.
+        # 出站: 按查找名逐站获取; 缓存命中则跳过请求.
         for i, site in enumerate(sites):
             cached_payload = raw_cache.get(site) if use_metadata_cache else None
             if cached_payload is not None:
@@ -150,10 +168,12 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
                 failed_sites.append(site)
             await self.report_progress(i + 1, progress_total, f"fetched {site}")
 
-        # 填空合并后写库.
+        # 本次结果优先写回, 空位由库内值兜底.
         site_agg = merge_actor_metadata(results, profile_sites=profile_sites, image_sites=image_sites)
         existing_aliases = await self._repo.get_actor_aliases(payload.actor_id)
-        merged = merge_actor_rows_fill_empty(actor_to_aggregated(actor), site_agg)
+        merged = merge_actor_scrape_result(site_agg, actor_to_aggregated(actor))
+        # AUTO 写入: 锁定字段保留库内值; 下载与任务结果同以过滤后集合为准, 不为注定丢弃的新图下载.
+        merged = filter_locked_person_data(merged, locked=locked_fields_of(actor), current=actor_to_aggregated(actor))
 
         if cfg.download_images and merged.image_urls and self._web_client is not None:
             for url in merged.image_urls:
@@ -161,10 +181,20 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
         await self.report_progress(len(sites) + 1, progress_total, "images")
 
         apply_aggregated_to_actor(actor, merged)
-        # 别名行整表替换为「既有行 + 站点名」并集 (去重/去展示名在行写入层).
+        # 别名行整表替换为「既有行 + 站点名」并集 (去重/去展示名/锁判定在行写入层).
         saved = await self._repo.save_actor(actor, aliases=[*existing_aliases, *merged.aliases])
         if saved is None:
-            return TaskResult(success=False, error=f"Failed to save actor {payload.actor_id}")
+            return TaskResult(
+                success=False,
+                error=f"保存演员 {payload.actor_id} 失败",
+                result=ActorScrapeResult(
+                    actor_id=payload.actor_id,
+                    field_sources=dict(merged.field_sources),
+                    failed_sites=failed_sites,
+                    image_count=len(merged.image_urls),
+                    outcomes=current().site_outcomes(),
+                ),
+            )
         await self.report_progress(progress_total, progress_total, "saved")
 
         rec.info(
@@ -181,6 +211,7 @@ class ActorScrapeHandler(TaskHandler[ActorScrapePayload, ActorScrapeResult]):
                 field_sources=dict(merged.field_sources),
                 failed_sites=failed_sites,
                 image_count=len(merged.image_urls),
+                outcomes=current().site_outcomes(),
             ),
         )
 

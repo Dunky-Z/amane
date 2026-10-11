@@ -16,6 +16,7 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import {
   IconBrandGithub,
+  IconBookmark,
   IconCategory,
   IconClock,
   IconDeviceMobile,
@@ -77,6 +78,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/actors", labelKey: "nav.actors", icon: IconUsers },
       { to: "/catalog", labelKey: "nav.catalog", icon: IconCategory },
       { to: "/feeds", labelKey: "nav.feeds", icon: IconRss, end: true },
+      { to: "/saved-queries", labelKey: "nav.savedQueries", icon: IconBookmark },
     ],
   },
   {
@@ -303,7 +305,7 @@ function HeaderSearch() {
   }
 
   return (
-    // 窄屏顶栏放不下搜索框, 入口回落到片库页内搜索.
+    // 窄屏顶栏放不下搜索框, 入口回退到片库页内搜索.
     <Box
       component="form"
       visibleFrom="sm"

@@ -1,10 +1,12 @@
-import { Button, Group, Modal, Stack, Text } from "@mantine/core";
+import { Button, getDefaultZIndex, Group, Modal, Stack, Text } from "@mantine/core";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 export type ConfirmOptions = {
   title?: string;
-  message: string;
+  /** 单句说明, 或条目清单. */
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   /** 确认钮颜色; 未设置时 danger=true 用 red. */
@@ -22,6 +24,9 @@ type ConfirmBridge = {
 };
 
 let bridge: ConfirmBridge | null = null;
+
+/** 确认框须盖住任何已打开的弹窗: Modal 默认层级彼此相同, 同层时后挂载的盖住先挂载的. */
+const CONFIRM_Z_INDEX = getDefaultZIndex("popover") + 1;
 
 /** 屏幕居中确认框; 须在 MantineProvider 内挂载 `<ConfirmHost />`. */
 export function confirm(options: ConfirmOptions): Promise<boolean> {
@@ -70,9 +75,13 @@ export function ConfirmHost() {
       centered
       size="sm"
       radius="md"
+      zIndex={CONFIRM_Z_INDEX}
     >
       <Stack gap="md">
-        <Text size="sm">{pending?.message}</Text>
+        {/* component="div": 清单消息会传 <ul>, 套在 <p> 里是非法嵌套 */}
+        <Text size="sm" component="div">
+          {pending?.message}
+        </Text>
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={() => close(false)}>
             {pending?.cancelLabel ?? t("actions.cancel")}

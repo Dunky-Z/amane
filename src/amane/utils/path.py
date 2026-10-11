@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import os
+import stat
 import unicodedata
 from pathlib import Path
+
+#: 重解析点 tag 的 name surrogate 位: 置位表示该目录项代表系统里另一个命名对象.
+NAME_SURROGATE = 0x20000000
 
 
 def _resolve_or_literal(p: str | Path) -> str:
@@ -18,6 +22,23 @@ def _resolve_or_literal(p: str | Path) -> str:
     except OSError, ValueError:
         # 回退需 lexically 归一且不做链接解析, Path.resolve() 语义不符
         return os.path.abspath(os.fspath(p))  # noqa: PTH100
+
+
+def resolved_path(path: str | Path) -> Path:
+    """真实路径: 解析符号链接后的绝对路径, 解析失败时按字面绝对路径回退.
+
+    库路径及其派生的索引路径必须同一形式: 两侧按字面比较, 写法不同会把同一个文件算成两个.
+    """
+    return Path(_resolve_or_literal(path))
+
+
+def is_resolved_path(path: str | Path) -> bool:
+    """路径是否已经是真实路径.
+
+    与字面形式比较时必须先做 lexical 归一 (``Path`` 不折叠 ``..``), 且不能用 ``Path.resolve()``:
+    它会跟随符号链接, 那正是这里要区分的差别.
+    """
+    return resolved_path(path) == Path(os.path.abspath(os.fspath(path)))  # noqa: PTH100
 
 
 def is_descendant(p: str | Path, parent: str | Path) -> bool:
@@ -42,14 +63,22 @@ def is_any_descendant(p: str | Path, *parents: str | Path) -> bool:
     return any(is_descendant(p, parent) for parent in parents)
 
 
+def path_key(path: str | Path) -> str:
+    """字面路径的比较键: NFC、``normcase`` 与 ``normpath``.
+
+    与 `path_is_under` 同一套归一, 供集合成员判定使用 — 两两比较在万级规模下是平方.
+    """
+    return os.path.normcase(os.path.normpath(nfc_path(os.fspath(path))))
+
+
 def path_is_under(path: str | Path, root: str | Path) -> bool:
     """字面路径是否为 root 自身或子孙.
 
     不做 realpath: 目录移出或删除后源路径已不存在, 仍须能按索引前缀匹配.
     比较前 NFC、``normcase``、``normpath``, 避免 ``/a/bar`` 命中 ``/a/barbar``.
     """
-    candidate = Path(os.path.normcase(os.path.normpath(nfc_path(os.fspath(path)))))
-    base = Path(os.path.normcase(os.path.normpath(nfc_path(os.fspath(root)))))
+    candidate = Path(path_key(path))
+    base = Path(path_key(root))
     return candidate == base or base in candidate.parents
 
 
@@ -80,3 +109,21 @@ def existing_disk_path(path: str | Path, *, follow_symlinks: bool = True) -> Pat
         if candidate.exists(follow_symlinks=follow_symlinks):
             return candidate
     return None
+
+
+def is_name_surrogate(st: os.stat_result) -> bool:
+    """该目录项是否代表系统里另一个命名对象 (Windows 的 junction、挂载点、符号链接等).
+
+    ``st_reparse_tag`` 只有 Windows 有, 其它平台取不到即视为假 — 那边的目录符号链接
+    由 ``S_ISLNK`` 覆盖.
+    """
+    return bool(getattr(st, "st_reparse_tag", 0) & NAME_SURROGATE)
+
+
+def is_name_surrogate_dir(path: str | Path) -> bool:
+    """路径是否为目录链接 (Windows 的 junction 与挂载点). 读不到时返回假, 交给调用方的存在性分支."""
+    try:
+        st = Path(path).lstat()
+    except OSError:
+        return False
+    return stat.S_ISDIR(st.st_mode) and is_name_surrogate(st)

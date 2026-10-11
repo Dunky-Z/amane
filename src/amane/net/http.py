@@ -1,10 +1,11 @@
-"""curl_cffi TLS 指纹模拟 + 限速 + 重试; 爬虫 / 图片 / Emby 等对外 HTTP 统一经此模块."""
+"""curl_cffi TLS 指纹模拟 + 限速 + 重试; 爬虫 / 图片 / Emby 等对外 HTTP 统一经此模块.
+
+指纹按 host 选用, 被站点拦下时轮换; 契约见 ``WebClient.request``.
+"""
 
 import asyncio
-import os
 import random
 import time
-from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 import aiofiles
@@ -15,10 +16,10 @@ from curl_cffi import CurlError
 from curl_cffi.requests import AsyncSession, BrowserTypeLiteral, Response
 
 from .errors import FailureKind, RequestError, RequestFailure
-from .recording import get_bound_http_recorder, reset_skip_http_body, set_skip_http_body
+from .recording import get_bound_http_recorder, skip_body_recording
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Mapping
     from pathlib import Path
 
     from curl_cffi.requests.session import HttpMethod
@@ -26,16 +27,6 @@ if TYPE_CHECKING:
     from ..config import SiteConfig
 
 logger = structlog.get_logger()
-
-
-@contextmanager
-def _skip_body_recording() -> Iterator[None]:
-    """get_bytes / download 跳过 body 落盘 (仅记 meta)."""
-    token = set_skip_http_body(True)
-    try:
-        yield
-    finally:
-        reset_skip_http_body(token)
 
 
 _IMPERSONATE_OPTIONS: tuple[BrowserTypeLiteral, ...] = (
@@ -46,8 +37,46 @@ _IMPERSONATE_OPTIONS: tuple[BrowserTypeLiteral, ...] = (
     "firefox133",
     "firefox135",
 )
+"""进程内可用的指纹; 轮换按此顺序取下一个."""
 
 _RETRYABLE_STATUS_CODES = frozenset({408, 429, 503, 504})
+
+_IMPERSONATE_REJECTED_STATUSES = frozenset({403, 406})
+"""判定「站点拦下此指纹」的状态码: 站点按 TLS 指纹放行时给出的典型响应;
+404 表示资源不存在, 换指纹无意义."""
+
+_MAX_IMPERSONATE_ROTATIONS = 3
+"""单次请求最多轮换的指纹数. 与重试预算分开计, 因此被拦时单次调用最多发出 4 次请求."""
+
+
+class _FingerprintPicker:
+    """按 host 选 TLS 指纹: 换过的指纹对该 host 保持, 后续请求不再试探原指纹.
+
+    host 比来源更精确 (同一来源的 HTML 与图片可能落在不同 host), 比 URL 更稳定 (图片 URL 各不相同).
+    """
+
+    def __init__(self, options: tuple[BrowserTypeLiteral, ...]) -> None:
+        self._options = options
+        self._default: BrowserTypeLiteral = random.choice(options)
+        self._chosen: dict[str, BrowserTypeLiteral] = {}
+        self._rejected: dict[str, set[BrowserTypeLiteral]] = {}
+
+    @property
+    def default(self) -> BrowserTypeLiteral:
+        return self._default
+
+    def select(self, host: str) -> BrowserTypeLiteral:
+        return self._chosen.get(host, self._default)
+
+    def rotate(self, host: str) -> BrowserTypeLiteral | None:
+        """把该 host 当前用的指纹记为拒绝项, 返回下一个未试过的; 全部试过返回 None."""
+        rejected = self._rejected.setdefault(host, set())
+        rejected.add(self.select(host))
+        for option in self._options:
+            if option not in rejected:
+                self._chosen[host] = option
+                return option
+        return None
 
 
 class RateLimiters:
@@ -122,6 +151,26 @@ def _make_limiter(rate: float) -> AsyncLimiter:
     return AsyncLimiter(1, 1 / rate)
 
 
+def site_proxy_overrides(
+    site_configs: Mapping[str, SiteConfig],
+    site_urls: Mapping[str, list[str]],
+) -> dict[str, str | None]:
+    """按 host 汇总站点级代理: 值 ``None`` 表示该 host 直连 (站点关闭了代理).
+
+    host 取自来源 profile 的 URL 与配置的 ``base_url``, 与 ``RateLimiters.from_config`` 是同一份集合;
+    未出现在结果里的 host 使用全局 ``network.proxy``. 多个站点共享 host 时按遍历顺序最后一次写入生效.
+    """
+    overrides: dict[str, str | None] = {}
+    for site, cfg in site_configs.items():
+        if cfg.use_proxy and cfg.proxy is None:
+            continue
+        for url in (*site_urls.get(str(site), []), cfg.base_url):
+            host = httpx.URL(url).host if url else None
+            if host:
+                overrides[host] = cfg.proxy if cfg.use_proxy else None
+    return overrides
+
+
 def _failure_body(resp: Response | None) -> bytes | None:
     if resp is None:
         return None
@@ -151,28 +200,45 @@ def _with_same_origin_referer(
 
 
 class WebClient:
+    """出站 HTTP 通道. 代理按 host 解析 (站点级覆盖全局), 指纹按 host 选用, 被拦后换下一个."""
+
     def __init__(
         self,
         *,
         proxy: str | None = None,
+        proxy_overrides: Mapping[str, str | None] | None = None,
         timeout: float = 30.0,
-        max_retries: int = 3,
+        max_retries: int = 2,
         max_clients: int = 50,
         limiters: RateLimiters,
         same_origin_referer_hosts: frozenset[str] = frozenset(),
     ):
         self._proxy = proxy
+        self._proxy_overrides = dict(proxy_overrides or {})
         self._timeout = timeout
         self._max_retries = max_retries
         self._limiters = limiters
         self._same_origin_referer_hosts = same_origin_referer_hosts
+        self._fingerprints = _FingerprintPicker(_IMPERSONATE_OPTIONS)
         self._session = AsyncSession(
             max_clients=max_clients,
             verify=False,
             max_redirects=20,
             timeout=timeout,
-            impersonate=random.choice(_IMPERSONATE_OPTIONS),
+            impersonate=self._fingerprints.default,
         )
+        # 日志给出进程默认指纹, 便于判断某站点是否按 TLS 指纹放行.
+        logger.info("web client created", impersonate=self._fingerprints.default)
+
+    async def acquire(self, url: str) -> None:
+        """按 host 取得限速许可. 供不经 ``request`` 的通道 (浏览器渲染 / solver) 复用同一限速."""
+        await self._limiters.get(httpx.URL(url).host).acquire()
+
+    def _proxy_for(self, host: str | None) -> str | None:
+        """该 host 实际使用的代理: 站点级设定优先, 含显式直连 (值为 ``None``)."""
+        if host in self._proxy_overrides:
+            return self._proxy_overrides[host]
+        return self._proxy
 
     async def request(
         self,
@@ -191,34 +257,48 @@ class WebClient:
     ) -> Response:
         """``ok_statuses`` 额外视为成功 (例如 RSS 304), 不重试、不当失败. 重试用尽后抛 ``RequestError``.
 
-        ``max_attempts`` 向下覆盖构造期的 ``max_retries``, 供一次性的探测使用. ``max_retries`` 实为总
-        **尝试次数** (``3`` → 最多发 3 次请求), 名字为兼容既有配置保留; 两者都至少发一次请求, 配置 0
-        表示不重试而不是一次都不发.
+        ``max_retries`` 是首次请求之外的**重试次数** (``2`` → 最多发 3 次请求); ``max_attempts`` 是
+        **总尝试次数** 上限, 供一次性的探测向下覆盖 (探测传 1 表示只发一次). 两者都至少发一次请求,
+        配置 0 表示不重试而不是一次都不发.
+
+        ``use_proxy=False`` 强制直连 (本机 solver 服务用), 否则按 host 应用站点级代理, 未配置时用全局
+        ``network.proxy``. 代理地址由 ``_proxy_for`` 决定, 同一 host 的连续请求走同一代理.
+
+        403/406 另按「站点拦下此指纹」处理: 换下一个未试过的指纹重发, 换过的指纹对该 host 保持.
+        轮换不占重试次数, 单次请求最多换 ``_MAX_IMPERSONATE_ROTATIONS`` 次; 该 host 的指纹全部被拒后
+        不再轮换, 按原状态失败.
         """
         host = httpx.URL(url).host
         headers = _with_same_origin_referer(host, headers, self._same_origin_referer_hosts)
         await self._limiters.get(host).acquire()
 
-        attempts = max(1, self._max_retries if max_attempts is None else min(max_attempts, self._max_retries))
+        key = host or url
+        total_attempts = 1 + self._max_retries
+        attempts = max(1, total_attempts if max_attempts is None else min(max_attempts, total_attempts))
         t0 = time.monotonic()
         failure: RequestFailure | None = None
-        last_resp: Response | None = None
-        for attempt in range(attempts):
+        resp: Response | None = None
+        sent = 0
+        retries = 0
+        rotations = 0
+        while True:
+            sent += 1
+            resp = None
+            impersonate = self._fingerprints.select(key)
             should_retry = False
             try:
-                resp: Response = await self._session.request(
+                resp = await self._session.request(
                     method,
                     url,
                     headers=headers,
                     cookies=cookies,
                     data=data,
                     json=json,
-                    proxy=self._proxy if use_proxy else None,
+                    proxy=self._proxy_for(host) if use_proxy else None,
                     timeout=timeout or self._timeout,
                     allow_redirects=allow_redirects,
+                    impersonate=impersonate,
                 )
-                last_resp = resp
-
                 extra_ok = ok_statuses or frozenset()
                 if (
                     resp.status_code < 300
@@ -239,30 +319,44 @@ class WebClient:
             except CurlError as e:
                 failure = RequestFailure(kind=FailureKind.CURL, message=f"curl error: {e}")
                 should_retry = True
-                last_resp = None
             except TimeoutError:
                 failure = RequestFailure(kind=FailureKind.TIMEOUT, message="timeout")
                 should_retry = True
-                last_resp = None
             except Exception as e:
                 failure = RequestFailure(kind=FailureKind.UNEXPECTED, message=f"unexpected: {type(e).__name__}: {e}")
-                last_resp = None
 
-            if not should_retry:
+            if resp is not None and resp.status_code in _IMPERSONATE_REJECTED_STATUSES:
+                # 先记录拒绝项并选出下一个: 预算用尽时它留给该 host 的下一次请求, 不重复试探同一个指纹.
+                rotated = self._fingerprints.rotate(key)
+                if rotated is None:
+                    logger.warning("host rejected every fingerprint", url=url, status=resp.status_code)
+                elif rotations < _MAX_IMPERSONATE_ROTATIONS:
+                    rotations += 1
+                    logger.warning(
+                        "impersonate rotated",
+                        url=url,
+                        status=resp.status_code,
+                        rejected=impersonate,
+                        impersonate=rotated,
+                    )
+                    # 轮换重发是同一 host 的额外请求, 与首次请求一样先取限速许可: 严格平滑桶不允许突发.
+                    await self._limiters.get(host).acquire()
+                    continue
+
+            if not should_retry or retries >= attempts - 1:
                 break
-
-            if attempt < attempts - 1:
-                wait = attempt * 3 + 2 + random.uniform(-1, 1)
-                logger.warning(
-                    "request retry",
-                    method=method,
-                    url=url,
-                    attempt=attempt + 1,
-                    max_retries=attempts,
-                    error=failure.message,
-                    retry_in=wait,
-                )
-                await asyncio.sleep(wait)
+            wait = retries * 3 + 2 + random.uniform(-1, 1)
+            retries += 1
+            logger.warning(
+                "request retry",
+                method=method,
+                url=url,
+                attempt=retries,
+                max_retries=attempts,
+                error=failure.message if failure else None,
+                retry_in=wait,
+            )
+            await asyncio.sleep(wait)
 
         log_failed = logger.debug if get_bound_http_recorder() is not None else logger.error
         log_failed(
@@ -270,12 +364,10 @@ class WebClient:
             method=method,
             url=url,
             error=failure.message if failure else None,
-            attempts=attempts,
+            attempts=sent,
             duration_s=round(time.monotonic() - t0, 2),
         )
-        self._record_exchange(
-            method, url, resp=last_resp, error=failure.message if failure else None, t0=t0, attempts=attempts
-        )
+        self._record_exchange(method, url, resp=resp, error=failure.message if failure else None, t0=t0, attempts=sent)
         raise RequestError(url, failure)
 
     def _record_exchange(
@@ -352,7 +444,7 @@ class WebClient:
         cookies: dict[str, str] | None = None,
         use_proxy: bool = True,
     ) -> bytes:
-        with _skip_body_recording():
+        with skip_body_recording():
             resp = await self.request("GET", url, headers=headers, cookies=cookies, use_proxy=use_proxy)
         return resp.content
 
@@ -433,7 +525,7 @@ class WebClient:
         chunk_size: int = 1 * 1024**2,
         download_concurrency: int = 10,
     ) -> bool:
-        """大于 chunked_threshold 时分块并发下载. 失败返回 False."""
+        """大于 chunked_threshold 时分块并发下载. 失败返回 False, 并按状态与原因记日志."""
         file_size, _ = await self._probe(url, use_proxy=use_proxy)
 
         if file_size and file_size > chunked_threshold:
@@ -444,7 +536,13 @@ class WebClient:
         try:
             content = await self.get_bytes(url, use_proxy=use_proxy)
         except RequestError as e:
-            logger.error("download failed", url=url, error=e.message)
+            logger.error(
+                "download failed",
+                url=url,
+                status=e.failure.status if e.failure else None,
+                reason=e.reason,
+                error=e.message,
+            )
             return False
 
         try:
@@ -480,27 +578,27 @@ class WebClient:
 
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def _fetch_chunk(start: int, end: int) -> str:
+        async def _fetch_chunk(start: int, end: int) -> RequestFailure | None:
             async with semaphore:
                 try:
                     resp = await self.request(
                         "GET", url, headers={"Range": f"bytes={start}-{end}"}, use_proxy=use_proxy
                     )
                 except RequestError as e:
-                    return e.message
+                    return e.failure or RequestFailure(kind=FailureKind.UNEXPECTED, message=e.message)
                 async with aiofiles.open(dest, "rb+") as f:
                     await f.seek(start)
                     await f.write(resp.content)
-                return ""
+                return None
 
         results = await asyncio.gather(*[_fetch_chunk(s, e) for s, e in parts], return_exceptions=True)
 
         for i, result in enumerate(results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.error("chunk download failed", chunk=i, url=url, error=str(result))
                 return False
-            if result:  # 非空错误字符串
-                logger.error("chunk download failed", chunk=i, url=url, error=result)
+            if result is not None:
+                logger.error("chunk download failed", chunk=i, url=url, status=result.status, error=result.message)
                 return False
 
         logger.info("chunked download complete", url=url)
@@ -511,62 +609,3 @@ class WebClient:
             await self._session.close()
         except Exception as e:
             logger.debug("session close error (ignored)", error=str(e))
-
-
-class BrowserClient:
-    """延迟初始化: 浏览器仅在首次使用时启动."""
-
-    def __init__(self, *, headless: bool = True, default_timeout: float = 30000):
-        self._headless = headless
-        self._default_timeout = default_timeout
-        self._playwright = None
-        self._browser = None
-        self._lock = asyncio.Lock()
-
-    async def _ensure_browser(self):
-        if self._browser is not None:
-            return
-        async with self._lock:
-            if self._browser is not None:
-                return
-            from patchright.async_api import async_playwright
-
-            self._playwright = await async_playwright().start()
-            self._browser = await self._playwright.chromium.launch(
-                channel="chrome",
-                headless=self._headless if os.getenv("AMANE_SHOW_BROWSER") is None else False,
-                args=["--disable-blink-features=AutomationControlled"],
-            )
-
-    async def get_page(
-        self,
-        url: str,
-        *,
-        wait_for: str | None = None,
-        timeout: float | None = None,
-    ) -> tuple[str | None, str]:
-        """成功返回 ``(html, "")``, 失败返回 ``(None, 错误信息)``."""
-        effective_timeout = timeout if timeout is not None else self._default_timeout
-        try:
-            await self._ensure_browser()
-            assert self._browser is not None  # _ensure_browser 已保证
-            page = await self._browser.new_page()
-            try:
-                await page.goto(url, timeout=effective_timeout, wait_until="domcontentloaded")
-                if wait_for:
-                    await page.wait_for_selector(wait_for, timeout=effective_timeout)
-                content = await page.content()
-                return content, ""
-            finally:
-                await page.close()
-        except Exception as e:
-            logger.error("browser page fetch failed", url=url, error=str(e))
-            return None, str(e)
-
-    async def close(self) -> None:
-        if self._browser is not None:
-            await self._browser.close()
-            self._browser = None
-        if self._playwright is not None:
-            await self._playwright.stop()
-            self._playwright = None

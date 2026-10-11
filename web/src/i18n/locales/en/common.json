@@ -16,9 +16,9 @@
     "saving": "Saving...",
     "clear": "Clear",
     "translate": "Translate",
-    "selectFile": "",
-    "selectDirectory": "",
-    "selectPath": "",
+    "selectFile": "Choose file",
+    "selectDirectory": "Choose directory",
+    "selectPath": "Choose path",
     "submit": "Submit",
     "scrapeNormal": "Scrape",
     "scrapeNormalDesc": "Do not re-fetch cached data",
@@ -45,12 +45,13 @@
     "client": "Client",
     "logs": "Logs",
     "networkCheck": "Network Check",
-    "meta": "Library",
+    "meta": "Films",
     "actors": "Actors",
     "catalog": "Catalog",
     "libraries": "Libraries",
     "feeds": "Feeds",
     "feedSources": "Feed sources",
+    "savedQueries": "Saved queries",
     "agent": "Amane",
     "groups": {
       "browse": "Browse",
@@ -103,9 +104,9 @@
   "toast": {
     "scrapeStarted": "Scrape task queued",
     "scanStarted": "Scan started",
-    "metadataUpdated": "Metadata updated",
-    "metadataDeleted": "Metadata deleted",
-    "sourceFilesDeleted": "Metadata and source files deleted",
+    "metadataUpdated": "Film updated",
+    "metadataDeleted": "Film deleted",
+    "sourceFilesDeleted": "Film and source files deleted",
     "sourceFilesDeletePartial": "Deleted {{deleted}}. {{failed}} kept because source files could not be deleted",
     "configSaved": "Configuration saved",
     "watchPathAdded": "Watch path added",
@@ -127,7 +128,7 @@
     "feedPolled": "Feed fetched",
     "operationFailed": "Operation failed",
     "taskCreated": "Task queued",
-    "organizeStarted": "",
+    "organizeStarted": "Organize task submitted",
     "userTagCreated": "User tag created",
     "userTagExists": "User tag already exists",
     "userTagAttached": "User tag attached",
@@ -135,7 +136,7 @@
     "userTagBatchUpdated_other": "User tags updated on {{count}} titles",
     "userTagDetached": "User tag removed",
     "userTagDeleted": "User tag deleted",
-    "facetDeleted": "Facet deleted and blocklisted",
+    "facetDeleted": "Facet deleted and dropped",
     "facetRuleDeleted": "Rule removed",
     "commentCreated": "Comment posted",
     "commentUpdated": "Comment saved",
@@ -163,10 +164,16 @@
   },
   "auth": {
     "title": "Sign in required",
-    "description": "On desktop, click the menu bar / tray icon and copy the API token. In a container, read it from the token file in the data directory.",
+    "description": "On desktop, click the menu bar / tray icon and copy the API token. In a container, read it from the token file in the data directory",
     "tokenPlaceholder": "Paste token",
     "serverSettings": "Server settings",
-    "invalidToken": "Invalid token. Please check and retry.",
-    "connectionFailed": "Cannot reach the server. Make sure it is running."
+    "invalidToken": "Invalid token. Please check and retry",
+    "connectionFailed": "Cannot reach the server. Make sure it is running"
+  },
+  "errorBoundary": {
+    "title": "Page error",
+    "description": "Rendering this page threw an uncaught exception; details below",
+    "retry": "Retry",
+    "switchServer": "Switch server"
   }
 }

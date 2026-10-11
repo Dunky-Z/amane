@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from starlette.status import HTTP_403_FORBIDDEN
 
 from ..db import Library, MediaFileStatus, Repository
+from ..db.models import TaskType
 from ..enums import DownloadableResource
+from ..observability.models import OrganizeConflict, SiteOutcomeRecord
 from ..parsing import ContentType, infer_content_type
-from ..utils.path import is_descendant
+from ..utils.path import is_descendant, is_resolved_path, resolved_path
 
 if TYPE_CHECKING:
     from ..db.models import Feed
@@ -32,12 +34,16 @@ class LibraryBase(BaseModel):
         """就地写回 Library 默认值与覆盖; path 非库子目录时 403."""
         lib = await repo.get_library(self.library_id)
         if lib is None:
-            raise HTTPException(status_code=404, detail=f"Library {self.library_id} not found")
+            raise HTTPException(status_code=404, detail=f"媒体库 {self.library_id} 不存在")
         if self.path and not is_descendant(self.path, lib.path):
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN,
-                detail=f"Path {self.path} is not a descendant of library path {lib.path}",
+                detail=f"路径 {self.path} 不在媒体库路径 {lib.path} 之下",
             )
+        # 范围路径与库路径必须同一形式 (文件选择器给的是真实路径): 索引与清理清单都按字面路径比较,
+        # 两种写法会把同一个文件算成两条索引. 库路径尚未解析为真实路径的旧库保持原样, 否则范围会与既有索引分家.
+        if self.path and is_resolved_path(lib.path):
+            self.path = str(resolved_path(self.path))
         self.path = self.path or lib.path
         self._apply_library(lib)
 
@@ -46,7 +52,7 @@ class LibraryBase(BaseModel):
 
 
 class LibraryScanBase(LibraryBase):
-    """REFRESH / TRASH 扫描范围: 可覆盖库的 recursive / patterns."""
+    """REFRESH / SCAN_INVALID 扫描范围: 可覆盖库的 recursive / patterns."""
 
     recursive: bool | None = Field(default=None, description="覆盖 Library 的 recursive; None 沿用库设置")
     patterns: list[str] | None = Field(default=None, description="覆盖 Library 的 patterns; None 沿用库设置")
@@ -84,6 +90,7 @@ class RefreshPayload(LibraryScanBase):
 
 
 class RefreshResult(BaseModel):
+    type: Literal[TaskType.REFRESH] = TaskType.REFRESH
     added: int
     removed: int
     scrape: int
@@ -118,9 +125,13 @@ def build_feed_scrape_payload(feed: Feed, number: str) -> ScrapePayload:
 
 
 class ScrapeResult(BaseModel):
-    metadata_id: int
+    type: Literal[TaskType.SCRAPE] = TaskType.SCRAPE
+    metadata_id: int | None = None
+    """刮削失败时没有元数据行, 为 None."""
     field_sources: dict[str, str]
     failed_sites: list[str]
+    outcomes: list[SiteOutcomeRecord] = Field(default_factory=list)
+    """各来源的结果明细; 与记录里的 summary 同源."""
 
 
 # --- ORGANIZE ---
@@ -142,6 +153,10 @@ class OrganizePayload(LibraryBase):
         default=None,
         description="勾选快照; 与 path 不能同时指定. None 表示 path 范围内的全部索引",
     )
+    prune_empty_dirs: bool = Field(
+        default=True,
+        description="移动后删除本次腾空的目录 (库根与 .amane_trash 除外); 复制 / 硬链接 / 符号链接方式不移走源文件, 该开关无效",
+    )
 
     async def resolve(self, repo: Repository) -> None:
         if self.media_file_ids is not None and self.path:
@@ -160,22 +175,80 @@ class OrganizePayload(LibraryBase):
             self.copy_resources = [DownloadableResource(r) for r in lib.copy_resources]
 
 
+ORGANIZE_CONFLICT_LIMIT = 200
+"""conflicts 的条数上限; 超出只累加 conflicted, 不写进任务结果."""
+
+
 class OrganizeResult(BaseModel):
+    type: Literal[TaskType.ORGANIZE] = TaskType.ORGANIZE
     organized: int
     skipped: int
+    conflicted: int
     failed: int
+    pruned_dirs: int
+    conflicts: list[OrganizeConflict]
+    """未处理的条目, 最多 ORGANIZE_CONFLICT_LIMIT 条; 恒为 conflicted 条目的前缀, 差额只留在任务日志里."""
 
 
-# --- TRASH ---
+# --- SCAN INVALID ---
 
 
-class TrashPayload(LibraryScanBase):
-    """扫描 path 范围内的黑名单与过小视频, 移入 `.amane_trash`. path 缺省为库根."""
+class ScanInvalidPayload(LibraryScanBase):
+    """只读遍历 path 范围内的无效文件与空目录, 产出清单. path 缺省为库根."""
 
 
-class TrashResult(BaseModel):
-    trashed: int
-    failed: int = 0
+class ScanInvalidResult(BaseModel):
+    type: Literal[TaskType.SCAN_INVALID] = TaskType.SCAN_INVALID
+    inventory_id: str
+    entries: int
+    dirs: int
+    scope_path: str | None = None
+    truncated: bool = False
+    skipped_dirs: int = 0
+    skipped_files: int = 0
+    blocked_dirs: int = 0
+    """因子树里有无法识别的文件而未登记的候选目录数; 与「读不到」的 skipped 分开计."""
+
+
+# --- DELETE ---
+
+
+class DeletePayload(BaseModel):
+    """按清单标识删除; 执行集合取自清单条目 — 命中排除项的不删除, 命中更深的纳入项的仍删除."""
+
+    library_id: int = Field(description="清单所属 Library ID")
+    inventory_id: str = Field(description="后端生成的清单标识; 不存在或已过期则失败")
+    exclude: list[str] = Field(
+        default_factory=list,
+        description="排除项: 库内为清单库根下的相对路径, 库外为绝对路径; 按路径分量匹配",
+    )
+    include: list[str] = Field(
+        default_factory=list,
+        description=(
+            "在排除项内重新纳入的路径 (路径约定同 exclude); 与排除项互为祖先时按最深的一条判定, "
+            "同一路径同时命中两组时按纳入处理"
+        ),
+    )
+    prune_empty_dirs: bool = Field(default=True, description="删除本次腾空的目录 (库根与 .amane_trash 除外)")
+
+
+class DeleteResult(BaseModel):
+    type: Literal[TaskType.DELETE] = TaskType.DELETE
+    deleted: int
+    changed: int
+    failed: int
+    freed_bytes: int = 0
+    """按 inode 归并后的释放空间; 硬链接名字不齐时不计入."""
+    hardlink_items: int = 0
+    """已删除但不释放空间的硬链接项数."""
+    pruned_dirs: int = 0
+    excluded: int = 0
+    """因排除项而不删除、且未被纳入项恢复的清单条目数."""
+    indexed: int = 0
+    """随之删除的 MediaFile 行数."""
+    reverify_rejected: int = 0
+    """执行前复验未通过的条目数; 拒绝原因见 `delete.py::_reverify` (目录里出现媒体 / 未识别的
+    文件 / 下载进度, 目录不再为空或无法读取), 这些条目同时计入 `failed`."""
 
 
 # --- CLEANUP ---
@@ -189,6 +262,7 @@ class CleanupPayload(BaseModel):
 
 
 class CleanupResult(BaseModel):
+    type: Literal[TaskType.CLEANUP] = TaskType.CLEANUP
     files_removed: int
     resources_removed: int
 
@@ -206,6 +280,7 @@ class UpscalePayload(BaseModel):
 
 
 class UpscaleResult(BaseModel):
+    type: Literal[TaskType.UPSCALE] = TaskType.UPSCALE
     scanned: int
     upscaled: int
     skipped: int
@@ -221,6 +296,7 @@ class R18ImportPayload(BaseModel):
 
 
 class R18ImportResult(BaseModel):
+    type: Literal[TaskType.R18_IMPORT] = TaskType.R18_IMPORT
     imported: bool
     """False 表示远程未变化而跳过, 不是导入失败."""
     etag: str | None = None
@@ -239,10 +315,13 @@ class ActorScrapePayload(BaseModel):
 
 
 class ActorScrapeResult(BaseModel):
+    type: Literal[TaskType.ACTOR_SCRAPE] = TaskType.ACTOR_SCRAPE
     actor_id: int
     field_sources: dict[str, str]
     failed_sites: list[str]
     image_count: int
+    outcomes: list[SiteOutcomeRecord] = Field(default_factory=list)
+    """各来源的结果明细; 与记录里的 summary 同源."""
 
 
 # --- RESCRAPE ---
@@ -274,6 +353,7 @@ class RescrapePayload(BaseModel):
 
 
 class RescrapeResult(BaseModel):
+    type: Literal[TaskType.RESCRAPE] = TaskType.RESCRAPE
     submitted: int
     metadata: int = 0
     actors: int = 0

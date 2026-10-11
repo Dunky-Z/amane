@@ -176,7 +176,6 @@ export function MetaTable({
     onSuccess: (res) => {
       notifications.show({
         message: t("common:toast.batchScrapeStarted", {
-          defaultValue: `已提交 ${res.submitted} 个刮削任务`,
           count: res.submitted,
         }),
         color: "blue",

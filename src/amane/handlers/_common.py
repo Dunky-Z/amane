@@ -4,8 +4,8 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..db import MediaFileStatus
-from ..library import LibraryHit, LibraryScan
+from ..db import Library, MediaFileStatus
+from ..library import LibraryHit, LibraryScan, has_companion_subtitle
 from ..utils.oshash import compute_oshash
 from ..utils.threads import existing_disk_path, in_thread
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class LibraryTaskLocks:
-    """同库 TRASH 与 ORGANIZE 共用, 执行期串行."""
+    """同库 ORGANIZE 与 DELETE 共用, 执行期串行."""
 
     def __init__(self) -> None:
         self._locks: dict[int, asyncio.Lock] = {}
@@ -37,10 +37,10 @@ def _maybe_file(f: Path) -> bool:
 
 @in_thread
 def scan_library(scan_dir: Path, *, recursive: bool, scan: LibraryScan) -> list[LibraryHit]:
-    """目录本身与回收站不产出."""
+    """目录本身与回收目录不产出."""
     glob_pattern = "**/*" if recursive else "*"
     hits: list[LibraryHit] = []
-    # 跳过目录与回收站; 其余按规则分类.
+    # 跳过目录与回收目录; 其余按规则分类.
     for file_path in scan_dir.glob(glob_pattern):
         if not _maybe_file(file_path):
             continue
@@ -51,9 +51,27 @@ def scan_library(scan_dir: Path, *, recursive: bool, scan: LibraryScan) -> list[
     return hits
 
 
-async def register_media_file(repo: Repository, library_id: int, path: Path) -> MediaFile:
-    """注册不读文件内容; oshash 留给刮削按需计算."""
-    return await repo.create_media_file(library_id=library_id, path=str(path))
+async def register_media_file(
+    repo: Repository, library_id: int, path: Path, *, library: Library | None = None
+) -> MediaFile:
+    """注册不读文件内容; oshash 留给刮削按需计算. 有库配置时立刻查一次同目录字幕."""
+    media = await repo.create_media_file(library_id=library_id, path=str(path))
+    if library is not None:
+        await refresh_external_subtitle(repo, media, library)
+    return media
+
+
+async def refresh_external_subtitle(repo: Repository, media: MediaFile, library: Library) -> None:
+    """按视频当前所在目录检查一次外挂字幕, 写回 ``MediaFile.has_external_subtitle``.
+
+    库 ``subtitle_extensions`` 为空表示关闭发现, 此时写入假值, 早先命中的角标随之熄灭.
+    """
+    extensions = library.subtitle_extensions or []
+    found = await has_companion_subtitle(Path(media.path), extensions)
+    if media.id is None:
+        return
+    media.has_external_subtitle = found
+    await repo.update_media_file(media.id, has_external_subtitle=found)
 
 
 async def ensure_oshash(repo: Repository, media: MediaFile) -> str | None:

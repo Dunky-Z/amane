@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Amane API",
-    "version": "0.17.0"
+    "version": "0.19.0"
   },
   "paths": {
     "/api/health": {
@@ -105,6 +105,257 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Get Config Schema"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/libraries/{library_id}/cleanup/inventory": {
+      "get": {
+        "tags": [
+          "cleanup"
+        ],
+        "summary": "Get Cleanup Inventory",
+        "description": "面板的入口: 有清单给状态与范围, 无清单只给 ``exists=False``; 节点经 ``/inventory/nodes`` 另取.\n\n遍历设置与当前库配置不一致的清单按不存在处理: 面板只渲染代表整库的规则来源清单,\n否则一次不递归或带自定义匹配模式的扫描会被当成整库可以清理.",
+        "operationId": "get_cleanup_inventory",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventorySummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/libraries/{library_id}/cleanup/inventory/nodes": {
+      "get": {
+        "tags": [
+          "cleanup"
+        ],
+        "summary": "Get Cleanup Inventory Nodes",
+        "description": "展开某个节点的一页子节点. 库可能有上万条候选, 因此不整份下发.",
+        "operationId": "get_cleanup_inventory_nodes",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "节点路径: 库内相对库根, 库外为绝对路径; 空串取根",
+              "default": "",
+              "title": "Path"
+            },
+            "description": "节点路径: 库内相对库根, 库外为绝对路径; 空串取根"
+          },
+          {
+            "name": "inventory_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "指定清单; 缺省用规则来源的最新一份",
+              "title": "Inventory Id"
+            },
+            "description": "指定清单; 缺省用规则来源的最新一份"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "从第几个子节点开始",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "从第几个子节点开始"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "description": "本页最多返回多少个子节点",
+              "default": 200,
+              "title": "Limit"
+            },
+            "description": "本页最多返回多少个子节点"
+          },
+          {
+            "name": "noise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否列出系统与同步工具的产物",
+              "default": false,
+              "title": "Noise"
+            },
+            "description": "是否列出系统与同步工具的产物"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryNodePage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/libraries/{library_id}/cleanup/trash": {
+      "get": {
+        "tags": [
+          "cleanup"
+        ],
+        "summary": "Get Cleanup Trash",
+        "description": "展开回收目录的历史内容: 产出回收目录来源的清单, 前端拿到要展开的目录再按页读.\n\n展开本身是只读遍历, 但代价随回收目录大小增长, 而同一个打开动作可能重复发请求 (渲染两次 / 重连):\n窗口内已有的一份直接复用, 免得重走整棵树并往存放里堆用不到的清单.",
+        "operationId": "get_cleanup_trash",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashSummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/libraries/{library_id}/cleanup/selection": {
+      "post": {
+        "tags": [
+          "cleanup"
+        ],
+        "summary": "Expand Cleanup Selection",
+        "description": "由选中项展开显式来源清单: 文件表与详情页的删除入口据此预览. 只读, 不改磁盘与索引.",
+        "operationId": "expand_cleanup_selection",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionSummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1172,6 +1423,59 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metadata/{metadata_id}/locks": {
+      "put": {
+        "tags": [
+          "metadata"
+        ],
+        "summary": "Set Metadata Locks",
+        "description": "整体替换锁定字段集合.",
+        "operationId": "set_metadata_locks",
+        "parameters": [
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Metadata Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataLocksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2772,7 +3076,7 @@
           "actors"
         ],
         "summary": "Update Actor",
-        "description": "更新演员规范人物字段 (不含 name/raw/field_sources).",
+        "description": "更新演员规范人物字段 (不含 name/raw/field_sources); 写入字段自动加锁.",
         "operationId": "update_actor",
         "parameters": [
           {
@@ -2791,6 +3095,155 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ActorUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/actors/{actor_id}/locks": {
+      "put": {
+        "tags": [
+          "actors"
+        ],
+        "summary": "Set Actor Locks",
+        "description": "整体替换锁定字段集合.",
+        "operationId": "set_actor_locks",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Actor Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorLocksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/actors/{actor_id}/clear-person": {
+      "post": {
+        "tags": [
+          "actors"
+        ],
+        "summary": "Clear Actor Person",
+        "description": "清空人物档案与刮削缓存并解除全部锁 (保留 name / gender).",
+        "operationId": "clear_actor_person",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Actor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/actors/{actor_id}/crop-avatar": {
+      "post": {
+        "tags": [
+          "actors"
+        ],
+        "summary": "Crop Actor Avatar",
+        "description": "从当前主图 (image_urls[0]) 按像素框裁切头像, 结果前插为主图并保留原图.",
+        "operationId": "crop_actor_avatar",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Actor Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CropAvatarRequest"
               }
             }
           }
@@ -2953,6 +3406,24 @@
             }
           },
           {
+            "name": "favorite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by favorite marker",
+              "title": "Favorite"
+            },
+            "description": "Filter by favorite marker"
+          },
+          {
             "name": "offset",
             "in": "query",
             "required": false,
@@ -3107,6 +3578,58 @@
         }
       }
     },
+    "/api/facets/{kind}/batch": {
+      "post": {
+        "tags": [
+          "facets"
+        ],
+        "summary": "Batch Facets",
+        "description": "对一批分类执行同一个动作, 单个事务; 分类不支持收藏返回 400.\n\n不存在的 id 计入 ``missing`` 而不报 404 — 批量请求里某个 id 已失效不该让整批无结果. 动作语义\n与扩展位见 ``FacetBatchAction``.",
+        "operationId": "batch_facets",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FacetKind"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FacetBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacetBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/facets/{kind}/{facet_id}": {
       "get": {
         "tags": [
@@ -3220,7 +3743,7 @@
           "facets"
         ],
         "summary": "Delete Facet",
-        "description": "删除分类. 爬取侧写入黑名单并从 Metadata 真值剔除; user_tag 硬删.",
+        "description": "删除分类. 爬取侧写入剔除规则并从 Metadata 真值移除; user_tag 硬删.",
         "operationId": "delete_facet",
         "parameters": [
           {
@@ -4503,7 +5026,10 @@
                     "$ref": "#/components/schemas/OrganizeSubmission"
                   },
                   {
-                    "$ref": "#/components/schemas/TrashSubmission"
+                    "$ref": "#/components/schemas/ScanInvalidSubmission"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DeleteSubmission"
                   },
                   {
                     "$ref": "#/components/schemas/ScrapeSubmission"
@@ -4772,49 +5298,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/{task_id}/report": {
-      "get": {
-        "tags": [
-          "tasks"
-        ],
-        "summary": "Get Task Report",
-        "description": "面向 UI 的投影, 非完整记录导出. 仅终态可用.",
-        "operationId": "get_task_report",
-        "parameters": [
-          {
-            "name": "task_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Task Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskReport"
                 }
               }
             }
@@ -5280,14 +5763,14 @@
         }
       }
     },
-    "/api/agent/sessions/{session_id}/messages/stream": {
+    "/api/agent/sessions/{session_id}/title": {
       "post": {
         "tags": [
           "agent"
         ],
-        "summary": "Stream Agent Message",
-        "description": "启动后台回合并以 SSE 订阅事件; 客户端断连不取消回合.",
-        "operationId": "stream_agent_message",
+        "summary": "Generate Agent Session Title",
+        "description": "按首条输入生成标题. 与主回合并行执行, 前端不等回合结束即可刷新列表.",
+        "operationId": "generate_agent_session_title",
         "parameters": [
           {
             "name": "session_id",
@@ -5304,7 +5787,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AgentMessageRequest"
+                "$ref": "#/components/schemas/AgentSessionTitleRequest"
               }
             }
           }
@@ -5314,201 +5797,8 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agent/sessions/{session_id}/events/stream": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Stream Agent Events",
-        "description": "续订会话事件流 (刷新或切换页面后用). after= 上次收到的 seq.",
-        "operationId": "stream_agent_events",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Session Id"
-            }
-          },
-          {
-            "name": "after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "After"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agent/sessions/{session_id}/approve/stream": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Stream Approve Agent Sql",
-        "operationId": "stream_approve_agent_sql",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentApproveRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agent/sessions/{session_id}/reject/stream": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Stream Reject Agent Approval",
-        "operationId": "stream_reject_agent_approval",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentRejectRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agent/sessions/{session_id}/cancel": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Cancel Agent Turn",
-        "description": "显式终止后台回合; 与 SSE 断连无关.",
-        "operationId": "cancel_agent_turn",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentCancelResponse"
+                  "$ref": "#/components/schemas/AgentSessionTitleResponse"
                 }
               }
             }
@@ -5568,10 +5858,141 @@
         }
       }
     },
-    "/api/saved-queries": {
+    "/api/agent/sessions/{session_id}/agui": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Run Agent Agui",
+        "description": "启动 AG-UI 回合 (后台执行) 并订阅其事件. ``threadId`` 由适配器映射为 ``conversation_id``.",
+        "operationId": "run_agent_agui",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/sessions/{session_id}/agui/events": {
       "get": {
         "tags": [
           "agent"
+        ],
+        "summary": "Follow Agent Events",
+        "description": "跟随 ``after_seq`` 之后的回放行, 供页面接上进度: 整段历史经 ``/trace``, 这里只接新行.\n\n页面发起的回合也经由这条通道 (展示只认回放行), 因此必须能给出起始位置: 否则每接一次都要重发整段历史.\n\n只订阅, **不**启动回合, 故进行中的回合也不会 409; 回合结束且追平后关闭.",
+        "operationId": "follow_agent_events",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "After Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/sessions/{session_id}/agui/cancel": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Cancel Agui Turn",
+        "description": "显式终止后台回合: 客户端 abort 只是断开订阅, 回合会继续运行.",
+        "operationId": "cancel_agui_turn",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCancelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/saved-queries": {
+      "get": {
+        "tags": [
+          "saved-queries"
         ],
         "summary": "List Saved Queries",
         "operationId": "list_saved_queries",
@@ -5629,12 +6050,52 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "saved-queries"
+        ],
+        "summary": "Create Saved Query",
+        "description": "手动创建: 无会话归属, 直接已保留.",
+        "operationId": "create_saved_query",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedQueryCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedQueryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/saved-queries/{query_id}": {
       "get": {
         "tags": [
-          "agent"
+          "saved-queries"
         ],
         "summary": "Get Saved Query",
         "operationId": "get_saved_query",
@@ -5674,9 +6135,10 @@
       },
       "patch": {
         "tags": [
-          "agent"
+          "saved-queries"
         ],
         "summary": "Update Saved Query",
+        "description": "SQL 变化才重校验并失效缓存.",
         "operationId": "update_saved_query",
         "parameters": [
           {
@@ -5721,27 +6183,36 @@
             }
           }
         }
-      },
-      "delete": {
+      }
+    },
+    "/api/saved-queries/batch": {
+      "post": {
         "tags": [
-          "agent"
+          "saved-queries"
         ],
-        "summary": "Delete Saved Query",
-        "operationId": "delete_saved_query",
-        "parameters": [
-          {
-            "name": "query_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Query Id"
+        "summary": "Batch Saved Queries",
+        "description": "不存在的 id 计入 missing; 重复 id 只处理一次. AgentService 未装配时 delete 跳过缓存失效.",
+        "operationId": "batch_saved_queries",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedQueryBatchRequest"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
-          "204": {
-            "description": "Successful Response"
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedQueryBatchResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5759,7 +6230,7 @@
     "/api/saved-queries/{query_id}/result": {
       "get": {
         "tags": [
-          "agent"
+          "saved-queries"
         ],
         "summary": "Get Saved Query Result",
         "operationId": "get_saved_query_result",
@@ -5824,6 +6295,25 @@
   },
   "components": {
     "schemas": {
+      "ActorField": {
+        "type": "string",
+        "enum": [
+          "gender",
+          "birthday",
+          "birthplace",
+          "height",
+          "bust",
+          "waist",
+          "hip",
+          "cup",
+          "overview",
+          "tagline",
+          "image_urls",
+          "aliases"
+        ],
+        "title": "ActorField",
+        "description": "演员人物档案的可锁字段; 除 ``ALIASES`` 外取值与 Actor 列名同形."
+      },
       "ActorGender": {
         "type": "string",
         "enum": [
@@ -5854,6 +6344,21 @@
           "total"
         ],
         "title": "ActorListResponse"
+      },
+      "ActorLocksRequest": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ActorField"
+            },
+            "type": "array",
+            "title": "Fields",
+            "description": "锁定的字段集合; 空集解除全部锁定"
+          }
+        },
+        "type": "object",
+        "title": "ActorLocksRequest",
+        "description": "整体替换锁定字段集合."
       },
       "ActorResponse": {
         "properties": {
@@ -6025,6 +6530,14 @@
             "type": "object",
             "title": "Raw"
           },
+          "locked_fields": {
+            "items": {
+              "$ref": "#/components/schemas/ActorField"
+            },
+            "type": "array",
+            "title": "Locked Fields",
+            "default": []
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -6044,7 +6557,7 @@
           "name"
         ],
         "title": "ActorResponse",
-        "description": "详情填全量; 列表 (`GET /actors`) 只填卡片/表格字段, 简介/别名/标签/源字典/raw 为空."
+        "description": "详情填全量; 列表 (`GET /actors`) 只填卡片/表格字段, 其余 (简介/别名/标签/源字典/raw/锁) 为空."
       },
       "ActorScrapeRequest": {
         "properties": {
@@ -6060,6 +6573,53 @@
         },
         "type": "object",
         "title": "ActorScrapeRequest"
+      },
+      "ActorScrapeResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "actor_scrape",
+            "title": "Type",
+            "default": "actor_scrape"
+          },
+          "actor_id": {
+            "type": "integer",
+            "title": "Actor Id"
+          },
+          "field_sources": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Field Sources"
+          },
+          "failed_sites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failed Sites"
+          },
+          "image_count": {
+            "type": "integer",
+            "title": "Image Count"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/SiteOutcomeRecord"
+            },
+            "type": "array",
+            "title": "Outcomes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "actor_id",
+          "field_sources",
+          "failed_sites",
+          "image_count"
+        ],
+        "title": "ActorScrapeResult"
       },
       "ActorScrapeSubmission": {
         "properties": {
@@ -6099,12 +6659,13 @@
                 "minnano",
                 "javdb",
                 "wikipedia",
-                "theporndb"
+                "theporndb",
+                "avbase"
               ]
             },
             "type": "array",
             "title": "Profile Sites",
-            "description": "档案源顺序 (标量填空优先级); 仅演员档案站",
+            "description": "资料来源顺序 (单源字段填空优先级); 仅演员资料来源",
             "x-ordered": true
           },
           "image_sites": {
@@ -6116,7 +6677,7 @@
             },
             "type": "array",
             "title": "Image Sites",
-            "description": "头像源顺序 (优先于档案站附图); 仅演员头像站",
+            "description": "头像来源顺序 (优先于资料来源附图); 仅演员头像来源",
             "x-ordered": true
           },
           "download_images": {
@@ -6138,7 +6699,7 @@
         },
         "type": "object",
         "title": "ActorScrapingConfig",
-        "description": "档案站顺序填空, 头像站优先."
+        "description": "资料来源顺序填空, 头像来源优先."
       },
       "ActorSortField": {
         "type": "string",
@@ -6366,32 +6927,6 @@
         ],
         "title": "ActorUserTagsRequest"
       },
-      "AgentApproveRequest": {
-        "properties": {
-          "approval_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 64,
-            "minItems": 1,
-            "title": "Approval Ids"
-          },
-          "slow_timeout_ms": {
-            "type": "integer",
-            "maximum": 300000.0,
-            "minimum": 1000.0,
-            "title": "Slow Timeout Ms",
-            "default": 60000
-          }
-        },
-        "type": "object",
-        "required": [
-          "approval_ids"
-        ],
-        "title": "AgentApproveRequest",
-        "description": "一次可批多项; 服务端顺序执行后只开一轮模型 follow-up."
-      },
       "AgentCancelResponse": {
         "properties": {
           "cancelled": {
@@ -6500,34 +7035,6 @@
         "title": "AgentConfig",
         "description": "与 llm 翻译 section 分离: 凭据/模型/限速各自独立."
       },
-      "AgentMessageRequest": {
-        "properties": {
-          "content": {
-            "type": "string",
-            "maxLength": 32000,
-            "minLength": 1,
-            "title": "Content"
-          }
-        },
-        "type": "object",
-        "required": [
-          "content"
-        ],
-        "title": "AgentMessageRequest"
-      },
-      "AgentRejectRequest": {
-        "properties": {
-          "approval_id": {
-            "type": "string",
-            "title": "Approval Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "approval_id"
-        ],
-        "title": "AgentRejectRequest"
-      },
       "AgentSessionCreateRequest": {
         "properties": {
           "title": {
@@ -6610,6 +7117,35 @@
         ],
         "title": "AgentSessionStatus"
       },
+      "AgentSessionTitleRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "AgentSessionTitleRequest",
+        "description": "首条用户输入: 标题只依据它生成."
+      },
+      "AgentSessionTitleResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "AgentSessionTitleResponse"
+      },
       "AgentSessionUpdateRequest": {
         "properties": {
           "title": {
@@ -6662,8 +7198,53 @@
           },
           "events": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/UserMessageRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ReasoningDeltaRow"
+                },
+                {
+                  "$ref": "#/components/schemas/TextDeltaRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolCallRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolResultRow"
+                },
+                {
+                  "$ref": "#/components/schemas/RequestUsageRow"
+                },
+                {
+                  "$ref": "#/components/schemas/TurnUsageRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ApprovalsRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorRow"
+                },
+                {
+                  "$ref": "#/components/schemas/CancelledRow"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "approvals": "#/components/schemas/ApprovalsRow",
+                  "cancelled": "#/components/schemas/CancelledRow",
+                  "error": "#/components/schemas/ErrorRow",
+                  "reasoning_delta": "#/components/schemas/ReasoningDeltaRow",
+                  "request_usage": "#/components/schemas/RequestUsageRow",
+                  "text_delta": "#/components/schemas/TextDeltaRow",
+                  "tool_call": "#/components/schemas/ToolCallRow",
+                  "tool_result": "#/components/schemas/ToolResultRow",
+                  "turn_usage": "#/components/schemas/TurnUsageRow",
+                  "user_message": "#/components/schemas/UserMessageRow"
+                }
+              }
             },
             "type": "array",
             "title": "Events"
@@ -6694,6 +7275,45 @@
           "anthropic"
         ],
         "title": "ApiType"
+      },
+      "ApprovalsRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "approvals",
+            "title": "Type"
+          },
+          "interrupts": {
+            "items": {
+              "$ref": "#/components/schemas/Interrupt"
+            },
+            "type": "array",
+            "title": "Interrupts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "interrupts"
+        ],
+        "title": "ApprovalsRow",
+        "description": "未决审批快照. 每个回合结束发一条, **空列表表示已无未决**, 后者覆盖前者.\n\n原样携带 AG-UI 中断: 前端既用它渲染审批入口, 也把它交给 runtime 完成 `resume`."
       },
       "Body_install_plugin": {
         "properties": {
@@ -6726,6 +7346,48 @@
         "type": "object",
         "title": "Body_install_plugin"
       },
+      "BrowserBackendName": {
+        "type": "string",
+        "enum": [
+          "off",
+          "patchright",
+          "camoufox",
+          "solver"
+        ],
+        "title": "BrowserBackendName"
+      },
+      "BrowserConfig": {
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/BrowserBackendName",
+            "default": "off"
+          },
+          "timeout": {
+            "type": "integer",
+            "maximum": 120000.0,
+            "minimum": 5000.0,
+            "title": "Timeout",
+            "default": 30000
+          },
+          "solver_url": {
+            "type": "string",
+            "pattern": "^https?://.+",
+            "title": "Solver Url",
+            "default": "http://127.0.0.1:8191"
+          }
+        },
+        "type": "object",
+        "title": "BrowserConfig"
+      },
+      "BrowserMode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "auto",
+          "always"
+        ],
+        "title": "BrowserMode"
+      },
       "CacheKind": {
         "type": "string",
         "enum": [
@@ -6734,6 +7396,61 @@
         ],
         "title": "CacheKind",
         "description": "刮削可复用的缓存种类. use_cache 为其集合: 含某项 = 该缓存生效, 不含 = 强制刷新该项."
+      },
+      "CancelledRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "cancelled",
+            "title": "Type"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "CancelledRow",
+        "description": "回合被显式终止."
+      },
+      "CleanupResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "cleanup",
+            "title": "Type",
+            "default": "cleanup"
+          },
+          "files_removed": {
+            "type": "integer",
+            "title": "Files Removed"
+          },
+          "resources_removed": {
+            "type": "integer",
+            "title": "Resources Removed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files_removed",
+          "resources_removed"
+        ],
+        "title": "CleanupResult"
       },
       "CleanupSubmission": {
         "properties": {
@@ -7024,6 +7741,43 @@
         ],
         "title": "ContentType"
       },
+      "CropAvatarRequest": {
+        "properties": {
+          "left": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Left",
+            "description": "裁切框左边界 (含)"
+          },
+          "top": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Top",
+            "description": "裁切框上边界 (含)"
+          },
+          "right": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Right",
+            "description": "裁切框右边界 (不含)"
+          },
+          "bottom": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Bottom",
+            "description": "裁切框下边界 (不含)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "left",
+          "top",
+          "right",
+          "bottom"
+        ],
+        "title": "CropAvatarRequest",
+        "description": "从当前主图按像素框裁切头像 (相对 image_urls[0] 当前本地文件像素; 含就地超分后尺寸)."
+      },
       "CropPosterRequest": {
         "properties": {
           "left": {
@@ -7061,6 +7815,113 @@
         "title": "CropPosterRequest",
         "description": "从封面图按像素框裁切海报 (相对 thumb 当前本地文件像素; 含就地超分后尺寸)."
       },
+      "DeleteResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delete",
+            "title": "Type",
+            "default": "delete"
+          },
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted"
+          },
+          "changed": {
+            "type": "integer",
+            "title": "Changed"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "freed_bytes": {
+            "type": "integer",
+            "title": "Freed Bytes",
+            "default": 0
+          },
+          "hardlink_items": {
+            "type": "integer",
+            "title": "Hardlink Items",
+            "default": 0
+          },
+          "pruned_dirs": {
+            "type": "integer",
+            "title": "Pruned Dirs",
+            "default": 0
+          },
+          "excluded": {
+            "type": "integer",
+            "title": "Excluded",
+            "default": 0
+          },
+          "indexed": {
+            "type": "integer",
+            "title": "Indexed",
+            "default": 0
+          },
+          "reverify_rejected": {
+            "type": "integer",
+            "title": "Reverify Rejected",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "changed",
+          "failed"
+        ],
+        "title": "DeleteResult"
+      },
+      "DeleteSubmission": {
+        "properties": {
+          "library_id": {
+            "type": "integer",
+            "title": "Library Id",
+            "description": "清单所属 Library ID"
+          },
+          "inventory_id": {
+            "type": "string",
+            "title": "Inventory Id",
+            "description": "后端生成的清单标识; 不存在或已过期则失败"
+          },
+          "exclude": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exclude",
+            "description": "排除项: 库内为清单库根下的相对路径, 库外为绝对路径; 按路径分量匹配"
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Include",
+            "description": "在排除项内重新纳入的路径 (路径约定同 exclude); 与排除项互为祖先时按最深的一条判定, 同一路径同时命中两组时按纳入处理"
+          },
+          "prune_empty_dirs": {
+            "type": "boolean",
+            "title": "Prune Empty Dirs",
+            "description": "删除本次腾空的目录 (库根与 .amane_trash 除外)",
+            "default": true
+          },
+          "type": {
+            "type": "string",
+            "const": "delete",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "library_id",
+          "inventory_id",
+          "type"
+        ],
+        "title": "DeleteSubmission"
+      },
       "DesktopResponse": {
         "properties": {
           "version": {
@@ -7094,6 +7955,102 @@
         ],
         "title": "DownloadableResource",
         "description": "影片附属资源类型: 刮削写入 Resource, 整理时按库配置复制到库路径."
+      },
+      "ErrorRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "error",
+            "title": "Type"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "message"
+        ],
+        "title": "ErrorRow",
+        "description": "回合异常; 文案直接进助手气泡."
+      },
+      "FacetBatchAction": {
+        "type": "string",
+        "enum": [
+          "favorite",
+          "unfavorite"
+        ],
+        "title": "FacetBatchAction",
+        "description": "分类批量动作; 两个动作都是整体赋值且幂等.\n\n不设逐项取反 (toggle): 多选混合态下点「收藏」必须保持收藏, 取反会取消已收藏的条目. 枚举是\n动作信封的扩展位, 新增动作 (如批量删除) 时 ``FacetBatchResponse`` 的字段按动作解释."
+      },
+      "FacetBatchRequest": {
+        "properties": {
+          "facet_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Facet Ids",
+            "description": "分类 ID 列表"
+          },
+          "action": {
+            "$ref": "#/components/schemas/FacetBatchAction",
+            "description": "favorite 置为已收藏, unfavorite 置为未收藏; 两者均幂等"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facet_ids",
+          "action"
+        ],
+        "title": "FacetBatchRequest",
+        "description": "对一批分类执行同一个动作; 重复 id 去重, 使结果计数以去重后的条目数为准."
+      },
+      "FacetBatchResponse": {
+        "properties": {
+          "changed": {
+            "type": "integer",
+            "title": "Changed",
+            "description": "收藏位确实发生写入的分类数"
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged",
+            "description": "已处于目标取值的分类数"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing",
+            "description": "不存在的分类 id 数"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changed",
+          "unchanged",
+          "missing"
+        ],
+        "title": "FacetBatchResponse",
+        "description": "批量动作的结果计数, 字段按 action 解释; 两个已实现动作下三者之和等于去重后的条目数."
       },
       "FacetKind": {
         "type": "string",
@@ -7180,13 +8137,18 @@
           "count": {
             "type": "integer",
             "title": "Count"
+          },
+          "is_favorite": {
+            "type": "boolean",
+            "title": "Is Favorite"
           }
         },
         "type": "object",
         "required": [
           "id",
           "name",
-          "count"
+          "count",
+          "is_favorite"
         ],
         "title": "FacetResponse"
       },
@@ -7989,6 +8951,18 @@
         "title": "FilePhaseSummary",
         "description": "关联文件相位聚合: 任一文件具备即亮; definition 取最高档."
       },
+      "FootprintNoticeKind": {
+        "type": "string",
+        "enum": [
+          "missing",
+          "outside_root",
+          "work_dir_is_root",
+          "work_dir_multiple",
+          "template_error"
+        ],
+        "title": "FootprintNoticeKind",
+        "description": "未能纳入清单的项. 只给码与参数, 文案由面板按界面语言给出."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -8094,189 +9068,196 @@
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
+                  "use_proxy": true
+                },
+                "avbase": {
+                  "cookie": {},
+                  "official_routes": {},
+                  "rate_limit": 2.0,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "avsox": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "dahlia": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "dmm": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "faleno": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "fc2": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "fc2club": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "fc2ppvdb": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "freejavbt": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "getchu": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "gfriends": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "giga": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "iqqtv": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "jav321": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "javbus": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "javdb": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "javlibrary": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "kin8": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "local": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "mgstage": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "minnano": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "official": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "prestige": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "r18dev": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "theporndb": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "wikipedia": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 },
                 "xcity": {
                   "cookie": {},
                   "official_routes": {},
                   "rate_limit": 2.0,
-                  "use_browser": false,
+                  "use_browser": "auto",
                   "use_proxy": true
                 }
               }
@@ -8289,7 +9270,8 @@
                 "minnano",
                 "javdb",
                 "wikipedia",
-                "theporndb"
+                "theporndb",
+                "avbase"
               ],
               "image_sites": [
                 "gfriends"
@@ -8318,9 +9300,13 @@
             "$ref": "#/components/schemas/NetworkConfig",
             "default": {
               "timeout": 10.0,
-              "max_retries": 3,
+              "max_retries": 2,
               "max_clients": 50,
-              "browser_timeout": 15000,
+              "browser": {
+                "backend": "off",
+                "solver_url": "http://127.0.0.1:8191",
+                "timeout": 30000
+              },
               "chunked_threshold": 2097152,
               "chunk_size": 1048576,
               "concurrency": 10,
@@ -8425,6 +9411,339 @@
         "title": "HotSettings",
         "description": "运行时可更新, 持久化到 TOML. extra=forbid, 未知字段须校验失败."
       },
+      "Interrupt": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "toolCallId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolcallid"
+          },
+          "responseSchema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responseschema"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiresat"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "subagentRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subagentrunid"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "title": "Interrupt",
+        "description": "A pause carried inside ``RunFinishedEvent.outcome`` when the outcome is\n``RunFinishedInterruptOutcome``. The client resumes\nby addressing this interrupt in the resume array of the next RunAgentInput."
+      },
+      "InventoryEntryKind": {
+        "type": "string",
+        "enum": [
+          "file",
+          "dir",
+          "symlink"
+        ],
+        "title": "InventoryEntryKind"
+      },
+      "InventoryNodePage": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryNodeResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "entry_count": {
+            "type": "integer",
+            "title": "Entry Count"
+          },
+          "entry_bytes": {
+            "type": "integer",
+            "title": "Entry Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "entry_count",
+          "entry_bytes"
+        ],
+        "title": "InventoryNodePage",
+        "description": "一个目录的子节点切片. 面板只渲染 ``items``, 滚到底再按 ``offset`` 取下一页."
+      },
+      "InventoryNodeResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/InventoryEntryKind"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InventoryReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "hardlink": {
+            "type": "boolean",
+            "title": "Hardlink",
+            "default": false
+          },
+          "entry_count": {
+            "type": "integer",
+            "title": "Entry Count"
+          },
+          "entry_bytes": {
+            "type": "integer",
+            "title": "Entry Bytes"
+          },
+          "will_be_empty": {
+            "type": "boolean",
+            "title": "Will Be Empty",
+            "default": false
+          },
+          "noise": {
+            "type": "boolean",
+            "title": "Noise",
+            "default": false
+          },
+          "has_children": {
+            "type": "boolean",
+            "title": "Has Children",
+            "default": false
+          },
+          "children": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InventoryNodeResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "name",
+          "kind",
+          "entry_count",
+          "entry_bytes"
+        ],
+        "title": "InventoryNodeResponse",
+        "description": "树节点. ``path`` 库内为相对路径, 库外为绝对路径, 一律 `/` 分隔; 子节点按需再取."
+      },
+      "InventoryReason": {
+        "type": "string",
+        "enum": [
+          "blacklist",
+          "undersized",
+          "empty_dir",
+          "explicit",
+          "orphan"
+        ],
+        "title": "InventoryReason"
+      },
+      "InventorySummaryResponse": {
+        "properties": {
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          },
+          "inventory_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inventory Id"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "scope_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Path"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "dropped": {
+            "type": "integer",
+            "title": "Dropped",
+            "default": 0
+          },
+          "skipped_dirs": {
+            "type": "integer",
+            "title": "Skipped Dirs",
+            "default": 0
+          },
+          "skipped_files": {
+            "type": "integer",
+            "title": "Skipped Files",
+            "default": 0
+          },
+          "blocked_dirs": {
+            "type": "integer",
+            "title": "Blocked Dirs",
+            "default": 0
+          },
+          "scan_running": {
+            "type": "boolean",
+            "title": "Scan Running",
+            "default": false
+          },
+          "last_scan_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exists"
+        ],
+        "title": "InventorySummaryResponse",
+        "description": "面板入口: 状态与范围. ``exists`` 为假时其余字段无意义; 节点一律经分页接口另取."
+      },
+      "JsonValue": {},
       "LLMConfig": {
         "properties": {
           "enabled": {
@@ -9324,6 +10643,10 @@
             "type": "integer",
             "title": "Id"
           },
+          "library_id": {
+            "type": "integer",
+            "title": "Library Id"
+          },
           "path": {
             "type": "string",
             "title": "Path"
@@ -9454,6 +10777,7 @@
         "type": "object",
         "required": [
           "id",
+          "library_id",
           "path",
           "status",
           "content_type"
@@ -9828,6 +11152,21 @@
           "total"
         ],
         "title": "MetadataListResponse"
+      },
+      "MetadataLocksRequest": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataField"
+            },
+            "type": "array",
+            "title": "Fields",
+            "description": "锁定的字段集合; 空集解除全部锁定"
+          }
+        },
+        "type": "object",
+        "title": "MetadataLocksRequest",
+        "description": "整体替换锁定字段集合."
       },
       "MetadataPartial": {
         "properties": {
@@ -10293,6 +11632,14 @@
             "title": "Raw",
             "default": {}
           },
+          "locked_fields": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataField"
+            },
+            "type": "array",
+            "title": "Locked Fields",
+            "default": []
+          },
           "file_count": {
             "type": "integer",
             "title": "File Count",
@@ -10438,7 +11785,7 @@
             "maximum": 10.0,
             "minimum": 0.0,
             "title": "Max Retries",
-            "default": 3
+            "default": 2
           },
           "max_clients": {
             "type": "integer",
@@ -10448,13 +11795,8 @@
             "default": 50,
             "x-hidden": true
           },
-          "browser_timeout": {
-            "type": "integer",
-            "maximum": 120000.0,
-            "minimum": 5000.0,
-            "title": "Browser Timeout",
-            "default": 15000,
-            "x-hidden": true
+          "browser": {
+            "$ref": "#/components/schemas/BrowserConfig"
           },
           "chunked_threshold": {
             "type": "integer",
@@ -10539,6 +11881,85 @@
         "title": "OptionalPathTemplateDefaults",
         "description": "附属模板缺省 (Library 对应列为 None 时 ORGANIZE 使用)."
       },
+      "OrganizeConflict": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/OrganizeConflictReason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "target",
+          "reason"
+        ],
+        "title": "OrganizeConflict",
+        "description": "一条未落盘的整理项: 源路径 + 被占用的目标路径."
+      },
+      "OrganizeConflictReason": {
+        "type": "string",
+        "enum": [
+          "target_exists",
+          "subtitle_target_exists"
+        ],
+        "title": "OrganizeConflictReason",
+        "description": "整理未处理的原因."
+      },
+      "OrganizeResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "organize",
+            "title": "Type",
+            "default": "organize"
+          },
+          "organized": {
+            "type": "integer",
+            "title": "Organized"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "conflicted": {
+            "type": "integer",
+            "title": "Conflicted"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "pruned_dirs": {
+            "type": "integer",
+            "title": "Pruned Dirs"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/OrganizeConflict"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organized",
+          "skipped",
+          "conflicted",
+          "failed",
+          "pruned_dirs",
+          "conflicts"
+        ],
+        "title": "OrganizeResult"
+      },
       "OrganizeSubmission": {
         "properties": {
           "library_id": {
@@ -10596,6 +12017,12 @@
             ],
             "title": "Media File Ids",
             "description": "勾选快照; 与 path 不能同时指定. None 表示 path 范围内的全部索引"
+          },
+          "prune_empty_dirs": {
+            "type": "boolean",
+            "title": "Prune Empty Dirs",
+            "description": "移动后删除本次腾空的目录 (库根与 .amane_trash 除外); 复制 / 硬链接 / 符号链接方式不移走源文件, 该开关无效",
+            "default": true
           },
           "type": {
             "type": "string",
@@ -11024,7 +12451,37 @@
         },
         "type": "object",
         "title": "R18Config",
-        "description": "放 Hot: 修改 dsn 经 AppRuntime.rebuild() 重建只读引擎. 未配置 dsn 时整个数据源禁用.\n定时导入不在此节, 须经 Schedule API 创建 r18_import."
+        "description": "放 Hot: 修改 dsn 经 AppRuntime.apply_rebuild() 重建只读引擎. 未配置 dsn 时整个数据源禁用.\n定时导入不在此节, 须经 Schedule API 创建 r18_import."
+      },
+      "R18ImportResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "r18_import",
+            "title": "Type",
+            "default": "r18_import"
+          },
+          "imported": {
+            "type": "boolean",
+            "title": "Imported"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imported"
+        ],
+        "title": "R18ImportResult"
       },
       "R18ImportSubmission": {
         "properties": {
@@ -11044,6 +12501,76 @@
           "type"
         ],
         "title": "R18ImportSubmission"
+      },
+      "ReasoningDeltaRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "reasoning_delta",
+            "title": "Type"
+          },
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "block_id",
+          "text"
+        ],
+        "title": "ReasoningDeltaRow",
+        "description": "思考增量; `block_id` 取自协议的消息 id, 前端据此归块而不靠相邻关系."
+      },
+      "RefreshResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "refresh",
+            "title": "Type",
+            "default": "refresh"
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          },
+          "removed": {
+            "type": "integer",
+            "title": "Removed"
+          },
+          "scrape": {
+            "type": "integer",
+            "title": "Scrape"
+          }
+        },
+        "type": "object",
+        "required": [
+          "added",
+          "removed",
+          "scrape"
+        ],
+        "title": "RefreshResult"
       },
       "RefreshSubmission": {
         "properties": {
@@ -11177,6 +12704,110 @@
         ],
         "title": "ReleaseResponse"
       },
+      "RequestTokenUsage": {
+        "properties": {
+          "input": {
+            "type": "integer",
+            "title": "Input"
+          },
+          "cache_read": {
+            "type": "integer",
+            "title": "Cache Read"
+          },
+          "cache_write": {
+            "type": "integer",
+            "title": "Cache Write"
+          },
+          "output": {
+            "type": "integer",
+            "title": "Output"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input",
+          "cache_read",
+          "cache_write",
+          "output"
+        ],
+        "title": "RequestTokenUsage",
+        "description": "单次模型请求的用量. `duration_ms` 是请求发出到响应收到的本地时间差, 不含工具执行."
+      },
+      "RequestUsageRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "request_usage",
+            "title": "Type"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/RequestTokenUsage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "usage"
+        ],
+        "title": "RequestUsageRow",
+        "description": "单次模型请求的用量; 该次响应一到即写行, 到达顺序即它在回合里的位置 (这次响应的正文与工具调用之后)."
+      },
+      "RescrapeResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "rescrape",
+            "title": "Type",
+            "default": "rescrape"
+          },
+          "submitted": {
+            "type": "integer",
+            "title": "Submitted"
+          },
+          "metadata": {
+            "type": "integer",
+            "title": "Metadata",
+            "default": 0
+          },
+          "actors": {
+            "type": "integer",
+            "title": "Actors",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "submitted"
+        ],
+        "title": "RescrapeResult"
+      },
       "RescrapeSubmission": {
         "properties": {
           "limit": {
@@ -11244,6 +12875,89 @@
         ],
         "title": "RoutineType"
       },
+      "SavedQueryBatchAction": {
+        "type": "string",
+        "enum": [
+          "delete",
+          "persist"
+        ],
+        "title": "SavedQueryBatchAction"
+      },
+      "SavedQueryBatchRequest": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/SavedQueryBatchAction"
+          },
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Ids",
+            "description": "查询预设 ID 列表"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "ids"
+        ],
+        "title": "SavedQueryBatchRequest"
+      },
+      "SavedQueryBatchResponse": {
+        "properties": {
+          "affected": {
+            "type": "integer",
+            "title": "Affected",
+            "description": "成功处理的数量; delete 为实际删除的数量, persist 为找到并置为已保留的数量 (幂等, 已保留的也计入)"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing",
+            "description": "不存在的 id 数量"
+          }
+        },
+        "type": "object",
+        "required": [
+          "affected",
+          "missing"
+        ],
+        "title": "SavedQueryBatchResponse"
+      },
+      "SavedQueryCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "sql": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Sql"
+          },
+          "entity": {
+            "$ref": "#/components/schemas/SavedQueryEntity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "sql",
+          "entity"
+        ],
+        "title": "SavedQueryCreateRequest",
+        "description": "手动创建: 名称 / 描述 / SQL 与类型; 归属与保留态由服务端固定 (无会话, 已保留)."
+      },
       "SavedQueryEntity": {
         "type": "string",
         "enum": [
@@ -11279,6 +12993,10 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
           },
           "sql": {
             "type": "string",
@@ -11317,6 +13035,7 @@
         "required": [
           "id",
           "name",
+          "description",
           "sql",
           "entity",
           "session_id",
@@ -11386,7 +13105,112 @@
             ],
             "title": "Name"
           },
-          "persisted": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "sql": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sql"
+          }
+        },
+        "type": "object",
+        "title": "SavedQueryUpdateRequest",
+        "description": "仅名称 / 描述 / SQL 三项, 未知键被忽略; 显式 null 一律 422, 省略键才是「不更新」.\n\n字段不从 DB 模型派生: ``create_partial_model`` 会丢弃 ``StringConstraints``;\n约束别名与创建请求共用."
+      },
+      "ScanInvalidResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scan_invalid",
+            "title": "Type",
+            "default": "scan_invalid"
+          },
+          "inventory_id": {
+            "type": "string",
+            "title": "Inventory Id"
+          },
+          "entries": {
+            "type": "integer",
+            "title": "Entries"
+          },
+          "dirs": {
+            "type": "integer",
+            "title": "Dirs"
+          },
+          "scope_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Path"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "skipped_dirs": {
+            "type": "integer",
+            "title": "Skipped Dirs",
+            "default": 0
+          },
+          "skipped_files": {
+            "type": "integer",
+            "title": "Skipped Files",
+            "default": 0
+          },
+          "blocked_dirs": {
+            "type": "integer",
+            "title": "Blocked Dirs",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "inventory_id",
+          "entries",
+          "dirs"
+        ],
+        "title": "ScanInvalidResult"
+      },
+      "ScanInvalidSubmission": {
+        "properties": {
+          "library_id": {
+            "type": "integer",
+            "title": "Library Id",
+            "description": "所属 Library ID; 扫描/整理在该媒体库下进行",
+            "x-widget": "LibraryPicker"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).",
+            "default": "",
+            "x-path-type": "directory",
+            "x-widget": "PathPicker"
+          },
+          "recursive": {
             "anyOf": [
               {
                 "type": "boolean"
@@ -11395,11 +13219,36 @@
                 "type": "null"
               }
             ],
-            "title": "Persisted"
+            "title": "Recursive",
+            "description": "覆盖 Library 的 recursive; None 沿用库设置"
+          },
+          "patterns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patterns",
+            "description": "覆盖 Library 的 patterns; None 沿用库设置"
+          },
+          "type": {
+            "type": "string",
+            "const": "scan_invalid",
+            "title": "Type"
           }
         },
         "type": "object",
-        "title": "SavedQueryUpdateRequest"
+        "required": [
+          "library_id",
+          "type"
+        ],
+        "title": "ScanInvalidSubmission"
       },
       "ScanMode": {
         "type": "string",
@@ -11614,6 +13463,54 @@
         "type": "object",
         "title": "ScheduleUpdateRequest"
       },
+      "ScrapeResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scrape",
+            "title": "Type",
+            "default": "scrape"
+          },
+          "metadata_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Id"
+          },
+          "field_sources": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Field Sources"
+          },
+          "failed_sites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failed Sites"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/SiteOutcomeRecord"
+            },
+            "type": "array",
+            "title": "Outcomes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_sources",
+          "failed_sites"
+        ],
+        "title": "ScrapeResult"
+      },
       "ScrapeSubmission": {
         "properties": {
           "number": {
@@ -11725,6 +13622,7 @@
                 "type": "string",
                 "enum": [
                   "airav",
+                  "avbase",
                   "avsox",
                   "dahlia",
                   "dmm",
@@ -11766,6 +13664,7 @@
                 "type": "string",
                 "enum": [
                   "airav",
+                  "avbase",
                   "avsox",
                   "dahlia",
                   "dmm",
@@ -11807,6 +13706,7 @@
                 "type": "string",
                 "enum": [
                   "airav",
+                  "avbase",
                   "avsox",
                   "dahlia",
                   "dmm",
@@ -11864,6 +13764,120 @@
         "type": "object",
         "title": "ScrapingConfig"
       },
+      "SelectionNoticeResponse": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/FootprintNoticeKind"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "SelectionNoticeResponse",
+        "description": "展开时未能纳入清单的项. 面板按 ``kind`` 用界面语言给出文案, 因此服务端不带文案."
+      },
+      "SelectionRequest": {
+        "properties": {
+          "media_file_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Media File Ids",
+            "description": "选中的媒体文件 ID; 必须属于该库"
+          },
+          "include_work_dir": {
+            "type": "boolean",
+            "title": "Include Work Dir",
+            "description": "连同作品文件夹一起删除; 仅在该目录只含这一条媒体索引且不是库根时提供",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "media_file_ids"
+        ],
+        "title": "SelectionRequest",
+        "description": "由选中的媒体文件展开显式来源清单."
+      },
+      "SelectionSummaryResponse": {
+        "properties": {
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          },
+          "inventory_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inventory Id"
+          },
+          "notices": {
+            "items": {
+              "$ref": "#/components/schemas/SelectionNoticeResponse"
+            },
+            "type": "array",
+            "title": "Notices",
+            "default": []
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "dropped": {
+            "type": "integer",
+            "title": "Dropped",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "exists"
+        ],
+        "title": "SelectionSummaryResponse",
+        "description": "展开结果. 条目自库根展开 (库外产物挂在根下), 面板按分页接口读取."
+      },
       "SiteConfig": {
         "properties": {
           "base_url": {
@@ -11882,10 +13896,30 @@
             "title": "Use Proxy",
             "default": true
           },
+          "proxy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy"
+          },
           "use_browser": {
-            "type": "boolean",
-            "title": "Use Browser",
-            "default": false,
+            "$ref": "#/components/schemas/BrowserMode",
+            "default": "auto"
+          },
+          "browser_backend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrowserBackendName"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "x-hidden": true
           },
           "cookie": {
@@ -11942,6 +13976,7 @@
         "type": "string",
         "enum": [
           "airav",
+          "avbase",
           "avsox",
           "dahlia",
           "dmm",
@@ -12021,6 +14056,11 @@
               }
             ],
             "title": "Detail"
+          },
+          "detail_truncated": {
+            "type": "boolean",
+            "title": "Detail Truncated",
+            "default": false
           }
         },
         "type": "object",
@@ -12041,7 +14081,7 @@
           "no_url"
         ],
         "title": "SkipReason",
-        "description": "``SKIPPED`` 的原因.\n\n与 ``FailureReason`` 分开: 这一档不是失败, 文案也不进任务报告. 界面按它本地化, 因此每种原因\n都要能独立读懂, 不依赖 ``detail``."
+        "description": "``SKIPPED`` 的原因.\n\n与 ``FailureReason`` 分开: 这一档不是失败, 文案也不进站点明细. 界面按它本地化, 因此每种原因\n都要能独立读懂, 不依赖 ``detail``."
       },
       "SortOrder": {
         "type": "string",
@@ -12119,10 +14159,14 @@
             "title": "Urls",
             "default": []
           },
-          "multi_language": {
-            "type": "boolean",
-            "title": "Multi Language",
-            "default": false
+          "traits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Traits",
+            "default": []
           },
           "rate_limit": {
             "anyOf": [
@@ -12309,28 +14353,7 @@
         "type": "object",
         "title": "TaskBatchResponse"
       },
-      "TaskChildListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/TaskChildResponse"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "total"
-        ],
-        "title": "TaskChildListResponse"
-      },
-      "TaskChildResponse": {
+      "TaskChildItem": {
         "properties": {
           "id": {
             "type": "integer",
@@ -12352,23 +14375,6 @@
               }
             ],
             "title": "Title"
-          },
-          "payload": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Payload"
-          },
-          "result": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Result"
           },
           "error": {
             "anyOf": [
@@ -12469,7 +14475,28 @@
           "status",
           "link_key"
         ],
-        "title": "TaskChildResponse"
+        "title": "TaskChildItem"
+      },
+      "TaskChildListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskChildItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TaskChildListResponse"
       },
       "TaskChildStatusCounts": {
         "properties": {
@@ -12498,75 +14525,7 @@
         "title": "TaskChildStatusCounts",
         "description": "直接后继按状态计数. 四字段之和等于 child_count."
       },
-      "TaskListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/TaskResponse"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "total"
-        ],
-        "title": "TaskListResponse"
-      },
-      "TaskReport": {
-        "properties": {
-          "headline": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Headline"
-          },
-          "metadata_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata Id"
-          },
-          "actor_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor Id"
-          },
-          "outcomes": {
-            "items": {
-              "$ref": "#/components/schemas/SiteOutcomeRecord"
-            },
-            "type": "array",
-            "title": "Outcomes"
-          }
-        },
-        "type": "object",
-        "title": "TaskReport",
-        "description": "outcomes 与 summary.json 同一结构."
-      },
-      "TaskResponse": {
+      "TaskListItem": {
         "properties": {
           "id": {
             "type": "integer",
@@ -12588,23 +14547,6 @@
               }
             ],
             "title": "Title"
-          },
-          "payload": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Payload"
-          },
-          "result": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Result"
           },
           "error": {
             "anyOf": [
@@ -12700,7 +14642,211 @@
           "type",
           "status"
         ],
-        "title": "TaskResponse"
+        "title": "TaskListItem",
+        "description": "列表与树: 不含 payload 与 result 等重字段, 展开时再取详情."
+      },
+      "TaskListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TaskListResponse"
+      },
+      "TaskResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "log_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log File"
+          },
+          "retries": {
+            "type": "integer",
+            "title": "Retries",
+            "default": 0
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "default": 0
+          },
+          "root_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Task Id"
+          },
+          "child_count": {
+            "type": "integer",
+            "title": "Child Count",
+            "default": 0
+          },
+          "child_status": {
+            "$ref": "#/components/schemas/TaskChildStatusCounts"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OrganizeResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ScanInvalidResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DeleteResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ScrapeResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CleanupResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UpscaleResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/R18ImportResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActorScrapeResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RescrapeResult"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "type",
+                  "mapping": {
+                    "actor_scrape": "#/components/schemas/ActorScrapeResult",
+                    "cleanup": "#/components/schemas/CleanupResult",
+                    "delete": "#/components/schemas/DeleteResult",
+                    "organize": "#/components/schemas/OrganizeResult",
+                    "r18_import": "#/components/schemas/R18ImportResult",
+                    "refresh": "#/components/schemas/RefreshResult",
+                    "rescrape": "#/components/schemas/RescrapeResult",
+                    "scan_invalid": "#/components/schemas/ScanInvalidResult",
+                    "scrape": "#/components/schemas/ScrapeResult",
+                    "upscale": "#/components/schemas/UpscaleResult"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "status"
+        ],
+        "title": "TaskResponse",
+        "description": "详情: 额外带 payload 与按类型的 result."
       },
       "TaskSortField": {
         "type": "string",
@@ -12729,13 +14875,14 @@
         "enum": [
           "scrape",
           "organize",
-          "trash",
           "refresh",
           "cleanup",
           "upscale",
           "r18_import",
           "actor_scrape",
-          "rescrape"
+          "rescrape",
+          "scan_invalid",
+          "delete"
         ],
         "title": "TaskType"
       },
@@ -12751,6 +14898,132 @@
           "paused"
         ],
         "title": "TaskWorkerResponse"
+      },
+      "TextDeltaRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "text_delta",
+            "title": "Type"
+          },
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "block_id",
+          "text"
+        ],
+        "title": "TextDeltaRow",
+        "description": "正文增量; 归块同 `ReasoningDeltaRow`."
+      },
+      "ToolCallRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "tool_call",
+            "title": "Type"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "args": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "tool_call_id",
+          "name",
+          "args"
+        ],
+        "title": "ToolCallRow",
+        "description": "工具调用成形 (协议按增量传参, 这里已解析). 卡片的名字与参数由此行给出.\n\n`args` 在生成的 TS 类型里退化为 `unknown` (pydantic 的 `JsonValue` 无法表达到 schema),\n类型层面的保证到后端为止."
+      },
+      "ToolResultRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "tool_result",
+            "title": "Type"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "result": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "tool_call_id",
+          "result"
+        ],
+        "title": "ToolResultRow",
+        "description": "工具回执. 名字与参数在同 id 的 `ToolCallRow`, 故本行只带结果 (续批的回合不会再报调用名)."
       },
       "TranslateRequest": {
         "properties": {
@@ -12823,61 +15096,154 @@
         "type": "object",
         "title": "TranslateResponse"
       },
-      "TrashSubmission": {
+      "TrashSummaryResponse": {
         "properties": {
-          "library_id": {
-            "type": "integer",
-            "title": "Library Id",
-            "description": "所属 Library ID; 扫描/整理在该媒体库下进行",
-            "x-widget": "LibraryPicker"
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          },
+          "inventory_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inventory Id"
           },
           "path": {
-            "type": "string",
-            "title": "Path",
-            "description": "要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).",
-            "default": "",
-            "x-path-type": "directory",
-            "x-widget": "PathPicker"
-          },
-          "recursive": {
             "anyOf": [
               {
-                "type": "boolean"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Recursive",
-            "description": "覆盖 Library 的 recursive; None 沿用库设置"
+            "title": "Path"
           },
-          "patterns": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Patterns",
-            "description": "覆盖 Library 的 patterns; None 沿用库设置"
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
           },
-          "type": {
-            "type": "string",
-            "const": "trash",
-            "title": "Type"
+          "dropped": {
+            "type": "integer",
+            "title": "Dropped",
+            "default": 0
           }
         },
         "type": "object",
         "required": [
-          "library_id",
-          "type"
+          "exists"
         ],
-        "title": "TrashSubmission"
+        "title": "TrashSummaryResponse",
+        "description": "回收目录历史内容: 展开即产出清单, 面板套用同一套审查与删除."
+      },
+      "TurnTokenUsage": {
+        "properties": {
+          "input": {
+            "type": "integer",
+            "title": "Input"
+          },
+          "cache_read": {
+            "type": "integer",
+            "title": "Cache Read"
+          },
+          "cache_write": {
+            "type": "integer",
+            "title": "Cache Write"
+          },
+          "output": {
+            "type": "integer",
+            "title": "Output"
+          },
+          "requests": {
+            "type": "integer",
+            "title": "Requests"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input",
+          "cache_read",
+          "cache_write",
+          "output",
+          "requests"
+        ],
+        "title": "TurnTokenUsage",
+        "description": "`input` 是非缓存输入 (总量减去 cache_read/cache_write). pydantic-ai 的 `input_tokens` 含缓存, 此处拆开.\n\n字段不给默认值: 回放行里的用量总是全字段, 前端因此可以直接参与算术."
+      },
+      "TurnUsageRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "turn_usage",
+            "title": "Type"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/TurnTokenUsage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "usage"
+        ],
+        "title": "TurnUsageRow",
+        "description": "回合收尾: 聚合用量归属当前助手消息, 同时标志本轮结束.\n\n正文不在此行重复: 适配器对每段正文都发 `TEXT_MESSAGE_CONTENT`, 故正文必然已由\n`TextDeltaRow` 落盘, 无须回退到整段文本."
+      },
+      "UpscaleResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upscale",
+            "title": "Type",
+            "default": "upscale"
+          },
+          "scanned": {
+            "type": "integer",
+            "title": "Scanned"
+          },
+          "upscaled": {
+            "type": "integer",
+            "title": "Upscaled"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scanned",
+          "upscaled",
+          "skipped",
+          "failed"
+        ],
+        "title": "UpscaleResult"
       },
       "UpscaleSubmission": {
         "properties": {
@@ -12919,6 +15285,42 @@
           "type"
         ],
         "title": "UpscaleSubmission"
+      },
+      "UserMessageRow": {
+        "properties": {
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "type": {
+            "type": "string",
+            "const": "user_message",
+            "title": "Type"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "UserMessageRow",
+        "description": "用户输入. 批准 / 拒绝只以 tool return 进模型上下文, 不产生此行的附加说明."
       },
       "UserTagLinksResponse": {
         "properties": {
@@ -13146,7 +15548,7 @@
           "definition"
         ],
         "title": "WatermarkKind",
-        "description": "整理落盘封面角标类别. 清晰度共用 definition, 不论 4K/1080p."
+        "description": "整理落盘封面角标类别. 分辨率共用 definition, 不论 4K/1080p."
       },
       "WorkerConfig": {
         "properties": {

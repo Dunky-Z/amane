@@ -19,9 +19,13 @@ import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertCircle,
+  IconCheck,
   IconCrop,
   IconExternalLink,
+  IconFolders,
   IconGitMerge,
+  IconLock,
+  IconLockOpen,
   IconPencil,
   IconPhotoOff,
   IconPlayerPlay,
@@ -46,13 +50,15 @@ import {
   listFacetsQueryKey,
   listMetadataQueryKey,
   listPlaybackSourcesOptions,
+  setMetadataLocksMutation,
   submitTaskMutation,
   updateMetadataMutation,
 } from "@/client/@tanstack/react-query.gen";
 import { getMetadataSchema, translateText } from "@/client/sdk.gen";
-import type { MetadataResponse, TranslateRequest } from "@/client/types.gen";
+import type { MetadataField, MetadataResponse, TranslateRequest } from "@/client/types.gen";
 import { confirmMetadataDelete } from "@/components/media/delete-metadata-dialog";
 import { FacetBadge } from "@/components/media/facet-badge";
+import { LockChip, LockToggle, type LockProps } from "@/components/media/field-lock";
 import { UserTagActions } from "@/components/media/user-tag-add";
 import { FanartLightbox, FanartStrip } from "@/components/media/fanart-lightbox";
 import { FilePhaseBadges, FilePhaseOverlay } from "@/components/media/file-phase-badges";
@@ -62,6 +68,7 @@ import { type JSONSchemaObject, resolveSchema } from "@/components/schema-form/s
 import { SchemaForm } from "@/components/schema-form/schema-form";
 import { extractErrorMessage } from "@/lib/api-error";
 import { USER_TAG_FACET_LIST } from "@/lib/facets";
+import { FIELD_LABEL_KEY, LOCKABLE_FIELDS } from "@/lib/media/metadata-fields";
 import { proxyImageUrl } from "@/lib/utils";
 import { ProxyImage } from "@/components/media/proxy-image";
 import { CommentSection } from "@/components/media/comment-section";
@@ -101,12 +108,23 @@ function formatRuntime(minutes?: number | null): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function FieldBlock({ label, children }: { label: string; children: ReactNode }) {
+function FieldBlock({
+  label,
+  children,
+  lock,
+}: {
+  label: string;
+  children: ReactNode;
+  lock?: LockProps<MetadataField>;
+}) {
   return (
     <div>
-      <Text size="xs" c="dimmed">
-        {label}
-      </Text>
+      <Group gap={4} wrap="nowrap" align="center">
+        <Text size="xs" c="dimmed">
+          {label}
+        </Text>
+        {lock && <LockToggle {...lock} />}
+      </Group>
       <div>{children}</div>
     </div>
   );
@@ -114,7 +132,7 @@ function FieldBlock({ label, children }: { label: string; children: ReactNode })
 
 function TitleDetailPage() {
   const { metadataId } = Route.useParams();
-  const { t } = useTranslation(["metadata", "common"]);
+  const { t } = useTranslation(["metadata", "library", "common"]);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
@@ -268,6 +286,52 @@ function TitleDetailPage() {
   const ensureTagsMutation = useMutation(createUserTagsMutation());
   const applyTagsMutation = useMutation(batchMetadataUserTagsMutation());
 
+  const [pendingLock, setPendingLock] = useState<MetadataField | null>(null);
+  const [lockTarget, setLockTarget] = useState<{ id: number; fields: MetadataField[] } | null>(
+    null,
+  );
+  // 锁写入串行化: 在途点击合并为最后目标, 结算后补发.
+  const queuedLocksRef = useRef<{ id: number; fields: MetadataField[] } | null>(null);
+  const lockMutation = useMutation({
+    ...setMetadataLocksMutation(),
+    onSuccess: async (_data, variables) => {
+      // 失效按本次请求的条目; 等重取完成再撤销乐观显示, 避免图标回退翻转.
+      await queryClient.invalidateQueries({
+        queryKey: getMetadataQueryKey({ path: { metadata_id: variables.path.metadata_id } }),
+      });
+    },
+    onError: (err) => {
+      queuedLocksRef.current = null;
+      notifications.show({
+        message: extractErrorMessage(err, t("common:toast.operationFailed")),
+        color: "red",
+      });
+    },
+    onSettled: () => {
+      const queued = queuedLocksRef.current;
+      queuedLocksRef.current = null;
+      if (queued) {
+        // 条目已切换时按原条目补发.
+        lockMutation.mutate({ path: { metadata_id: queued.id }, body: { fields: queued.fields } });
+        return;
+      }
+      setPendingLock(null);
+      setLockTarget(null);
+    },
+  });
+  const serverLockedFields = useMemo(
+    () => new Set<MetadataField>(data?.metadata.locked_fields ?? []),
+    [data?.metadata.locked_fields],
+  );
+  // 乐观显示目标集合; 在途状态不扩散到其它锁控件.
+  const lockedFields = useMemo(
+    () =>
+      lockTarget && lockTarget.id === id
+        ? new Set<MetadataField>(lockTarget.fields)
+        : serverLockedFields,
+    [lockTarget, id, serverLockedFields],
+  );
+
   async function handleAddTags(selection: { tagIds: number[]; createNames: string[] }) {
     const names = [
       ...new Set(
@@ -348,6 +412,38 @@ function TitleDetailPage() {
   const coverFailed = Boolean((thumbSrc || posterSrc) && !coverUrl);
   const hasExtrafanart = item.extrafanart && item.extrafanart.length > 0;
   const runtime = formatRuntime(item.runtime);
+  const allLocked = LOCKABLE_FIELDS.every((field) => lockedFields.has(field));
+
+  function applyLocks(fields: readonly MetadataField[], pending: MetadataField | null = null) {
+    const target = [...fields];
+    setPendingLock(pending);
+    setLockTarget({ id, fields: target });
+    if (lockMutation.isPending) {
+      queuedLocksRef.current = { id, fields: target };
+      return;
+    }
+    lockMutation.mutate({ path: { metadata_id: id }, body: { fields: target } });
+  }
+
+  function toggleLock(field: MetadataField) {
+    const next = new Set(lockedFields);
+    if (next.has(field)) {
+      next.delete(field);
+    } else {
+      next.add(field);
+    }
+    applyLocks(
+      LOCKABLE_FIELDS.filter((candidate) => next.has(candidate)),
+      field,
+    );
+  }
+
+  const lockProps = (field: MetadataField): LockProps<MetadataField> => ({
+    field,
+    locked: lockedFields.has(field),
+    busy: pendingLock === field,
+    onToggleLock: toggleLock,
+  });
 
   function handleCoverError() {
     if (coverSrc && coverSrc === thumbSrc) {
@@ -529,6 +625,9 @@ function TitleDetailPage() {
                 </Button>
               </Box>
             </Tooltip>
+            <LockChip label={t("detail.fields.thumb")} {...lockProps("thumb_urls")} />
+            <LockChip label={t("detail.fields.poster")} {...lockProps("poster_urls")} />
+            <LockChip label={t("detail.fields.trailer")} {...lockProps("trailer_urls")} />
           </Group>
         </Stack>
 
@@ -537,37 +636,42 @@ function TitleDetailPage() {
             <Title order={2} ff="monospace">
               {item.number}
             </Title>
-            {item.title && <Text c="dimmed">{item.title}</Text>}
+            {item.title && (
+              <Group gap={4} align="center" wrap="nowrap">
+                <Text c="dimmed">{item.title}</Text>
+                <LockToggle {...lockProps("title")} />
+              </Group>
+            )}
           </div>
 
           <Group gap="lg" wrap="wrap">
             {item.studio && (
-              <FieldBlock label={t("detail.fields.studio")}>
+              <FieldBlock label={t("detail.fields.studio")} lock={lockProps("studio")}>
                 <FacetBadge kind="studio" id={data.studio_id} name={item.studio} />
               </FieldBlock>
             )}
             {item.publisher && (
-              <FieldBlock label={t("detail.fields.publisher")}>
+              <FieldBlock label={t("detail.fields.publisher")} lock={lockProps("publisher")}>
                 <FacetBadge kind="publisher" id={data.publisher_id} name={item.publisher} />
               </FieldBlock>
             )}
             {item.series && (
-              <FieldBlock label={t("detail.fields.series")}>
+              <FieldBlock label={t("detail.fields.series")} lock={lockProps("series")}>
                 <FacetBadge kind="series" id={data.series_id} name={item.series} />
               </FieldBlock>
             )}
             {item.release && (
-              <FieldBlock label={t("detail.fields.release")}>
+              <FieldBlock label={t("detail.fields.release")} lock={lockProps("release")}>
                 <Text size="sm">{item.release}</Text>
               </FieldBlock>
             )}
             {runtime && (
-              <FieldBlock label={t("detail.fields.runtime")}>
+              <FieldBlock label={t("detail.fields.runtime")} lock={lockProps("runtime")}>
                 <Text size="sm">{runtime}</Text>
               </FieldBlock>
             )}
             {item.score != null && (
-              <FieldBlock label={t("detail.fields.score")}>
+              <FieldBlock label={t("detail.fields.score")} lock={lockProps("score")}>
                 <Badge color="yellow" variant="light" leftSection={<IconStar size={12} />}>
                   {item.score.toFixed(1)}
                 </Badge>
@@ -576,7 +680,7 @@ function TitleDetailPage() {
           </Group>
 
           {item.directors && item.directors.length > 0 && (
-            <FieldBlock label={t("detail.fields.directors")}>
+            <FieldBlock label={t("detail.fields.directors")} lock={lockProps("directors")}>
               <Group gap={6}>
                 {item.directors.map((d) => (
                   <FacetBadge key={d} kind="director" id={data.director_ids?.[d]} name={d} />
@@ -586,7 +690,7 @@ function TitleDetailPage() {
           )}
 
           {item.actors && item.actors.length > 0 && (
-            <FieldBlock label={t("detail.fields.actors")}>
+            <FieldBlock label={t("detail.fields.actors")} lock={lockProps("actors")}>
               <Group gap={6}>
                 {item.actors.map((a) => (
                   <FacetBadge
@@ -602,7 +706,7 @@ function TitleDetailPage() {
           )}
 
           {item.tags && item.tags.length > 0 && (
-            <FieldBlock label={t("detail.fields.tags")}>
+            <FieldBlock label={t("detail.fields.tags")} lock={lockProps("tags")}>
               <Group gap={6}>
                 {item.tags.map((tg) => (
                   <FacetBadge key={tg} kind="tag" id={data.tag_ids?.[tg]} name={tg} />
@@ -659,7 +763,7 @@ function TitleDetailPage() {
           )}
 
           {item.plot && (
-            <FieldBlock label={t("detail.fields.plot")}>
+            <FieldBlock label={t("detail.fields.plot")} lock={lockProps("plot")}>
               <Text size="sm" style={{ whiteSpace: "pre-line" }}>
                 {item.plot}
               </Text>
@@ -667,7 +771,10 @@ function TitleDetailPage() {
           )}
 
           {hasExtrafanart && (
-            <FieldBlock label={`${t("detail.fields.extrafanart")} (${item.extrafanart?.length})`}>
+            <FieldBlock
+              label={`${t("detail.fields.extrafanart")} (${item.extrafanart?.length})`}
+              lock={lockProps("extrafanart")}
+            >
               <FanartStrip images={item.extrafanart ?? []} />
             </FieldBlock>
           )}
@@ -717,6 +824,37 @@ function TitleDetailPage() {
             >
               {t("common:actions.edit")}
             </Button>
+            <Menu shadow="md" position="bottom-start">
+              <Menu.Target>
+                <Button
+                  size="xs"
+                  variant="light"
+                  color={allLocked ? "yellow" : "gray"}
+                  leftSection={<IconLock size={14} />}
+                  loading={lockMutation.isPending}
+                >
+                  {t("lock.manage")}
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item onClick={() => applyLocks(allLocked ? [] : LOCKABLE_FIELDS)}>
+                  {allLocked ? t("lock.clearAll") : t("lock.all")}
+                </Menu.Item>
+                <Menu.Divider />
+                {LOCKABLE_FIELDS.map((field) => (
+                  <Menu.Item
+                    key={field}
+                    onClick={() => toggleLock(field)}
+                    leftSection={
+                      lockedFields.has(field) ? <IconLock size={14} /> : <IconLockOpen size={14} />
+                    }
+                    rightSection={lockedFields.has(field) ? <IconCheck size={14} /> : undefined}
+                  >
+                    {t(FIELD_LABEL_KEY[field])}
+                  </Menu.Item>
+                ))}
+              </Menu.Dropdown>
+            </Menu>
             <Button
               size="xs"
               variant="light"
@@ -763,6 +901,21 @@ function TitleDetailPage() {
                   <Badge size="sm" variant="light">
                     {f.status}
                   </Badge>
+                  {/* 逐文件的删除只在媒体库详情页做: 这里只把人送过去, 并按该文件的路径过滤列表. */}
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    aria-label={t("detail.openInLibrary")}
+                    onClick={() =>
+                      void navigate({
+                        to: "/libraries/$libraryId",
+                        params: { libraryId: String(f.library_id) },
+                        search: { q: f.path },
+                      })
+                    }
+                  >
+                    <IconFolders size={16} />
+                  </ActionIcon>
                 </Group>
               ))}
             </Stack>

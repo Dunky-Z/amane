@@ -50,8 +50,18 @@ def test_strm_content_does_not_clip_title(tmp_path: Path) -> None:
 
 
 def test_relpath_outside_library_raises(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="outside library root"):
+    with pytest.raises(ValueError, match="库根"):
         render_strm_content("/{video_relpath}", tmp_path / "outside" / "A.mp4", tmp_path / "lib", _meta())
+
+
+def test_title_control_chars_replaced(tmp_path: Path) -> None:
+    """标题里的控制字符替换为空格: 正文不会在中间断行."""
+    root = tmp_path / "lib"
+    meta = Metadata(number="ABC-123", title="line1\nline2", actors=["A"], studio="StudioX", release="2024-01-15")
+
+    body = render_strm_content("https://example.com/{title}", root / "A.mp4", root, meta)
+
+    assert body == "https://example.com/line1 line2\n"
 
 
 @pytest.mark.parametrize("raw", ["/{video_relpath}\n", "/{video_relpath"])

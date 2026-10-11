@@ -1,4 +1,5 @@
 import contextlib
+import importlib
 import os
 import tempfile
 import tomllib
@@ -6,6 +7,7 @@ from copy import copy
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 import tomli_w
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -23,6 +25,8 @@ from ..crawlers.site_roles import (
 from ..crawlers.sites.official import Manufacturer
 from ..enums import (
     ApiType,
+    BrowserBackendName,
+    BrowserMode,
     DownloadableResource,
     Language,
     MetadataField,
@@ -99,7 +103,7 @@ _DEFAULT_CONTENT_ROUTES: dict[ContentType, list[SiteName]] = {
 
 
 class R18Config(BaseModel):
-    """放 Hot: 修改 dsn 经 AppRuntime.rebuild() 重建只读引擎. 未配置 dsn 时整个数据源禁用.
+    """放 Hot: 修改 dsn 经 AppRuntime.apply_rebuild() 重建只读引擎. 未配置 dsn 时整个数据源禁用.
     定时导入不在此节, 须经 Schedule API 创建 r18_import.
     """
 
@@ -224,11 +228,54 @@ class ColdSettings(BaseSettings):
         return self.data_dir / "amane.db"
 
 
+_PROXY_SCHEMES = frozenset({"http", "https", "socks4", "socks4a", "socks5", "socks5h"})
+"""curl 接受的代理协议; 地址必须带协议, 否则无法区分 http 与 socks."""
+
+
+def _validate_proxy_url(value: str | None) -> str | None:
+    """校验站点代理地址; 空白归一为未配置."""
+    if value is None or not value.strip():
+        return None
+    parsed = urlsplit(value)
+    if parsed.scheme not in _PROXY_SCHEMES or not parsed.hostname:
+        raise ValueError(
+            f"代理地址必须带协议, 形如 socks5://127.0.0.1:1080; 支持的协议: {', '.join(sorted(_PROXY_SCHEMES))}"
+        )
+    return value
+
+
 class SiteConfig(BaseModel):
     base_url: str | None = None
     use_proxy: bool = True
-    use_browser: bool = Field(default=False, json_schema_extra={"x-hidden": True})
+    """``False`` 表示该站点的域名直连: 站点代理与全局代理都不使用."""
+    proxy: str | None = None
+    """该站点的专用代理; 留空使用 ``network.proxy``."""
+    use_browser: BrowserMode = BrowserMode.AUTO
+    """``auto`` 先直连, 首次命中 Cloudflare 挑战后该来源改用浏览器; 后端由 ``network.browser.backend`` 决定."""
+    browser_backend: BrowserBackendName | None = Field(default=None, json_schema_extra={"x-hidden": True})
+    """覆盖 ``network.browser.backend``; 仅在改用浏览器后生效, ``off`` 表示该来源禁用浏览器."""
     cookie: dict[str, str] = {}
+
+    @field_validator("proxy")
+    @classmethod
+    def _validate_proxy(cls, v: str | None) -> str | None:
+        return _validate_proxy_url(v)
+
+    @field_validator("use_browser", mode="before")
+    @classmethod
+    def _migrate_use_browser_bool(cls, v: object) -> object:
+        """旧布尔值: true → always, false → off."""
+        if v is True:
+            return BrowserMode.ALWAYS
+        if v is False:
+            return BrowserMode.OFF
+        return v
+
+    @field_validator("browser_backend")
+    @classmethod
+    def _override_engine_available(cls, v: BrowserBackendName | None) -> BrowserBackendName | None:
+        return None if v is None else _require_browser_engine(v)
+
     api_token: str | None = Field(default=None, json_schema_extra={"x-visible-keys": _SITES_WITH_API_TOKEN})
     official_routes: dict[str, Manufacturer] = Field(
         default_factory=dict, json_schema_extra={"x-visible-keys": [SiteName.OFFICIAL]}
@@ -247,7 +294,7 @@ class ScrapingConfig(BaseModel):
     crop_poster: bool = True
 
     poster_ratio: float = Field(default=0.7, ge=0.3, le=1.0)
-    """海报裁剪宽高比 (w/h). 从缩略图右侧裁剪生成海报. 默认 0.7 (贴近常见 379x538 / 高清海报)."""
+    """海报裁剪宽高比 (w/h). 从封面右侧裁剪生成海报. 默认 0.7 (贴近常见 379x538 / 高清海报)."""
 
     poster_crop_skip_ratio: float = Field(default=0.9, ge=0.5, le=1.0)
     """海报裁剪跳过阈值. 当 poster 候选高度已达 thumb 高度的此比例以上时, 视为候选够用, 不再从 thumb 裁剪
@@ -470,13 +517,38 @@ class WatermarkConfig(BaseModel):
         return _complete_frozen_dict(v, dict.fromkeys(WatermarkKind, WatermarkCorner.TOP_LEFT))
 
 
+def _require_browser_engine(backend: BrowserBackendName) -> BrowserBackendName:
+    """本地引擎不在当前分发时拒绝配置, 不等到启动浏览器才报 ModuleNotFoundError."""
+    module = {BrowserBackendName.PATCHRIGHT: "patchright", BrowserBackendName.CAMOUFOX: "camoufox"}.get(backend)
+    if module is None:
+        return backend
+    try:
+        importlib.import_module(module)
+    except ImportError as exc:
+        raise ValueError(f"浏览器后端 {backend} 不可用: 当前分发未包含 {module}, 请改用 solver") from exc
+    return backend
+
+
+class BrowserConfig(BaseModel):
+    backend: BrowserBackendName = BrowserBackendName.OFF
+    timeout: int = Field(default=30000, ge=5000, le=120000)
+    """页面导航默认超时 (毫秒); 单次渲染可覆盖."""
+    solver_url: str = Field(default="http://127.0.0.1:8191", pattern=r"^https?://.+")
+    """FlareSolverr 兼容服务地址; 仅 ``solver`` 后端使用. 服务不允许暴露到公网."""
+
+    @field_validator("backend")
+    @classmethod
+    def _engine_available(cls, v: BrowserBackendName) -> BrowserBackendName:
+        return _require_browser_engine(v)
+
+
 class NetworkConfig(BaseModel):
     proxy: str | None = None
     timeout: float = Field(default=10.0, ge=5.0, le=300.0)
-    max_retries: int = Field(default=3, ge=0, le=10)
-    """实为总尝试次数 (``3`` → 最多发 3 次请求), 名字为兼容既有配置保留; 0 表示不重试."""
+    max_retries: int = Field(default=2, ge=0, le=10)
+    """首次请求之外的重试次数 (``2`` → 最多发 3 次请求); 0 表示不重试. 名字为兼容既有配置保留."""
     max_clients: int = Field(default=50, ge=5, le=500, json_schema_extra={"x-hidden": True})
-    browser_timeout: int = Field(default=15000, ge=5000, le=120000, json_schema_extra={"x-hidden": True})
+    browser: BrowserConfig = Field(default_factory=BrowserConfig)
 
     chunked_threshold: int = Field(default=2 * 1024**2, ge=512 * 1024, le=100 * 1024**2)
     """超过此大小 (字节) 启用分块并发下载."""
@@ -628,17 +700,17 @@ class AgentConfig(BaseModel):
 
 
 class ActorScrapingConfig(BaseModel):
-    """档案站顺序填空, 头像站优先."""
+    """资料来源顺序填空, 头像来源优先."""
 
     profile_sites: list[SiteName] = Field(
         default_factory=lambda: list(ACTOR_PROFILE_SITES),
         json_schema_extra=site_list_schema(ACTOR_PROFILE_SITES, ordered=True),
-        description="档案源顺序 (标量填空优先级); 仅演员档案站",
+        description="资料来源顺序 (单源字段填空优先级); 仅演员资料来源",
     )
     image_sites: list[SiteName] = Field(
         default_factory=lambda: list(ACTOR_IMAGE_SITES),
         json_schema_extra=site_list_schema(ACTOR_IMAGE_SITES, ordered=True),
-        description="头像源顺序 (优先于档案站附图); 仅演员头像站",
+        description="头像来源顺序 (优先于资料来源附图); 仅演员头像来源",
     )
     download_images: bool = True
     auto_scrape: bool = True
@@ -685,6 +757,23 @@ class HotSettings(BaseModel):
             logging = {}
             data["logging"] = logging
         logging.setdefault("debug_capture", flag)
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_browser_timeout(cls, data: Any) -> Any:
+        """network.browser_timeout → network.browser.timeout."""
+        if not isinstance(data, dict):
+            return data
+        network = data.get("network")
+        if not isinstance(network, dict) or "browser_timeout" not in network:
+            return data
+        timeout = network.pop("browser_timeout")
+        browser = network.get("browser")
+        if not isinstance(browser, dict):
+            browser = {}
+            network["browser"] = browser
+        browser.setdefault("timeout", timeout)
         return data
 
     scraping: ScrapingConfig = ScrapingConfig()

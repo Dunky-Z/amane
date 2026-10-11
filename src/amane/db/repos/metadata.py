@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime
 from typing import Unpack, cast
 
@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql.functions import count
 from sqlmodel import col, select
 
-from ...enums import ActorGender
+from ...enums import ActorGender, MetadataField
 from ...parsing import ContentType, Mosaic
 from ...utils.text import normalize_long_text
 from ..models import (
@@ -23,9 +23,11 @@ from ..models import (
     Series,
     SortOrder,
     Studio,
+    has_subtitle_predicate,
 )
 from ..repo_types import (
     MetadataFields,
+    WriteMode,
     _media_file_uncensored_predicate,
     _metadata_has_files_clause,
     _metadata_linked_file_exists,
@@ -44,14 +46,68 @@ from .facet_helpers import (
 
 
 def _normalize_text_fields(fields: MetadataFields) -> MetadataFields:
-    """长文本列在落库前归一 (与聚合出口同一函数, 幂等).
+    """长文本列在落库前归一 (与聚合输出同一函数, 幂等).
 
-    覆盖面是全部写库路径: 首刮 / 补刮 / merge / REST PATCH / Agent 工具都走这两个写方法.
+    覆盖面是全部写库路径: 首刮 / 补刮 / merge / REST PATCH / Agent 工具都经这两个写方法.
     """
     plot = fields.get("plot")
     if not isinstance(plot, str):
         return fields
-    return cast("MetadataFields", {**fields, "plot": normalize_long_text(plot)})
+    return {**fields, "plot": normalize_long_text(plot)}
+
+
+# 锁字段 (MetadataField) ↔ Metadata 列名; 仅 extrafanart / score 两名不同.
+_LOCK_FIELD_COLUMN: dict[MetadataField, str] = {
+    MetadataField.TITLE: "title",
+    MetadataField.PLOT: "plot",
+    MetadataField.ACTORS: "actors",
+    MetadataField.DIRECTORS: "directors",
+    MetadataField.TAGS: "tags",
+    MetadataField.SERIES: "series",
+    MetadataField.RELEASE: "release",
+    MetadataField.RUNTIME: "runtime",
+    MetadataField.PUBLISHER: "publisher",
+    MetadataField.STUDIO: "studio",
+    MetadataField.POSTER_URLS: "poster_urls",
+    MetadataField.THUMB_URLS: "thumb_urls",
+    MetadataField.TRAILER_URLS: "trailer_urls",
+    MetadataField.EXTRAFANART: "extrafanart_urls",
+    MetadataField.SCORE: "scores",
+}
+_LOCK_COLUMN_FIELD: dict[str, MetadataField] = {column: field for field, column in _LOCK_FIELD_COLUMN.items()}
+
+
+def _locked_fields_of(meta: Metadata) -> set[MetadataField]:
+    """库内锁定集合; 非法存量值忽略."""
+    locked: set[MetadataField] = set()
+    for name in meta.locked_fields or []:
+        try:
+            locked.add(MetadataField(name))
+        except ValueError:
+            continue
+    return locked
+
+
+def _filter_locked(
+    fields: MetadataFields, locked: set[MetadataField], existing_sources: Mapping[str, str]
+) -> MetadataFields:
+    """AUTO 写入: 跳过锁定列, ``field_sources`` 保留锁定字段的既有来源."""
+    if not locked:
+        return fields
+    locked_columns = {_LOCK_FIELD_COLUMN[field] for field in locked}
+    filtered = cast("MetadataFields", {key: value for key, value in fields.items() if key not in locked_columns})
+    sources = filtered.get("field_sources")
+    if sources is not None:
+        preserved = {key: value for key, value in existing_sources.items() if key in locked}
+        merged = {**preserved, **{key: value for key, value in sources.items() if key not in locked}}
+        filtered = cast("MetadataFields", {**filtered, "field_sources": merged})
+    return filtered
+
+
+def _merge_auto_locks(fields: MetadataFields, locked: set[MetadataField]) -> list[str]:
+    """MANUAL 写入: 把本次写入的可锁列并入锁定集."""
+    written = {_LOCK_COLUMN_FIELD[key] for key in fields if key in _LOCK_COLUMN_FIELD}
+    return [str(field) for field in MetadataField if field in locked | written]
 
 
 class MetadataRepoMixin(RepositoryMixinBase):
@@ -134,9 +190,9 @@ class MetadataRepoMixin(RepositoryMixinBase):
             if has_files is not None:
                 base = base.where(_metadata_has_files_clause(has_files=has_files))
             if has_subtitle is True:
-                base = base.where(_metadata_linked_file_exists(col(MediaFile.has_subtitle).is_(True)))
+                base = base.where(_metadata_linked_file_exists(has_subtitle_predicate()))
             elif has_subtitle is False:
-                base = base.where(~_metadata_linked_file_exists(col(MediaFile.has_subtitle).is_(True)))
+                base = base.where(~_metadata_linked_file_exists(has_subtitle_predicate()))
             if mosaic is not None:
                 base = base.where(_metadata_linked_file_exists(col(MediaFile.mosaic) == mosaic))
             if uncensored is True:
@@ -179,8 +235,9 @@ class MetadataRepoMixin(RepositoryMixinBase):
         **kwargs: Unpack[MetadataFields],
     ) -> Metadata:
         """查重忽略大小写; 已存在时不改写 number 的原始大小写.
+        自动刮削写入; 锁定行为见 docs/dev/data-model.md.
         ``actor_genders`` 只填 ``Actor.gender`` 空位, 不是 Metadata 列.
-        并发新建同番号时 UNIQUE 冲突回退为更新已有行.
+        并发新建同番号时 UNIQUE 冲突回退为更新已有行, 并套用字段锁.
         """
         fields = _normalize_text_fields(kwargs)
         async with self._session() as session:
@@ -197,12 +254,14 @@ class MetadataRepoMixin(RepositoryMixinBase):
                     existing = (await session.exec(stmt)).first()
                     if existing is None:
                         raise
+                    fields = _filter_locked(fields, _locked_fields_of(existing), existing.field_sources or {})
                     for key, value in fields.items():
                         setattr(existing, key, value)
                     existing.updated_at = _utcnow()
                     session.add(existing)
                     await session.flush()
             else:
+                fields = _filter_locked(fields, _locked_fields_of(existing), existing.field_sources or {})
                 for key, value in fields.items():
                     setattr(existing, key, value)
                 existing.updated_at = _utcnow()
@@ -219,15 +278,21 @@ class MetadataRepoMixin(RepositoryMixinBase):
         self,
         metadata_id: int,
         *,
+        mode: WriteMode = WriteMode.AUTO,
         actor_genders: Mapping[str, ActorGender] | None = None,
         **updates: Unpack[MetadataFields],
     ) -> Metadata | None:
-        """不存在返回 None."""
+        """不存在返回 None; 写入策略见 WriteMode."""
         updates = _normalize_text_fields(updates)
         async with self._session() as session:
             metadata = await session.get(Metadata, metadata_id)
             if metadata is None:
                 return None
+            locked = _locked_fields_of(metadata)
+            if mode is WriteMode.AUTO:
+                updates = _filter_locked(updates, locked, metadata.field_sources or {})
+            else:
+                metadata.locked_fields = _merge_auto_locks(updates, locked)
             # 显式赋值, 禁止 setattr; 字段集由 MetadataFields 与 Metadata 静态对齐.
             if "title" in updates:
                 metadata.title = updates["title"]
@@ -277,8 +342,21 @@ class MetadataRepoMixin(RepositoryMixinBase):
             await session.refresh(metadata)
             return metadata
 
+    async def set_metadata_locks(self, metadata_id: int, fields: Collection[MetadataField]) -> Metadata | None:
+        """整体替换锁定字段集合, 不修改 ``updated_at``. 不存在返回 None."""
+        async with self._session() as session:
+            metadata = await session.get(Metadata, metadata_id)
+            if metadata is None:
+                return None
+            wanted = set(fields)
+            metadata.locked_fields = [str(field) for field in MetadataField if field in wanted]
+            session.add(metadata)
+            await session.commit()
+            await session.refresh(metadata)
+            return metadata
+
     async def delete_metadata(self, metadata_id: int, *, remove_files: bool = False) -> bool:
-        """级联见 ``cascade_delete_metadata``. 不存在返回 False. 不删除磁盘文件."""
+        """级联见 ``cascade_delete_metadata``. 不存在返回 False."""
         async with self._session() as session:
             metadata = await session.get(Metadata, metadata_id)
             if metadata is None:

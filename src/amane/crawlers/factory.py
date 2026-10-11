@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from ..aggregate import CrawlerLike
     from ..config import SiteConfig
     from .actor import ActorCrawler
+    from .connectivity import ConnectivityProbe
     from .http import HttpClient
     from .r18dev import R18Database
 
@@ -60,6 +61,12 @@ class _PluginProviderAdapter(FilmSourceProvider):
         return await probe_get(self._http.web_client, urls[0])
 
 
+if TYPE_CHECKING:
+    # 结构性协议没有运行期检查: 在此静态断言适配器满足工厂下游声明的协议.
+    _adapter_crawler_like: type[CrawlerLike] = _PluginProviderAdapter
+    _adapter_connectivity_probe: type[ConnectivityProbe] = _PluginProviderAdapter
+
+
 class CrawlerFactory:
     """延迟创建并缓存爬虫. 全部共用一个 HttpClient.
 
@@ -87,38 +94,37 @@ class CrawlerFactory:
         self._plugin_manager = plugin_manager
         self._plugin_configs = plugin_configs or {}
         self._local_roots = list(local_roots or [])
-        self._instances: dict[str, Crawler] = {}
-        self._plugin_instances: dict[str, _PluginProviderAdapter] = {}
+        self._instances: dict[str, Crawler | FilmSourceProvider] = {}
         self._actor_instances: dict[str, ActorCrawler] = {}
 
     async def get(self, name: str) -> Crawler | FilmSourceProvider | None:
-        if name in self._instances:
-            return self._instances[name]
+        """内置来源与插件来源共用一份实例缓存; 分派只在此处, 下游只依赖结构性协议."""
+        cached = self._instances.get(name)
+        if cached is not None:
+            return cached
 
         cls = registry.get(name)
-        if cls is None and self._plugin_manager is not None and self._plugin_manager.has_film_plugin(name):
-            return await self._get_plugin(name)
-        if cls is None:
+        if cls is not None:
+            site_config = self._site_configs.get(name)
+            client = self._http.for_source(name, site_config)
+            # R18DevCrawler 额外注入只读 DB; LocalCrawler 注入 local_roots.
+            if cls is R18DevCrawler:
+                instance: Crawler = R18DevCrawler(client=client, config=site_config, db=self._r18_db)
+            elif cls is LocalCrawler:
+                instance = LocalCrawler(client=client, config=site_config, roots=self._local_roots)
+            else:
+                instance = cls(client=client, config=site_config)
+            self._instances[name] = instance
+            return instance
+
+        manager = self._plugin_manager
+        if manager is None or not manager.has_film_plugin(name):
             logger.error("crawler not registered", name=name)
             return None
+        return await self._get_plugin(manager, name)
 
-        site_config = self._site_configs.get(name)
-        # R18DevCrawler 额外注入只读 DB; LocalCrawler 注入 local_roots.
-        if cls is R18DevCrawler:
-            instance: Crawler = R18DevCrawler(client=self._http, config=site_config, db=self._r18_db)
-        elif cls is LocalCrawler:
-            instance = LocalCrawler(client=self._http, config=site_config, roots=self._local_roots)
-        else:
-            instance = cls(client=self._http, config=site_config)
-        self._instances[name] = instance
-        return instance
-
-    async def _get_plugin(self, name: str) -> FilmSourceProvider | None:
+    async def _get_plugin(self, manager: PluginManager, name: str) -> FilmSourceProvider | None:
         # 插件禁用返回 None; data_dir 缺失抛 RuntimeError.
-        if name in self._plugin_instances:
-            return self._plugin_instances[name]
-        if self._plugin_manager is None:
-            return None
         config = self._plugin_configs.get(name, PluginConfig())
         if not config.enabled:
             logger.info("source plugin disabled", source=name)
@@ -127,7 +133,7 @@ class CrawlerFactory:
             raise RuntimeError("data_dir is required for source plugins")
         plugin_dir = self._data_dir / "plugins" / name
         plugin_dir.mkdir(parents=True, exist_ok=True)
-        provider = self._plugin_manager.build_plugin_provider(
+        provider = manager.build_plugin_provider(
             name,
             context=PluginContext(
                 source_id=name,
@@ -140,9 +146,9 @@ class CrawlerFactory:
         adapter = _PluginProviderAdapter(
             provider,
             http_client=self._http,
-            descriptor=self._plugin_manager.descriptor(name),
+            descriptor=manager.descriptor(name),
         )
-        self._plugin_instances[name] = adapter
+        self._instances[name] = adapter
         return adapter
 
     async def get_crawlers(self, names: Iterable[str]) -> dict[str, CrawlerLike]:
@@ -167,15 +173,16 @@ class CrawlerFactory:
             return None
 
         site_config = self._site_configs.get(name)
+        client = self._http.for_source(name, site_config)
         if cls is GFriendsActorCrawler:
             instance: ActorCrawler = GFriendsActorCrawler(
-                client=self._http,
+                client=client,
                 config=site_config,
                 data_dir=self._data_dir,
                 repo_url=self._gfriends_repo,
             )
         else:
-            instance = cls(client=self._http, config=site_config)
+            instance = cls(client=client, config=site_config)
         self._actor_instances[name] = instance
         return instance
 
@@ -186,7 +193,3 @@ class CrawlerFactory:
             if crawler is not None:
                 result[name] = crawler
         return result
-
-    @property
-    def active_crawlers(self) -> dict[str, Crawler]:
-        return dict(self._instances)
