@@ -1869,7 +1869,7 @@ export type Language = 'zh_cn' | 'zh_tw' | 'jp' | 'en';
 /**
  * LibraryAutomation
  *
- * 媒体库自动化级别. 含更低级别的行为; 自动整理尚未开放.
+ * 媒体库自动化级别 (只控制发现侧). 含更低级别的行为; 自动整理由 `Library.auto_organize` 单独控制.
  */
 export type LibraryAutomation = 'none' | 'watch' | 'scrape';
 
@@ -1886,6 +1886,10 @@ export type LibraryCreateRequest = {
      */
     path: string;
     automation?: LibraryAutomation;
+    /**
+     * Auto Organize
+     */
+    auto_organize?: boolean;
     ingest?: LibraryIngest;
     /**
      * Cloud Path
@@ -2005,6 +2009,10 @@ export type LibraryResponse = {
      */
     path: string;
     automation: LibraryAutomation;
+    /**
+     * Auto Organize
+     */
+    auto_organize: boolean;
     ingest: LibraryIngest;
     /**
      * Cloud Path
@@ -2099,6 +2107,10 @@ export type LibraryUpdateRequest = {
      */
     path?: string | null;
     automation?: LibraryAutomation | null;
+    /**
+     * Auto Organize
+     */
+    auto_organize?: boolean | null;
     ingest?: LibraryIngest | null;
     /**
      * Cloud Path
@@ -4079,6 +4091,12 @@ export type SiteConfig = {
      * Rate Limit
      */
     rate_limit?: number | null;
+    /**
+     * Languages
+     *
+     * 词条语言优先级, 依序取第一个有正文的词条
+     */
+    languages?: Array<'zh' | 'ja' | 'en'>;
 };
 
 /**
