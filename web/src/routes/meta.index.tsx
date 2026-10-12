@@ -102,6 +102,7 @@ function MetaIndexPage() {
   const narrowViewport = useNarrowViewport("md");
 
   const hasFiles = parseHasFiles(search.has_files);
+  const watched = parseHasFiles(search.watched);
   const filePhase: FilePhaseFilters = {
     has_subtitle: parseHasFiles(search.has_subtitle),
     uncensored: parseHasFiles(search.uncensored),
@@ -116,7 +117,9 @@ function MetaIndexPage() {
     filePhase.definition != null ||
     filePhase.content_type != null;
   const [searchInput, setSearchInput] = useState(search.q ?? "");
-  const [advancedOpen, setAdvancedOpen] = useState(hasFiles !== null || phaseActive);
+  const [advancedOpen, setAdvancedOpen] = useState(
+    hasFiles !== null || watched !== null || phaseActive,
+  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const filters: FacetFilters = {
@@ -134,6 +137,7 @@ function MetaIndexPage() {
     sort_by: search.sort_by,
     order: search.order,
     has_files: hasFiles === null ? undefined : hasFiles,
+    watched: watched === null ? undefined : watched,
     has_subtitle: filePhase.has_subtitle === null ? undefined : filePhase.has_subtitle,
     uncensored: filePhase.uncensored === null ? undefined : filePhase.uncensored,
     mosaic: filePhase.mosaic ?? undefined,
@@ -248,6 +252,16 @@ function MetaIndexPage() {
     });
   }
 
+  function setWatchedFilter(value: HasFilesFilter) {
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        watched: triToSearch(value),
+        page: 1,
+      }),
+    });
+  }
+
   function setFilePhaseFilter(value: FilePhaseFilters) {
     void navigate({
       search: (prev) => ({
@@ -276,7 +290,11 @@ function MetaIndexPage() {
 
   const active = activeFacetFilters(filters);
   const hasActiveFilters =
-    active.length > 0 || hasFiles !== null || phaseActive || search.saved_query_id != null;
+    active.length > 0 ||
+    hasFiles !== null ||
+    watched !== null ||
+    phaseActive ||
+    search.saved_query_id != null;
 
   return (
     <BrowsePageShell
@@ -320,7 +338,7 @@ function MetaIndexPage() {
           {/* 窄屏的筛选在底部面板里常驻展开, 该开关只在宽屏有意义. */}
           {narrowViewport ? null : (
             <HintedActionIcon
-              variant={advancedOpen || hasFiles !== null ? "filled" : "default"}
+              variant={advancedOpen || hasFiles !== null || watched !== null || phaseActive ? "filled" : "default"}
               size={36}
               onClick={() => setAdvancedOpen((v) => !v)}
               label={t("search.advanced")}
@@ -360,6 +378,8 @@ function MetaIndexPage() {
           onSelect={appendFacet}
           hasFiles={hasFiles}
           onHasFilesChange={setHasFilesFilter}
+          watched={watched}
+          onWatchedChange={setWatchedFilter}
           filePhase={filePhase}
           onFilePhaseChange={setFilePhaseFilter}
         />
@@ -397,6 +417,12 @@ function MetaIndexPage() {
                 <IconX size={14} />
               </ActionIcon>
             </Group>
+          )}
+          {watched !== null && (
+            <ActiveTriChip
+              label={`${t("search.watched")}: ${watched ? t("search.watchedYes") : t("search.watchedNo")}`}
+              onClear={() => setWatchedFilter(null)}
+            />
           )}
           {hasFiles !== null && (
             <ActiveHasFilesChip hasFiles={hasFiles} onClear={() => setHasFilesFilter(null)} />
