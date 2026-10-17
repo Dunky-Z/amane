@@ -24,6 +24,8 @@
     "scrapeNormalDesc": "不重新获取已缓存数据",
     "scrapeForce": "强制刮削",
     "scrapeForceDesc": "重新获取全部来源(覆盖缓存)",
+    "scrapeSubtitle": "重新刮削字幕",
+    "scrapeSubtitleDesc": "删除现有外挂字幕后重新搜索; 匹配不到则保持无字幕",
     "moveUp": "上移",
     "moveDown": "下移"
   },

@@ -1,4 +1,5 @@
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from structlog.contextvars import bind_contextvars
@@ -21,12 +22,20 @@ from ..crawlers.site_roles import builtin_descriptors
 from ..db.models import TaskType
 from ..enums import ActorGender, MetadataField, SiteName
 from ..media import materialize_images
+from ..net.errors import SourceError
 from ..observability import current
 from ..observability.models import SiteOutcomeKind
 from ..plugins.models import SourceDescriptor, SourceTrait
-from ._common import ensure_oshash, finalize_media_file, mark_media_file_failed
+from ._common import ensure_oshash, finalize_media_file, mark_media_file_failed, refresh_external_subtitle
 from .models import ActorScrapePayload, CacheKind, OrganizePayload, ScrapePayload, ScrapeResult
 from .protocol import FollowupTask, TaskHandler, TaskResult
+from .subtitle_scrape import (
+    SUBTITLE_SOURCE_ID,
+    paired_subtitles_exist,
+    remove_paired_subtitles,
+    resolve_subtitle_targets,
+    subtitle_extensions_for,
+)
 
 if TYPE_CHECKING:
     from ..config import HotSettings
@@ -72,6 +81,9 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
 
     async def handle(self, payload: ScrapePayload) -> TaskResult[ScrapeResult]:
         bind_contextvars(number=payload.number)
+
+        if payload.subtitle_only:
+            return await self._handle_subtitle_only(payload)
 
         content_type = payload.content_type
         progress_total = len(SCALAR_FIELDS) + _PROGRESS_POST_STEPS
@@ -268,6 +280,105 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
                 outcomes=current().site_outcomes(),
             ),
             followups=[*actor_followups, *organize_followups],
+        )
+
+    async def _handle_subtitle_only(self, payload: ScrapePayload) -> TaskResult[ScrapeResult]:
+        """清空配对外挂字幕后只调用 ``nas.javsubs``; 不写 Metadata、不扇出后继."""
+        rec = current()
+        meta, targets = await resolve_subtitle_targets(
+            self._repo,
+            number=payload.number,
+            media_file_id=payload.media_file_id,
+        )
+        if not targets:
+            rec.warning("subtitle scrape: no media files", number=payload.number)
+            return TaskResult(
+                success=False,
+                error=f"番号 {payload.number} 没有可写字幕的媒体文件",
+                result=ScrapeResult(
+                    metadata_id=meta.id if meta is not None else None,
+                    field_sources={},
+                    failed_sites=[],
+                ),
+            )
+
+        crawlers = await self._factory.get_crawlers([SUBTITLE_SOURCE_ID])
+        provider = crawlers.get(SUBTITLE_SOURCE_ID)
+        if provider is None:
+            rec.warning("subtitle scrape: plugin unavailable", source=SUBTITLE_SOURCE_ID)
+            return TaskResult(
+                success=False,
+                error=f"字幕来源 {SUBTITLE_SOURCE_ID} 未安装或未启用",
+                result=ScrapeResult(
+                    metadata_id=meta.id if meta is not None else None,
+                    field_sources={},
+                    failed_sites=[SUBTITLE_SOURCE_ID],
+                ),
+            )
+
+        rec.info(
+            "subtitle scrape started",
+            source=SUBTITLE_SOURCE_ID,
+            targets=len(targets),
+        )
+        rec.update_summary(eligible_sites=[SUBTITLE_SOURCE_ID], sites_queried=[SUBTITLE_SOURCE_ID])
+
+        written = 0
+        plugin_error: str | None = None
+        for media in targets:
+            library = await self._repo.get_library(media.library_id)
+            extensions = subtitle_extensions_for(library)
+            video_path = Path(media.path)
+            await remove_paired_subtitles(video_path, extensions)
+            try:
+                await provider.fetch(
+                    SearchQuery(
+                        payload.number,
+                        media.path,
+                        None,
+                        payload.content_type,
+                    )
+                )
+            except SourceError as exc:
+                plugin_error = str(exc)
+                rec.warning(
+                    "subtitle scrape source error",
+                    media_file_id=media.id,
+                    detail=plugin_error,
+                )
+                rec.record_site_outcome(site=SUBTITLE_SOURCE_ID, outcome=SiteOutcomeKind.FAILED)
+            else:
+                rec.record_site_outcome(site=SUBTITLE_SOURCE_ID, outcome=SiteOutcomeKind.OK)
+
+            if await paired_subtitles_exist(video_path, extensions):
+                written += 1
+            if library is not None and media.id is not None:
+                await refresh_external_subtitle(self._repo, media, library)
+
+        metadata_id = meta.id if meta is not None else None
+        if written > 0:
+            rec.info("subtitle scrape completed", written=written, targets=len(targets))
+            return TaskResult(
+                success=True,
+                result=ScrapeResult(
+                    metadata_id=metadata_id,
+                    field_sources={},
+                    failed_sites=[],
+                    outcomes=current().site_outcomes(),
+                ),
+            )
+
+        error = plugin_error or f"未找到与 {payload.number} 匹配的字幕"
+        rec.warning("subtitle scrape miss", error=error)
+        return TaskResult(
+            success=False,
+            error=error,
+            result=ScrapeResult(
+                metadata_id=metadata_id,
+                field_sources={},
+                failed_sites=[SUBTITLE_SOURCE_ID],
+                outcomes=current().site_outcomes(),
+            ),
         )
 
     def failure_result(self, payload: ScrapePayload) -> ScrapeResult | None:

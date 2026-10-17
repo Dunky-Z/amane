@@ -24,6 +24,8 @@
     "scrapeNormalDesc": "Do not re-fetch cached data",
     "scrapeForce": "Force Scrape",
     "scrapeForceDesc": "Re-fetch all sources (overwrite cache)",
+    "scrapeSubtitle": "Rescrape subtitles",
+    "scrapeSubtitleDesc": "Delete existing sidecar subtitles and search again; keep none if no match",
     "moveUp": "Move up",
     "moveDown": "Move down"
   },

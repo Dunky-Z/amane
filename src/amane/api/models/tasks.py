@@ -159,6 +159,10 @@ class ScrapeRequest(BaseModel):
         default_factory=lambda: {CacheKind.metadata, CacheKind.trans},
         description="启用的缓存种类 (metadata: 复用 DB per-site 快照; trans: 复用译文). 空集 = 全部强制刷新",
     )
+    subtitle_only: bool = Field(
+        default=False,
+        description="只重新刮削外挂字幕: 先删除配对字幕再调用字幕来源, 不改元数据",
+    )
 
     @field_validator("number", mode="before")
     @classmethod
@@ -193,6 +197,7 @@ class ScrapeRequest(BaseModel):
                     content_type=self.content_type or infer_content_type(self.number),
                     media_file_id=self.media_id,
                     use_cache=self.use_cache,
+                    subtitle_only=self.subtitle_only,
                 )
             parsed = parse_file_info(media.path)
             assert parsed.number is not None
@@ -201,12 +206,14 @@ class ScrapeRequest(BaseModel):
                 content_type=self.content_type or parsed.content_type,
                 media_file_id=self.media_id,
                 use_cache=self.use_cache,
+                subtitle_only=self.subtitle_only,
             )
         assert self.number is not None
         return ScrapePayload(
             number=self.number,
             content_type=self.content_type or infer_content_type(self.number),
             use_cache=self.use_cache,
+            subtitle_only=self.subtitle_only,
         )
 
 

@@ -10,7 +10,7 @@
 | 任务 | 职责 | 排除范围 |
 | ------ | ------ | ------ |
 | `REFRESH` | 扫描增删、注册 MediaFile、fan-out SCRAPE (`use_cache` 原样转发); 整库范围时顺带写入清理清单 | 移动文件、写 NFO |
-| `SCRAPE` | 联网聚合 → DB → Resource (路由含 `local` 且 sidecar 全量命中时不请求在线站; 未锁定字段以本次结果覆盖); `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联 | 库内移动 / NFO |
+| `SCRAPE` | 联网聚合 → DB → Resource (路由含 `local` 且 sidecar 全量命中时不请求在线站; 未锁定字段以本次结果覆盖); `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联; `subtitle_only` 时不聚合元数据, 先删配对外挂字幕再只调 `nas.javsubs`, 未写出新字幕则任务失败 | 库内移动 / NFO; `subtitle_only` 另不写 Metadata、不扇出后继 |
 | `ORGANIZE` | 范围内已有 Metadata 的 MediaFile 按路径模板落盘, 并删除本次腾空的目录; 缺资源时 `acquire` 可出站 HTTP | 扫描磁盘、运行爬虫、修改 Metadata |
 | `SCAN_INVALID` | 遍历库产出清理清单 (文件黑名单 / 小于最小视频大小 / 残留目录 / 空目录), 写入进程内清单存放 | 一切写操作 |
 | `DELETE` | 按清单标识删除文件与目录, 删对应索引, 按需剪枝 | 整库重新扫描、重新生成清单、写 NFO、回收 Resource |

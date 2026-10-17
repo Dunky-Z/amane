@@ -4033,6 +4033,12 @@ export type ScrapeSubmission = {
      */
     use_cache?: Array<CacheKind>;
     /**
+     * Subtitle Only
+     *
+     * 只重新刮削外挂字幕: 先删除配对字幕再调用字幕来源, 不改元数据
+     */
+    subtitle_only?: boolean;
+    /**
      * Type
      */
     type: 'scrape';

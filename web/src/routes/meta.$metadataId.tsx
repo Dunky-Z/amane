@@ -820,6 +820,18 @@ function TitleDetailPage() {
                     {t("common:actions.scrapeForceDesc")}
                   </Text>
                 </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    scrapeMutation.mutate({
+                      body: { type: "scrape", number: item.number, subtitle_only: true },
+                    })
+                  }
+                >
+                  <Text size="sm">{t("common:actions.scrapeSubtitle")}</Text>
+                  <Text size="xs" c="dimmed">
+                    {t("common:actions.scrapeSubtitleDesc")}
+                  </Text>
+                </Menu.Item>
               </Menu.Dropdown>
             </Menu>
             <Button

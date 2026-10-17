@@ -104,6 +104,8 @@ class ScrapePayload(BaseModel):
     content_type: ContentType = ContentType.CENSORED
     media_file_id: int | None = None
     use_cache: set[CacheKind] = {CacheKind.metadata, CacheKind.trans}
+    subtitle_only: bool = False
+    """为真时不聚合元数据, 只清空配对外挂字幕并调用字幕来源插件."""
 
 
 def build_feed_scrape_payload(feed: Feed, number: str) -> ScrapePayload:

@@ -14071,6 +14071,12 @@
             "title": "Use Cache",
             "description": "启用的缓存种类 (metadata: 复用 DB per-site 快照; trans: 复用译文). 空集 = 全部强制刷新"
           },
+          "subtitle_only": {
+            "type": "boolean",
+            "title": "Subtitle Only",
+            "description": "只重新刮削外挂字幕: 先删除配对字幕再调用字幕来源, 不改元数据",
+            "default": false
+          },
           "type": {
             "type": "string",
             "const": "scrape",
