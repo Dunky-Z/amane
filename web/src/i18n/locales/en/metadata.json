@@ -14,6 +14,7 @@
     "hasFilesYes": "Has files",
     "hasFilesNo": "No files",
     "hasSubtitle": "Chinese subtitles",
+    "vr": "VR",
     "uncensored": "Uncensored",
     "mosaic": "Mosaic mark",
     "definition": "Resolution",
@@ -31,8 +32,7 @@
       "hentai": "Hentai"
     },
     "mosaics": {
-      "censored": "Censored",
-      "uncensored": "Uncensored mark",
+      "uncensored": "Uncensored",
       "cracked": "Cracked",
       "leaked": "Leaked"
     }
@@ -74,6 +74,7 @@
       "release": "Release Date",
       "runtime": "Runtime",
       "score": "Score",
+      "vr": "VR",
       "series": "Series",
       "directors": "Directors",
       "actors": "Actors",

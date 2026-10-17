@@ -73,7 +73,7 @@ export const CONTENT_TYPES = exhaustiveTuple<ContentType>()(
   "hentai",
 );
 
-export const MOSAICS = exhaustiveTuple<Mosaic>()("censored", "uncensored", "cracked", "leaked");
+export const MOSAICS = exhaustiveTuple<Mosaic>()("uncensored", "cracked", "leaked");
 
 /** 顺序即优先级 (高→低). 与后端 DEFINITION_VALUES 对齐. */
 export const FILE_DEFINITIONS = exhaustiveTuple<
@@ -202,6 +202,7 @@ export const METADATA_SORT_FIELDS = exhaustiveTuple<MetadataSortField>()(
   "created_at",
   "updated_at",
   "file_count",
+  "score",
 );
 
 export const FACET_SORT_FIELDS = exhaustiveTuple<FacetSortField>()("name", "count");

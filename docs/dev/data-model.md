@@ -25,9 +25,13 @@
 
 `MediaFile` 与 `Metadata` 解耦: **Metadata 是一等公民** (用户直接管理的番号级条目), 有效性不依赖本地文件; `MediaFile` 是磁盘视频的索引, 能对应到某条 Metadata 时以多对一绑定 `metadata_id`. `metadata_id IS NULL` 的文件 (解析失败 / 尚未刮削) 与**没有任何 MediaFile 的 Metadata** (by-number 刮削、只囤元数据) 都是常态, 不是待清理的对象.
 
-文件相位 (`content_type` / `mosaic` / `definition`) 是 **path 的投影**, 连同中字的文件名标记列落在 `MediaFile`: 创建与修改 path 时用同一次 `parse_file_info` 回填, 不纳入对外 PATCH; `cd` 只用于 ORGANIZE 分集配对, 不落库. `content_type` 是番号 / 目录的内容类型 (决定刮削路由), `mosaic` 是这份文件的马赛克标记 (有码 / 无码 / 破解 / 流出); 词表未命中时按内容类型兜底 (有码 → `censored`, 无码 → `uncensored`, 国产 / FC2 / 欧美保持空), 已有的破解 / 流出 / 无码标记不覆盖. 无码展示与筛选是 `mosaic=uncensored OR content_type=uncensored`. `ContentType.chinese` 是国产, 不是中字. 中字是两个来源的并集: 文件名的中字标记 (`has_subtitle_in_name`, path 的投影) 与视频同目录存在库 `subtitle_extensions` 命中的字幕 (`has_external_subtitle`, 只在登记与修改 path 时各检查一次). 两者都不校验语言文字, 与 ORGANIZE 的字幕配对口径相同; 目录读取不到时按无字幕处理. 只删除字幕不会触发复查, 视频重新登记或更换 path 时才回退. 并集在 Python 是 `MediaFile.has_subtitle` (property), SQL 侧必须改用 `db/models.py::has_subtitle_predicate`, 两处口径必须一致.
+类型 (`content_type`) 是**番号的属性**, 落在 `Metadata`: 只在条目创建时落定 (有发现路径时随其路径关键词, 否则只依据番号), 番号不可改, 因此不随文件增删或后续刮削漂移; 它决定刮削路由, 也供「类型」筛选与有码 / 无码角标使用, 不进对外 PATCH. `ContentType.chinese` 是国产, 不是中字.
 
-Metadata 列表的角标与筛选经由关联 EXISTS / 页级聚合 (`file_phase`): 任一挂载文件具备即亮, `definition` 取最高档; 没有挂载文件的 Metadata 不命中这些筛选. 模板占位符 `{mosaic?}` 输出判定后的 mosaic, `{content_type}` 输出内容类型.
+文件相位 (`mosaic` / `definition` 与中字的文件名标记列) 是 **path 的投影**, 落在 `MediaFile`: 创建与修改 path 时用同一次 `parse_file_info` 回填, 不纳入对外 PATCH; `cd` 只用于 ORGANIZE 分集配对, 不落库. `mosaic` 只写入文件名与目录整段词表命中的马赛克标记 (无码 / 破解 / 流出); 同一次解析命中多个标记时取破解, 其次流出, 再次无码. 中字是两个来源的并集: 文件名的中字标记 (`has_subtitle_in_name`, path 的投影) 与视频同目录存在库 `subtitle_extensions` 命中的字幕 (`has_external_subtitle`, 在登记 / 修改 path / 库扫描时各检查一次; 外挂字幕只在整理落盘时作为 `parse_file_info` 的入参并进 `FileInfo.has_subtitle`, 不改变入库的路径投影). 两者都不校验语言文字, 与 ORGANIZE 的字幕配对口径相同; 目录读取不到时按无字幕处理. 只删除字幕不会触发复查, 视频重新登记、更换 path 或所在库被扫描时才回退. 并集在 Python 是 `MediaFile.has_subtitle` (property), SQL 侧必须改用 `db/models.py::has_subtitle_predicate`, 两处口径必须一致.
+
+Metadata 列表与 `/media` 文件行的角标与筛选: 有码 / 无码取条目类型 (没有挂载文件也成立), 无码再并上「存在无码标记的文件」; 中字 / 分辨率 / 破解 / 流出按关联 EXISTS 或页级聚合 (`file_phase`) 判定, 任一挂载文件具备即亮, `definition` 取最高档; 布尔取值的口径见 [api.md](api.md). 文件行同样返回派生的 `censored` / `uncensored`: `censored` 取这一份文件的性质 (带无码标记的副本不算有码), `uncensored` 与列表筛选同口径, 未绑定条目的文件只看自身标记. VR 标识与 `GET /metadata` 的 `vr` 筛选不来自文件相位, 也不物化: 只依据 `Metadata.tags` 与 `parsing/file_info.py::VR_TAGS` 的整体相等判定, 番号不参与; Python 与 SQL 两侧共用同一份词表 (`db/models.py::metadata_vr_predicate`, 用法同 `has_subtitle_predicate`), 因此重命名 / 合并标签后判定立即变化, 无需回填. 代价是判定随 `tags` 的单源取值: 字段链首个非空站点不给 VR 标签的条目判为否.
+
+马赛克性质 (`parsing/file_info.py::MosaicNature`) 是**展示口径**, 不落库: 词表标记优先, 没命中时继承条目类型的有码 / 无码 (HEYZO 等无标记的无码番因此也显示无码), 其余类型为空. 模板占位符 `{mosaic?}` 输出它 (`{content_type}` 输出条目类型), 因此 `censored=` 是合法映射键; 筛选参数与列仍只有标记三个取值.
 
 同番号多路 SCRAPE (如多 CD) 或同 `Resource.url` 并发入库时, `upsert_metadata` / `ResourceStore.ingest_file` (及 `acquire` / `acquire_derived`) 在 UNIQUE 冲突时回退为读取已有行, 不允许把竞态抬升为任务失败.
 
@@ -66,7 +70,7 @@ Metadata 列表的角标与筛选经由关联 EXISTS / 页级聚合 (`file_phase
 - `AUTO`: 跳过锁定列并保留其既有值与既有 `field_sources`; `raw` 始终更新, 只更新 `raw` 也刷新 `updated_at`, 因此全锁条目仍参与 RESCRAPE 的年龄选择. 写入位置: 影片 `upsert_metadata` (`ScrapeHandler`); 演员 `save_actor` (ACTOR_SCRAPE) 与 `clean_actor_names` 的 `Actor.gender` 填空与别名行写入.
 - `MANUAL`: 无视锁, 并把本次写入的可锁字段并入 `locked_fields`. 写入位置: 两端 REST PATCH / merge / crop 与 Agent 工具.
 - `set_metadata_locks` / `set_actor_locks` 整体替换锁集合; 锁集合本身的变更不刷新 `updated_at`.
-- 演员 `clear_actor_person` (REST clear-person) 清空档案 + `field_sources` + 锁 + `raw`, 保留 `name` / `gender`: 旧快照留着会在下次刮削被原样写回; 而 `raw` 非空是链式自动刮削的跳过判据, 清空后该演员重新入队, 代价是下次刮削全站重取.
+- 演员 `clear_actor_person` (REST `POST /actors/batch/clear-person`) 清空档案 + `field_sources` + 锁 + `raw`, 保留 `name` / `gender`: 旧快照留着会在下次刮削被原样写回; 而 `raw` 非空是链式自动刮削的跳过判据, 清空后该演员重新入队, 代价是下次刮削全站重取.
 - 分类治理与实体 rename / delete 不读锁, 也不自动上锁 (用户显式操作); 演员实体 merge 例外: 源锁集并入 target, 而填空并入的未锁字段不额外上锁.
 
 ## 可写字段与 req↔repo 兼容性
@@ -116,7 +120,7 @@ PATCH 三态: **省略键** = 不更新 (`exclude_unset`); **显式值** = 写�
 
 分集 (CD) 检测只做在 ORGANIZE 时, 不落库, 写回靠路径模板里的 `{cd?}`. 文件名无分集时, 直接父目录整段为 `CDn` / `PARTn` 也可认. **幂等**: 写出的分集 / 中字 / 马赛克 / 分辨率格式须能被同一检测逻辑反推, 否则二次整理会丢失标记 — 当前只文档约束, 不加验证.
 
-字幕: ORGANIZE 在视频**挪走前**扫描其同目录 (不递归、不入库、不扫描同目录其它视频), 扩展名由库 `subtitle_extensions` 配置; 多个字幕全部搬走不挑主字幕, 放置采用与视频相同的 `move_mode`. 字幕采用同一套 `parse_file_info`, 但只解析**文件名** (`text=` 入参), 否则 `chs.srt` 会被当成番号; 解析出番号时必须与当前视频相同, 再按分集配对, 解析不出时才回退独立目录规则. 中字角标只用同一份 `subtitle_extensions` 做同目录存在性检查 (`library/rules.py::has_companion_subtitle`), 不做这里的配对. 发现配对字幕且源文件名尚未带中字标记时, 整理前将 `FileInfo.has_subtitle` 升为真, 供路径模板 `{sub?}` 与中字水印使用.
+字幕: ORGANIZE 在视频**挪走前**扫描其同目录 (不递归、不入库、不扫描同目录其它视频), 扩展名由库 `subtitle_extensions` 配置; 多个字幕全部搬走不挑主字幕, 放置采用与视频相同的 `move_mode`. 字幕采用同一套 `parse_file_info`, 但只解析**文件名** (`text=` 入参), 否则 `chs.srt` 会被当成番号; 解析出番号时必须与当前视频相同, 再按分集配对, 解析不出时才回退独立目录规则. 中字落盘 (`{sub?}` 与封面角标) 先看 `MediaFile.has_external_subtitle` 与文件名标记; 存在性检查 (`has_companion_subtitle`) 不代替配对. 整理前若配对扫描发现字幕而该标记仍为假, 本次把 `FileInfo.has_external_subtitle` 升为真.
 
 `link_template` 为空则不创建链接, 非空时 ORGANIZE 在视频就位后按该模板写一条指向真实视频的链接 (`link_mode=strm` 写 `.strm`, `symlink` 做符号链接). 链接必须在库外, 否则 REFRESH 会把链接再扫描为媒体. `.strm` 正文由库级 `strm_content_template` 决定 (空则写一行视频绝对路径); 模板引用 `{video_relpath}` 且整理后路径不在本库内时失败, 不写出错误正文. 默认附属模板用 `{link_dir}`, 因此填链接模板后 NFO / 海报自动跟随链接.
 
@@ -124,11 +128,11 @@ PATCH 三态: **省略键** = 不更新 (`exclude_unset`); **显式值** = 写�
 
 ## Resource (一等存储, 非缓存)
 
-`Resource.url` UNIQUE, 作**通用 locator key**: 原始外部图用真实外部 URL, 派生裁剪用合成串 `derived:{sha256(src_url)}:crop:{args}`. 手动裁切写入派生 Resource: 海报替换 `poster_urls`, 演员头像前插 `image_urls` 并保留原图; 均**不**修改库路径海报 (ORGANIZE 再复制). `file_path` 是相对于 `{data_dir}/resources/` 的两级散列路径.
+`Resource.url` UNIQUE, 作**通用 locator key**: 原始外部图用真实外部 URL, 派生裁剪用合成串 `derived:{sha256(src_url)}:crop:{args}`. 手动裁切写入派生 Resource: 海报替换 `poster_urls`, 演员头像前插 `image_urls` 并保留原图; 均**不**修改库路径海报 (ORGANIZE 再复制). 文件路径相对 `{data_dir}/resources/`.
 
-`meta` (JSON, 默认 `{}`) 在派生 / 被处理资源上记录可逆来源与处理标记: 裁剪记 `{'op':'crop','src':底层locator,'args':str}` (不记 `/api/resources/{hash}` 内部 URL); 任意资源被超分后追加 `{'sr':{tool,model,scale}}` — 超分**就地覆盖**文件 (URL 不变), `'sr' in meta` 即去重依据.
+`meta` (JSON, 默认 `{}`) 记可逆来源与处理标记: 裁剪记 `{'op':'crop','src':底层locator,'args':str}` (不记内部 URL); 超分追加 `{'sr':{tool,model,scale}}`, **就地覆盖**文件 (URL 不变).
 
-**一等存储, 按引用回收**: Resource 不是 LRU 缓存. 刮削换 URL / 修改裁剪参数后旧条目会留在库里, 直到 CLEANUP 的 `remove_unreferenced_resources` 删除未引用项 (含派生). 要原始像素须 invalidate 重下 (就地超分后原像素不可恢复). 其它保留规则见 [task-system.md](task-system.md) CLEANUP. `content_hash` (SHA-256) 作完整性校验与 ETag, 约定见 [api.md](api.md).
+**按引用回收**: 不是 LRU 缓存. 刮削换 URL / 改裁剪参数后旧条目留到 CLEANUP 回收未引用项 (含派生). 原始像素须 invalidate 重下 (就地超分后不可恢复). 见 [task-system.md](task-system.md) CLEANUP. `content_hash` 兼作 ETag, 见 [api.md](api.md); 同一 locator 的写入按 locator 串行 (`ResourceStore._serialized`), 先写文件再写记录, 二者恒对应盘上那份字节.
 
 ## 分类索引 (爬取侧投影)
 

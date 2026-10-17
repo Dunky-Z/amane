@@ -103,6 +103,23 @@ class TestScrapeHandler:
         assert metadata.title == "Mock Title"
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_payload_content_type_lands_on_new_entry(self, repo: Repository, resource_store):
+        """payload 的条目类型写进新建条目, 不按番号重新推断."""
+        factory = RecordingFactory({"javdb": MockCrawler()})
+        config = _config_with({ContentType.WESTERN: [SiteName.JAVDB]})
+        h = ScrapeHandler(repo=repo, factory=factory, resource_store=resource_store, pipeline_config=config)
+
+        media = await repo.create_media_file(library_id=1, path="/media/MD-0123.mp4")
+        result = await h.handle(
+            ScrapePayload(media_file_id=media.id, number="MD-0123", content_type=ContentType.WESTERN)
+        )
+
+        assert result.success is True
+        metadata = await repo.get_metadata_by_number("MD-0123")
+        assert metadata is not None
+        assert metadata.content_type is ContentType.WESTERN
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_skips_locked_fields_end_to_end(self, repo: Repository, handler):
         """自动刮削跳过锁定字段, 未锁定字段正常更新, 锁定字段的来源标注保留."""
         seeded = await repo.upsert_metadata(
@@ -281,7 +298,7 @@ class TestScrapeHandler:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_declared_source_receives_partial_result(self, repo: Repository, resource_store):
-        """第二段来源收到第一段已定值的标量, 第一段来源收到 None."""
+        """第二段来源收到第一段已定值的标量与已抓到的图片地址, 第一段来源收到 None."""
 
         class RecordingFetcher:
             def __init__(self, metadata: MediaMetadata) -> None:
@@ -292,8 +309,12 @@ class TestScrapeHandler:
                 self.partials.append(query.partial_result)
                 return self._metadata
 
-        declared = RecordingFetcher(MediaMetadata(number="PHASE-001", title="FromDeclared"))
-        first_phase = RecordingFetcher(MediaMetadata(number="PHASE-001", title="FromPhase1"))
+        declared = RecordingFetcher(
+            MediaMetadata(number="PHASE-001", title="FromDeclared", poster_urls=["http://p2.jpg"])
+        )
+        first_phase = RecordingFetcher(
+            MediaMetadata(number="PHASE-001", title="FromPhase1", poster_urls=["http://p1.jpg"])
+        )
         catalog = (SourceDescriptor(id="javdb", name="javdb", traits=frozenset({"needs_partial"})),)
         h = ScrapeHandler(
             repo=repo,
@@ -313,6 +334,11 @@ class TestScrapeHandler:
         # dmm 是默认路由里各标量字段的链首且在第一段已返回, 其取值必须出现在第二段的入参上.
         assert declared.partials[0] is not None
         assert declared.partials[0].title == "FromPhase1"
+        assert declared.partials[0].poster_urls == ["http://p1.jpg"]
+        # 段间只作参考: 入库列表仍按字段链拼接两段贡献.
+        metadata = await repo.get_metadata_by_number("PHASE-001")
+        assert metadata is not None
+        assert metadata.poster_urls == ["http://p1.jpg", "http://p2.jpg"]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_builtin_trait_defers_without_injected_catalog(self, repo: Repository, resource_store):
@@ -598,6 +624,91 @@ class TestRefreshHandler:
         assert result.result.added == 2
         assert result.result.removed == 0
         assert result.result.scrape == 2
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @pytest.mark.parametrize(
+        ("subtitle_extensions", "subtitle_name", "stored", "expected"),
+        [
+            pytest.param([".srt"], "MIDV-771.srt", False, True, id="命中置真"),
+            pytest.param([".srt"], None, True, False, id="同目录无字幕置假"),
+            pytest.param([], "MIDV-771.srt", True, False, id="库关闭字幕发现置假"),
+        ],
+    )
+    async def test_scan_syncs_external_subtitle(
+        self,
+        repo: Repository,
+        tmp_path: Path,
+        subtitle_extensions: list[str],
+        subtitle_name: str | None,
+        stored: bool,
+        expected: bool,
+    ):
+        """存量行的外挂字幕标记只在库扫描时补齐: 迁移不回填, 登记与改 path 都不覆盖既有行."""
+        video = tmp_path / "MIDV-771.mp4"
+        video.write_bytes(b"\x00" * 100)
+        if subtitle_name is not None:
+            (tmp_path / subtitle_name).touch()
+        lib = await repo.create_library(
+            name="t", path=str(tmp_path), write_nfo=False, subtitle_extensions=subtitle_extensions
+        )
+        assert lib.id is not None
+        media = await repo.create_media_file(library_id=lib.id, path=str(video), has_external_subtitle=stored)
+        assert media.id is not None
+
+        result = await RefreshHandler(repo=repo).handle(
+            RefreshPayload(library_id=lib.id, path=str(tmp_path), scrape=set())
+        )
+
+        assert result.success is True
+        assert result.result is not None
+        assert result.result.added == 0
+        synced = await repo.get_media_file(media.id)
+        assert synced is not None
+        assert synced.has_external_subtitle is expected
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_scan_syncs_only_walked_rows(self, repo: Repository, tmp_path: Path):
+        """按遍历所见回写: 范围外的行不动, 已一致的行不写库."""
+        lib_root = tmp_path / "lib"
+        (lib_root / "hit").mkdir(parents=True)
+        (lib_root / "hit" / "MIDV-772.mp4").write_bytes(b"\x00" * 100)
+        (lib_root / "kept").mkdir()
+        (lib_root / "kept" / "MIDV-773.mp4").write_bytes(b"\x00" * 100)
+        (lib_root / "kept" / "MIDV-773.srt").touch()
+        (lib_root / "outside").mkdir()
+        (lib_root / "outside" / "MIDV-774.mp4").write_bytes(b"\x00" * 100)
+        (lib_root / "outside" / "MIDV-774.srt").touch()
+        lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, subtitle_extensions=[".srt"])
+        assert lib.id is not None
+        stale = await repo.create_media_file(
+            library_id=lib.id, path=str(lib_root / "hit" / "MIDV-772.mp4"), has_external_subtitle=True
+        )
+        kept = await repo.create_media_file(
+            library_id=lib.id, path=str(lib_root / "kept" / "MIDV-773.mp4"), has_external_subtitle=True
+        )
+        outside = await repo.create_media_file(
+            library_id=lib.id, path=str(lib_root / "outside" / "MIDV-774.mp4"), has_external_subtitle=False
+        )
+        assert stale.id is not None and kept.id is not None and outside.id is not None
+        kept_before = await repo.get_media_file(kept.id)
+        assert kept_before is not None
+
+        result = await RefreshHandler(repo=repo).handle(
+            RefreshPayload(library_id=lib.id, path=str(lib_root / "hit"), scrape=set())
+        )
+
+        assert result.success is True
+        synced = await repo.get_media_file(stale.id)
+        assert synced is not None
+        assert synced.has_external_subtitle is False
+        untouched_by_scope = await repo.get_media_file(outside.id)
+        assert untouched_by_scope is not None
+        assert untouched_by_scope.has_external_subtitle is False
+        # 范围内已一致的行不写库: 写库会刷新 updated_at.
+        kept_after = await repo.get_media_file(kept.id)
+        assert kept_after is not None
+        assert kept_after.has_external_subtitle is True
+        assert kept_after.updated_at == kept_before.updated_at
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_unscoped_scan_writes_cleanup_inventory(self, repo: Repository, tmp_path: Path):

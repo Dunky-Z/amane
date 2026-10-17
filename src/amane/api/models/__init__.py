@@ -1,4 +1,8 @@
 from .actors import (
+    ActorClearPersonBatchRequest,
+    ActorClearPersonBatchResponse,
+    ActorGenderBatchRequest,
+    ActorGenderBatchResponse,
     ActorListResponse,
     ActorLocksRequest,
     ActorResponse,
@@ -46,7 +50,14 @@ from .libraries import (
     path_template_schema,
 )
 from .llm import TranslateRequest, TranslateResponse
-from .media import MediaFileResponse, MediaFileUpdateRequest, MediaListResponse
+from .media import (
+    MediaBatchDeleteRequest,
+    MediaBatchDeleteResponse,
+    MediaFileResponse,
+    MediaFileUpdateRequest,
+    MediaListResponse,
+    to_media_file_response,
+)
 from .metadata import (
     CropPosterRequest,
     FilePhaseSummary,
@@ -90,6 +101,8 @@ from .tasks import (
     TaskBatchAction,
     TaskBatchRequest,
     TaskBatchResponse,
+    TaskBatchSubmitRequest,
+    TaskBatchSubmitResponse,
     TaskChildItem,
     TaskChildListResponse,
     TaskChildStatusCounts,
@@ -103,6 +116,10 @@ from .tasks import (
 from .user_tags import UserTagLinksResponse, UserTagResponse
 
 __all__ = [
+    "ActorClearPersonBatchRequest",
+    "ActorClearPersonBatchResponse",
+    "ActorGenderBatchRequest",
+    "ActorGenderBatchResponse",
     "ActorListResponse",
     "ActorLocksRequest",
     "ActorResponse",
@@ -146,6 +163,8 @@ __all__ = [
     "LibraryListResponse",
     "LibraryResponse",
     "LibraryUpdateRequest",
+    "MediaBatchDeleteRequest",
+    "MediaBatchDeleteResponse",
     "MediaFileResponse",
     "MediaFileUpdateRequest",
     "MediaListResponse",
@@ -187,6 +206,8 @@ __all__ = [
     "TaskBatchAction",
     "TaskBatchRequest",
     "TaskBatchResponse",
+    "TaskBatchSubmitRequest",
+    "TaskBatchSubmitResponse",
     "TaskChildItem",
     "TaskChildListResponse",
     "TaskChildStatusCounts",
@@ -204,4 +225,5 @@ __all__ = [
     "UserTagsCreateResponse",
     "normalize_feed_group",
     "path_template_schema",
+    "to_media_file_response",
 ]

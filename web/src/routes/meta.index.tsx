@@ -83,6 +83,16 @@ function ActiveHasFilesChip({ hasFiles, onClear }: { hasFiles: boolean; onClear:
   );
 }
 
+function ActiveVrChip({ vr, onClear }: { vr: boolean; onClear: () => void }) {
+  const { t } = useTranslation("metadata");
+  return (
+    <ActiveTriChip
+      label={`${t("search.vr")}: ${vr ? t("search.yes") : t("search.no")}`}
+      onClear={onClear}
+    />
+  );
+}
+
 function ActiveTriChip({ label, onClear }: { label: string; onClear: () => void }) {
   return (
     <Group gap={4} wrap="nowrap">
@@ -103,6 +113,7 @@ function MetaIndexPage() {
 
   const hasFiles = parseHasFiles(search.has_files);
   const watched = parseHasFiles(search.watched);
+  const vr = parseHasFiles(search.vr);
   const filePhase: FilePhaseFilters = {
     has_subtitle: parseHasFiles(search.has_subtitle),
     uncensored: parseHasFiles(search.uncensored),
@@ -118,7 +129,7 @@ function MetaIndexPage() {
     filePhase.content_type != null;
   const [searchInput, setSearchInput] = useState(search.q ?? "");
   const [advancedOpen, setAdvancedOpen] = useState(
-    hasFiles !== null || watched !== null || phaseActive,
+    hasFiles !== null || watched !== null || vr !== null || phaseActive,
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -138,6 +149,7 @@ function MetaIndexPage() {
     order: search.order,
     has_files: hasFiles === null ? undefined : hasFiles,
     watched: watched === null ? undefined : watched,
+    vr: vr === null ? undefined : vr,
     has_subtitle: filePhase.has_subtitle === null ? undefined : filePhase.has_subtitle,
     uncensored: filePhase.uncensored === null ? undefined : filePhase.uncensored,
     mosaic: filePhase.mosaic ?? undefined,
@@ -262,6 +274,16 @@ function MetaIndexPage() {
     });
   }
 
+  function setVrFilter(value: HasFilesFilter) {
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        vr: triToSearch(value),
+        page: 1,
+      }),
+    });
+  }
+
   function setFilePhaseFilter(value: FilePhaseFilters) {
     void navigate({
       search: (prev) => ({
@@ -293,6 +315,7 @@ function MetaIndexPage() {
     active.length > 0 ||
     hasFiles !== null ||
     watched !== null ||
+    vr !== null ||
     phaseActive ||
     search.saved_query_id != null;
 
@@ -338,7 +361,11 @@ function MetaIndexPage() {
           {/* 窄屏的筛选在底部面板里常驻展开, 该开关只在宽屏有意义. */}
           {narrowViewport ? null : (
             <HintedActionIcon
-              variant={advancedOpen || hasFiles !== null || watched !== null || phaseActive ? "filled" : "default"}
+              variant={
+                advancedOpen || hasFiles !== null || watched !== null || vr !== null || phaseActive
+                  ? "filled"
+                  : "default"
+              }
               size={36}
               onClick={() => setAdvancedOpen((v) => !v)}
               label={t("search.advanced")}
@@ -380,6 +407,8 @@ function MetaIndexPage() {
           onHasFilesChange={setHasFilesFilter}
           watched={watched}
           onWatchedChange={setWatchedFilter}
+          vr={vr}
+          onVrChange={setVrFilter}
           filePhase={filePhase}
           onFilePhaseChange={setFilePhaseFilter}
         />
@@ -427,6 +456,7 @@ function MetaIndexPage() {
           {hasFiles !== null && (
             <ActiveHasFilesChip hasFiles={hasFiles} onClear={() => setHasFilesFilter(null)} />
           )}
+          {vr !== null && <ActiveVrChip vr={vr} onClear={() => setVrFilter(null)} />}
           {filePhase.has_subtitle !== null && (
             <ActiveTriChip
               label={`${t("search.hasSubtitle")}: ${filePhase.has_subtitle ? t("search.yes") : t("search.no")}`}

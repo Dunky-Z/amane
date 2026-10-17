@@ -11,7 +11,7 @@ from ...db.repos.media import file_phase_of
 from ...handlers import ScrapePayload
 from ...library.source_delete import SourceDeleteError, unlink_indexed_files
 from ...media import manual_crop_image
-from ...parsing import DEFINITION_VALUES, ContentType, Mosaic, infer_content_type, summarize_file_phases
+from ...parsing import DEFINITION_VALUES, ContentType, Mosaic, summarize_file_phases
 from ...parsing import FilePhaseSummary as ParsedFilePhase
 from ...utils.dates import normalize_calendar_date
 from ...utils.model import to_resp
@@ -20,7 +20,6 @@ from ..models import (
     CommentResponse,
     CropPosterRequest,
     FilePhaseSummary,
-    MediaFileResponse,
     MergeRequest,
     MetadataBatchDeleteResponse,
     MetadataBatchIdsRequest,
@@ -34,6 +33,7 @@ from ..models import (
     PartialMetadata,
     UserTagLinksResponse,
     UserTagResponse,
+    to_media_file_response,
 )
 from .saved_queries import resolve_saved_query_id_subquery
 
@@ -48,6 +48,7 @@ router = APIRouter(prefix="/metadata", tags=["metadata"])
 def _file_phase_resp(summary: ParsedFilePhase) -> FilePhaseSummary:
     return FilePhaseSummary(
         has_subtitle=summary.has_subtitle,
+        censored=summary.censored,
         uncensored=summary.uncensored,
         mosaics=list(summary.mosaics),
         definition=summary.definition,
@@ -82,17 +83,16 @@ async def list_metadata(
     publisher_id: Annotated[list[int] | None, Query(description="Filter by publisher facet id(s); OR")] = None,
     series_id: Annotated[list[int] | None, Query(description="Filter by series facet id(s); OR")] = None,
     user_tag_id: Annotated[list[int] | None, Query(description="Filter by user tag id(s); AND")] = None,
-    watched: Annotated[
-        bool | None, Query(description="Filter by watched mark (fixed user tag 已播放)")
-    ] = None,
+    watched: Annotated[bool | None, Query(description="Filter by watched mark (fixed user tag 已播放)")] = None,
     has_files: Annotated[bool | None, Query(description="Filter by presence of linked MediaFile(s)")] = None,
     has_subtitle: Annotated[bool | None, Query(description="Filter by linked file subtitle marker")] = None,
+    vr: Annotated[bool | None, Query(description="Filter by VR marker (entry tag vocabulary)")] = None,
     mosaic: Annotated[Mosaic | None, Query(description="Filter by linked file mosaic marker")] = None,
     uncensored: Annotated[
-        bool | None, Query(description="Filter by uncensored file (mosaic marker or uncensored content type)")
+        bool | None, Query(description="Filter by uncensored number (own content type or linked file marker)")
     ] = None,
     definition: Annotated[str | None, Query(description="Filter by linked file definition (8K/4K/1080p/…)")] = None,
-    content_type: Annotated[ContentType | None, Query(description="Filter by linked file content type")] = None,
+    content_type: Annotated[ContentType | None, Query(description="Filter by number content type")] = None,
     saved_query_id: Annotated[
         int | None, Query(description="Saved query preset id; AND with other filters via SQL subquery")
     ] = None,
@@ -117,6 +117,7 @@ async def list_metadata(
         watched=watched,
         has_files=has_files,
         has_subtitle=has_subtitle,
+        vr=vr,
         mosaic=mosaic,
         uncensored=uncensored,
         definition=definition,
@@ -124,22 +125,20 @@ async def list_metadata(
         id_subquery_sql=id_subquery_sql,
     )
     ids = [m.id for m in items if m.id is not None]
-    summaries = await repo.summarize_media_by_metadata_ids(ids)
+    summaries = await repo.summarize_media_by_metadata(items)
     tags_by_id = await repo.list_user_tags_for_metadata_ids(ids)
-    empty = FilePhaseSummary()
-    return MetadataListResponse(
-        items=[
-            to_resp(MetadataResponse, m).model_copy(
-                update={
-                    "file_count": summaries[m.id].file_count if m.id in summaries else 0,
-                    "file_phase": _file_phase_resp(summaries[m.id].phase) if m.id in summaries else empty,
-                    "user_tags": [to_resp(UserTagResponse, tag) for tag in tags_by_id.get(m.id, [])],
-                }
-            )
-            for m in items
-        ],
-        total=total,
-    )
+    responses: list[MetadataResponse] = []
+    for m in items:
+        summary = summaries.get(m.id) if m.id is not None else None
+        response = to_resp(MetadataResponse, m)
+        update: dict[str, object] = {
+            "user_tags": [to_resp(UserTagResponse, tag) for tag in tags_by_id.get(m.id, [])],
+        }
+        if summary is not None:
+            update["file_count"] = summary.file_count
+            update["file_phase"] = _file_phase_resp(summary.phase)
+        responses.append(response.model_copy(update=update))
+    return MetadataListResponse(items=responses, total=total)
 
 
 @router.post("/batch/delete")
@@ -175,30 +174,23 @@ async def batch_delete_metadata(req: MetadataBatchIdsRequest, repo: RepoDep) -> 
 @router.post("/batch/scrape", status_code=202)
 async def batch_scrape_metadata(req: MetadataBatchScrapeRequest, repo: RepoDep) -> MetadataBatchScrapeResponse:
     """以各自 number 重新刮削."""
-    task_ids: list[int] = []
     missing = 0
-    # 挂载文件仅用于 content_type 推断 (req.content_type 显式给定时跳过).
-    files = await repo.list_media_files(metadata_ids=req.ids, limit=None)
-    first_path_by_metadata: dict[int, str] = {}
-    for f in files:
-        if f.metadata_id is not None and f.metadata_id not in first_path_by_metadata:
-            first_path_by_metadata[f.metadata_id] = f.path
-
+    payloads: list[ScrapePayload] = []
     for metadata_id in req.ids:
         metadata = await repo.get_metadata(metadata_id)
         if metadata is None:
             missing += 1
             continue
-        payload = ScrapePayload(
-            number=metadata.number,
-            content_type=req.content_type
-            if req.content_type is not None
-            else infer_content_type(metadata.number, first_path_by_metadata.get(metadata_id)),
-            use_cache=req.use_cache,
+        payloads.append(
+            ScrapePayload(
+                number=metadata.number,
+                content_type=req.content_type if req.content_type is not None else metadata.content_type,
+                use_cache=req.use_cache,
+            )
         )
-        task = await repo.create_task(task_type=TaskType.SCRAPE, payload=payload)
-        assert task.id is not None
-        task_ids.append(task.id)
+    # 批量提交动辄数百条, 逐条提交会重复付出事务开销
+    tasks = await repo.create_tasks(TaskType.SCRAPE, payloads)
+    task_ids = [task.id for task in tasks if task.id is not None]
     logger.info("metadata batch scrape submitted", submitted=len(task_ids), missing=missing)
     return MetadataBatchScrapeResponse(submitted=len(task_ids), missing=missing, task_ids=task_ids)
 
@@ -242,10 +234,12 @@ async def get_metadata(metadata_id: int, repo: RepoDep) -> MetadataDetailRespons
         metadata=to_resp(MetadataResponse, metadata).model_copy(
             update={
                 "file_count": len(files),
-                "file_phase": _file_phase_resp(summarize_file_phases(file_phase_of(f) for f in files)),
+                "file_phase": _file_phase_resp(
+                    summarize_file_phases((file_phase_of(f) for f in files), metadata.content_type)
+                ),
             }
         ),
-        files=[to_resp(MediaFileResponse, f) for f in files],
+        files=[to_media_file_response(f, metadata.content_type) for f in files],
         user_tags=[to_resp(UserTagResponse, t) for t in user_tags],
         comments=[to_resp(CommentResponse, c) for c in comments],
         actor_ids=actor_ids,

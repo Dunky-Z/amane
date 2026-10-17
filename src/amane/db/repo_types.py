@@ -35,7 +35,7 @@ def _utcnow() -> datetime:
 
 
 # 显式枚举 → Column. 禁止 getattr 反射: 类型检查须能验证列存在;
-# 新增枚举值未映射须 KeyError, 禁止静默. FILE_COUNT 不在此表, 见 _metadata_primary_order.
+# 新增枚举值未映射须 KeyError, 禁止静默. FILE_COUNT 与 SCORE 不在此表, 见 _metadata_primary_order.
 _METADATA_SORT_COLUMNS: dict[MetadataSortField, Mapped[Any]] = {
     MetadataSortField.NUMBER: col(Metadata.number),
     MetadataSortField.TITLE: col(Metadata.title),
@@ -79,12 +79,24 @@ def _metadata_file_count_expr() -> ColumnElement[int]:
     )
 
 
+def _metadata_score_expr() -> ColumnElement[Any]:
+    """评分排序键: ``scores`` 首值而非最大值, 与 `Metadata.score` 同口径.
+
+    json_each 按 JSON 文档顺序产出, 与 dict 插入顺序一致; 无评分的行键为 NULL, 不被排除.
+    """
+    scores = func.json_each(col(Metadata.scores)).table_valued("value")
+    return select(scores.c.value).correlate(Metadata).limit(1).scalar_subquery()
+
+
 def _metadata_primary_order(sort_by: MetadataSortField, order: SortOrder) -> ColumnElement[Any]:
-    """FILE_COUNT 使用计数表达式, 其余使用列映射."""
+    """FILE_COUNT 与 SCORE 无对应列, 改用计算表达式."""
     if sort_by is MetadataSortField.FILE_COUNT:
-        expr = _metadata_file_count_expr()
-        return asc(expr) if order == SortOrder.ASC else desc(expr)
-    return _order_clause(_METADATA_SORT_COLUMNS[sort_by], order)
+        expr: ColumnElement[Any] = _metadata_file_count_expr()
+    elif sort_by is MetadataSortField.SCORE:
+        expr = _metadata_score_expr()
+    else:
+        return _order_clause(_METADATA_SORT_COLUMNS[sort_by], order)
+    return asc(expr) if order == SortOrder.ASC else desc(expr)
 
 
 def _metadata_has_files_clause(*, has_files: bool) -> ColumnElement[bool]:
@@ -92,8 +104,21 @@ def _metadata_has_files_clause(*, has_files: bool) -> ColumnElement[bool]:
     return file_exists if has_files else ~file_exists
 
 
+def _media_file_entry_type_predicate(content_type: ContentType) -> ColumnElement[bool]:
+    """文件列表按类型筛的是所属条目, 未绑定条目的文件不命中任何类型."""
+    return exists().where(col(Metadata.id) == col(MediaFile.metadata_id), col(Metadata.content_type) == content_type)
+
+
 def _media_file_uncensored_predicate() -> ColumnElement[bool]:
-    return or_(col(MediaFile.mosaic) == Mosaic.UNCENSORED, col(MediaFile.content_type) == ContentType.UNCENSORED)
+    """文件视角的无码: 所属条目类型为无码, 或这一份文件带无码标记.
+
+    两侧都要空值安全: ``mosaic`` 可空, 用 ``=`` 时 NULL 参与 ``OR`` 会让整个条件求值为 NULL, 取反后把没有标记
+    的文件一起排除; 子查询写成 ``IN`` 时未绑定条目 (``metadata_id IS NULL``) 同样求值为 NULL.
+    """
+    entry_uncensored = exists().where(
+        col(Metadata.id) == col(MediaFile.metadata_id), col(Metadata.content_type) == ContentType.UNCENSORED
+    )
+    return or_(col(MediaFile.mosaic).is_(Mosaic.UNCENSORED), entry_uncensored)
 
 
 def _apply_media_phase_filters(
@@ -105,7 +130,7 @@ def _apply_media_phase_filters(
     definition: str | None = None,
     content_type: ContentType | None = None,
 ) -> SelectOfScalar[MediaFile]:
-    """None 表示该相位不过滤."""
+    """None 表示该相位不过滤; content_type 按所属条目筛."""
     if has_subtitle is not None:
         flag = has_subtitle_predicate()
         stmt = stmt.where(flag if has_subtitle else ~flag)
@@ -117,12 +142,20 @@ def _apply_media_phase_filters(
     if definition is not None:
         stmt = stmt.where(col(MediaFile.definition) == definition)
     if content_type is not None:
-        stmt = stmt.where(col(MediaFile.content_type) == content_type)
+        stmt = stmt.where(_media_file_entry_type_predicate(content_type))
     return stmt
 
 
 def _metadata_linked_file_exists(*extra: ColumnElement[bool]) -> ColumnElement[bool]:
     return exists().where(col(MediaFile.metadata_id) == col(Metadata.id), *extra)
+
+
+def _metadata_uncensored_predicate() -> ColumnElement[bool]:
+    """条目无码: 类型为无码, 或存在带无码标记的文件. 没有挂载文件也成立."""
+    return or_(
+        col(Metadata.content_type) == ContentType.UNCENSORED,
+        _metadata_linked_file_exists(col(MediaFile.mosaic) == Mosaic.UNCENSORED),
+    )
 
 
 def _facet_primary_order(sort_by: FacetSortField, order: SortOrder, *, name_col: Any, count_expr: Any) -> Any:

@@ -13,10 +13,10 @@ CHECK_DIRS := "src/amane tests scripts"
 host := env("AMANE_HOST", "0.0.0.0")
 port := env("AMANE_PORT", "8000")
 
-# Sync Python + web deps; pull test fixtures; install prek hooks
+# Sync Python + web deps; pull test fixtures; enable Git hooks
+# --replace-all 收敛 core.hooksPath 的多值残留: 普通 set 在该键已有多个取值时报错退出
 setup: sync fixtures
-    -git config --unset-all core.hooksPath
-    uv run prek install
+    git config --replace-all core.hooksPath scripts/githooks
 
 # Local: full Python (extras+dev+packaging) + web
 sync: _sync-python _web-install
@@ -59,8 +59,14 @@ fix-python:
 fix-web:
     pnpm fix
 
-typecheck:
+typecheck: typecheck-pyright typecheck-ty
+
+# pre-push: pyright 类型检查 (TypeScript 实现, 慢于 ty)
+typecheck-pyright:
     uv run pyright
+
+# pre-commit: ty 类型检查 (Rust 实现)
+typecheck-ty:
     uv run ty check
 
 # web: oxlint + oxfmt + tsc + i18n

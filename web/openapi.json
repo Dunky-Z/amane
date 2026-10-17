@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Amane API",
-    "version": "0.19.0"
+    "version": "0.21.0"
   },
   "paths": {
     "/api/health": {
@@ -549,10 +549,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by uncensored (mosaic marker or uncensored content type)",
+              "description": "Filter by uncensored (own marker or uncensored number content type)",
               "title": "Uncensored"
             },
-            "description": "Filter by uncensored (mosaic marker or uncensored content type)"
+            "description": "Filter by uncensored (own marker or uncensored number content type)"
           },
           {
             "name": "definition",
@@ -585,10 +585,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by content type",
+              "description": "Filter by owning number content type",
               "title": "Content Type"
             },
-            "description": "Filter by content type"
+            "description": "Filter by owning number content type"
           },
           {
             "name": "limit",
@@ -643,6 +643,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MediaListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/batch/delete": {
+      "post": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Batch Delete Media",
+        "description": "批量删除媒体文件记录; 不存在的 id 计入 missing 而不是报错.",
+        "operationId": "batch_delete_media",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaBatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaBatchDeleteResponse"
                 }
               }
             }
@@ -1079,6 +1121,24 @@
             "description": "Filter by linked file subtitle marker"
           },
           {
+            "name": "vr",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by VR marker (entry tag vocabulary)",
+              "title": "Vr"
+            },
+            "description": "Filter by VR marker (entry tag vocabulary)"
+          },
+          {
             "name": "mosaic",
             "in": "query",
             "required": false,
@@ -1109,10 +1169,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by uncensored file (mosaic marker or uncensored content type)",
+              "description": "Filter by uncensored number (own content type or linked file marker)",
               "title": "Uncensored"
             },
-            "description": "Filter by uncensored file (mosaic marker or uncensored content type)"
+            "description": "Filter by uncensored number (own content type or linked file marker)"
           },
           {
             "name": "definition",
@@ -1145,10 +1205,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by linked file content type",
+              "description": "Filter by number content type",
               "title": "Content Type"
             },
-            "description": "Filter by linked file content type"
+            "description": "Filter by number content type"
           },
           {
             "name": "saved_query_id",
@@ -3048,6 +3108,90 @@
         }
       }
     },
+    "/api/actors/batch/gender": {
+      "post": {
+        "tags": [
+          "actors"
+        ],
+        "summary": "Batch Actor Gender",
+        "description": "批量写入性别; 写入字段与单条 PATCH 一样自动加锁, 不存在的演员 id 计入 missing.",
+        "operationId": "batch_actor_gender",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorGenderBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorGenderBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/actors/batch/clear-person": {
+      "post": {
+        "tags": [
+          "actors"
+        ],
+        "summary": "Batch Clear Actor Person",
+        "description": "批量清空人物档案并解除全部锁 (保留 ``name`` / ``gender``); 不存在的演员 id 计入 missing.",
+        "operationId": "batch_clear_actor_person",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorClearPersonBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorClearPersonBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/actors/{actor_id}": {
       "get": {
         "tags": [
@@ -3200,8 +3344,9 @@
           "actors"
         ],
         "summary": "Clear Actor Person",
-        "description": "清空人物档案与刮削缓存并解除全部锁 (保留 name / gender).",
+        "description": "已弃用: 改用 `POST /actors/batch/clear-person` 的单元素列表 (只回计数).",
         "operationId": "clear_actor_person",
+        "deprecated": true,
         "parameters": [
           {
             "name": "actor_id",
@@ -3296,7 +3441,9 @@
           "actors"
         ],
         "summary": "Scrape Actor",
+        "description": "已弃用: 改用 `POST /tasks/batch/submit` 的单元素 `actor_scrape` 提交.",
         "operationId": "scrape_actor",
+        "deprecated": true,
         "parameters": [
           {
             "name": "actor_id",
@@ -5291,6 +5438,48 @@
         }
       }
     },
+    "/api/tasks/batch/submit": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Batch Submit Tasks",
+        "description": "批量提交任务. 逐项解析同单条提交, 同类型合并为一次入队事务.\n\n``missing`` 只覆盖目标实体不存在 (404); 路径越界 / 参数互斥等仍是整批中断.",
+        "operationId": "batch_submit_tasks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskBatchSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskBatchSubmitResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tasks/{task_id}": {
       "get": {
         "tags": [
@@ -6313,6 +6502,46 @@
   },
   "components": {
     "schemas": {
+      "ActorClearPersonBatchRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Ids",
+            "description": "演员 ID 列表; 上限防 SQLite 绑定变量超限"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "ActorClearPersonBatchRequest",
+        "description": "批量清空人物档案并解除全部锁 (保留 ``name`` / ``gender``)."
+      },
+      "ActorClearPersonBatchResponse": {
+        "properties": {
+          "cleared": {
+            "type": "integer",
+            "title": "Cleared",
+            "description": "清空的演员数"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing",
+            "description": "不存在的演员 id 数"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cleared",
+          "missing"
+        ],
+        "title": "ActorClearPersonBatchResponse"
+      },
       "ActorField": {
         "type": "string",
         "enum": [
@@ -6341,6 +6570,51 @@
         ],
         "title": "ActorGender",
         "description": "演员性别 - 用于展示与按站裁剪刮削源."
+      },
+      "ActorGenderBatchRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Ids",
+            "description": "演员 ID 列表; 上限防 SQLite 绑定变量超限"
+          },
+          "gender": {
+            "$ref": "#/components/schemas/ActorGender",
+            "description": "统一写入的性别"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids",
+          "gender"
+        ],
+        "title": "ActorGenderBatchRequest",
+        "description": "批量把同一性别写给一组演员; 写入字段按 MANUAL 语义加锁."
+      },
+      "ActorGenderBatchResponse": {
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "title": "Updated",
+            "description": "实际写入的演员数"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing",
+            "description": "不存在的演员 id 数"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated",
+          "missing"
+        ],
+        "title": "ActorGenderBatchResponse"
       },
       "ActorListResponse": {
         "properties": {
@@ -8940,6 +9214,11 @@
             "title": "Has Subtitle",
             "default": false
           },
+          "censored": {
+            "type": "boolean",
+            "title": "Censored",
+            "default": false
+          },
           "uncensored": {
             "type": "boolean",
             "title": "Uncensored",
@@ -8967,7 +9246,7 @@
         },
         "type": "object",
         "title": "FilePhaseSummary",
-        "description": "关联文件相位聚合: 任一文件具备即亮; definition 取最高档."
+        "description": "条目相位聚合; 判定见 ``parsing/file_info.py::summarize_file_phases``, definition 取最高档."
       },
       "FootprintNoticeKind": {
         "type": "string",
@@ -9050,7 +9329,8 @@
                   "javdb",
                   "fc2ppvdb",
                   "fc2",
-                  "freejavbt"
+                  "freejavbt",
+                  "airav"
                 ],
                 "hentai": [
                   "getchu",
@@ -9312,6 +9592,11 @@
                 },
                 "local": {
                   "cookie": {},
+                  "languages": [
+                    "zh",
+                    "ja",
+                    "en"
+                  ],
                   "official_routes": {},
                   "rate_limit": 2.0,
                   "use_browser": "auto",
@@ -10811,6 +11096,46 @@
         ],
         "title": "Manufacturer"
       },
+      "MediaBatchDeleteRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Ids",
+            "description": "MediaFile ID 列表; 上限防 SQLite 绑定变量超限"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "MediaBatchDeleteRequest",
+        "description": "批量删除媒体文件记录; 不存在的 id 计入 missing."
+      },
+      "MediaBatchDeleteResponse": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted",
+            "description": "成功删除的数量"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing",
+            "description": "不存在的 id 数量"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "missing"
+        ],
+        "title": "MediaBatchDeleteResponse"
+      },
       "MediaFileResponse": {
         "properties": {
           "id": {
@@ -10883,9 +11208,6 @@
           "status": {
             "$ref": "#/components/schemas/MediaFileStatus"
           },
-          "content_type": {
-            "$ref": "#/components/schemas/ContentType"
-          },
           "mosaic": {
             "anyOf": [
               {
@@ -10895,6 +11217,16 @@
                 "type": "null"
               }
             ]
+          },
+          "censored": {
+            "type": "boolean",
+            "title": "Censored",
+            "default": false
+          },
+          "uncensored": {
+            "type": "boolean",
+            "title": "Uncensored",
+            "default": false
           },
           "has_subtitle": {
             "type": "boolean",
@@ -10953,8 +11285,7 @@
           "id",
           "library_id",
           "path",
-          "status",
-          "content_type"
+          "status"
         ],
         "title": "MediaFileResponse"
       },
@@ -11137,7 +11468,7 @@
                 "type": "null"
               }
             ],
-            "description": "内容类型; None = 服务端推断 (挂载文件路径 → 番号模式)"
+            "description": "内容类型; None = 用条目已落定的类型 (不重新推断)"
           },
           "use_cache": {
             "items": {
@@ -11591,6 +11922,9 @@
             "type": "string",
             "title": "Number"
           },
+          "content_type": {
+            "$ref": "#/components/schemas/ContentType"
+          },
           "title": {
             "anyOf": [
               {
@@ -11744,6 +12078,11 @@
             ],
             "title": "Score"
           },
+          "vr": {
+            "type": "boolean",
+            "title": "Vr",
+            "default": false
+          },
           "poster_urls": {
             "items": {
               "type": "string"
@@ -11858,7 +12197,8 @@
         "type": "object",
         "required": [
           "id",
-          "number"
+          "number",
+          "content_type"
         ],
         "title": "MetadataResponse"
       },
@@ -11871,7 +12211,8 @@
           "release",
           "created_at",
           "updated_at",
-          "file_count"
+          "file_count",
+          "score"
         ],
         "title": "MetadataSortField"
       },
@@ -11916,12 +12257,12 @@
       "Mosaic": {
         "type": "string",
         "enum": [
-          "censored",
           "uncensored",
           "cracked",
           "leaked"
         ],
-        "title": "Mosaic"
+        "title": "Mosaic",
+        "description": "马赛克标记; 有码是条目类型, 不在此列."
       },
       "MoveMode": {
         "type": "string",
@@ -14544,6 +14885,102 @@
         "type": "object",
         "title": "TaskBatchResponse"
       },
+      "TaskBatchSubmitRequest": {
+        "properties": {
+          "submissions": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RefreshSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/OrganizeSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/ScanInvalidSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/DeleteSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/ScrapeSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/CleanupSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/UpscaleSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/R18ImportSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/ActorScrapeSubmission"
+                },
+                {
+                  "$ref": "#/components/schemas/RescrapeSubmission"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "actor_scrape": "#/components/schemas/ActorScrapeSubmission",
+                  "cleanup": "#/components/schemas/CleanupSubmission",
+                  "delete": "#/components/schemas/DeleteSubmission",
+                  "organize": "#/components/schemas/OrganizeSubmission",
+                  "r18_import": "#/components/schemas/R18ImportSubmission",
+                  "refresh": "#/components/schemas/RefreshSubmission",
+                  "rescrape": "#/components/schemas/RescrapeSubmission",
+                  "scan_invalid": "#/components/schemas/ScanInvalidSubmission",
+                  "scrape": "#/components/schemas/ScrapeSubmission",
+                  "upscale": "#/components/schemas/UpscaleSubmission"
+                }
+              }
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Submissions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submissions"
+        ],
+        "title": "TaskBatchSubmitRequest",
+        "description": "逐项与 ``POST /tasks`` 的 body 同形, 只是包成数组."
+      },
+      "TaskBatchSubmitResponse": {
+        "properties": {
+          "submitted": {
+            "type": "integer",
+            "title": "Submitted"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "task_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Task Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submitted",
+          "missing",
+          "skipped",
+          "task_ids"
+        ],
+        "title": "TaskBatchSubmitResponse"
+      },
       "TaskChildItem": {
         "properties": {
           "id": {
@@ -14577,17 +15014,6 @@
               }
             ],
             "title": "Error"
-          },
-          "log_file": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Log File"
           },
           "retries": {
             "type": "integer",
@@ -14750,17 +15176,6 @@
             ],
             "title": "Error"
           },
-          "log_file": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Log File"
-          },
           "retries": {
             "type": "integer",
             "title": "Retries",
@@ -14890,17 +15305,6 @@
               }
             ],
             "title": "Error"
-          },
-          "log_file": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Log File"
           },
           "retries": {
             "type": "integer",

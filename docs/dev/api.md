@@ -18,13 +18,13 @@ HTTP 宿主与 DI 在 `app.py` / `deps.py` / `middleware.py` / `spa.py`; `routes
 | `libraries` | `/libraries` | 库 CRUD; create 可携首刷; 路径模板 schema |
 | `webhooks` | `/webhooks` | CloudDrive 回调; 见 [watcher.md](watcher.md) |
 | `feeds` | `/feeds` | 源 CRUD + 立即拉取 + 条目历史检索 / 批量操作 / 重刮削; 见 [feeds.md](feeds.md) |
-| `media` | `/media` | MediaFile |
+| `media` | `/media` | MediaFile + 记录批量删除 |
 | `metadata` | `/metadata` | 番号条目 + merge / crop / facet 筛选 / user-tag / batch / schema |
 | `llm` | `/llm` | 同步字段翻译 (`POST /translate`); 不入队、不写库 |
-| `actors` | `/actors` | 演员浏览 (含用户标签筛选)、人物 PATCH / 锁 / 清空、用户标签挂载、刮削; 身份治理经由 facets |
+| `actors` | `/actors` | 演员浏览 (含用户标签筛选)、人物 PATCH / 锁、批量性别与批量清空、用户标签挂载; 单条刮削与单条清空已弃用; 身份治理经由 facets |
 | `facets` | `/facets` | 分类目录与规则 |
 | `comments` | `/comments` | 评论修改与删除; 新建经由 metadata |
-| `tasks` | `/tasks` | 队列 + `POST /batch` + worker 暂停领队 + 终态 `record` |
+| `tasks` | `/tasks` | 队列 + `POST /batch`(操作既有) + `POST /batch/submit`(批量入队) + worker 暂停领队 + 终态 `record` |
 | `schedules` | `/schedules` | cron CRUD + trigger |
 | `config` | `/config` | HotSettings + schema |
 | `plugins` | `/plugins` | 插件目录、安装 / 卸载 / 热扫描、配置 schema 与启用状态 |
@@ -39,7 +39,7 @@ HTTP 宿主与 DI 在 `app.py` / `deps.py` / `middleware.py` / `spa.py`; `routes
 OpenAPI 列出参数, 不表达组合语义:
 
 - metadata 同 kind 的筛选: 关联类 AND / 标量类 OR; 跨 kind 始终 AND. `saved_query_id` 与其它筛选项 AND; `data` 实体不可作列表筛选 (400). 关联文件相位筛选与 `has_files` 一样 AND (布尔项 True = 至少一份具备, False = 没有任何一份具备), 列表项带聚合 `file_phase`. `watched` 按是否挂载固定名用户标签 `已播放` 筛选 (True / False / 省略), 与其它筛选项 AND. 见 [data-model.md](data-model.md) / [agent.md](agent.md).
-- GET `/media` 的相位 query 作用在单行列上: 布尔 False 是 `col = false`, 不是 metadata 那种 NOT EXISTS. 未知 `definition` → 422; 相位列不纳入 PATCH.
+- GET `/media` 的相位 query 作用在单行列上; `uncensored` 与 `content_type` 是例外: 两者都按所属条目判定 (`uncensored` = 条目无码或这一份带无码标记, `content_type` = 条目类型), 未绑定条目的文件只看自身标记、不命中任何类型; 布尔侧按空值安全比较. 未知 `definition` → 422; 相位列不纳入 PATCH.
 - 手动裁切基准是源图**当前本地文件**像素 (含就地超分后尺寸): 海报以 `thumb_urls[0]` 为源并替换 `poster_urls`, 演员头像以 `image_urls[0]` 为源并前插保留原图; 库路径海报不受影响. locator 见 [data-model.md](data-model.md).
 - `PUT /metadata/{id}/locks` 与 `PUT /actors/{id}/locks` 整体替换锁定字段集合; 锁语义见 [data-model.md](data-model.md)「字段锁定」.
 - `GET /facets/{kind}` 的 `favorite` 过滤与 `POST /facets/{kind}/batch` 的收藏写入只在可收藏的分类上成立 (`db/models.py::FAVORITE_FACET_KINDS`; 链接型分类中的 `director` 与 `tag` 同样成立): 传入 `favorite` (与取值无关) 或对不支持的 kind 写收藏都是 400, 其余 kind 恒为 false. 写端点按 `action` 分派, 空 `facet_ids` 与未登记的 `action` 是 422, 取去重后的 `facet_ids`, 不存在的 id 计入 `missing` 而不报 404, 三个计数之和等于去重后的条目数. 见 [data-model.md](data-model.md).
@@ -64,13 +64,14 @@ OpenAPI 列出参数, 不表达组合语义:
 
 **错误**: `HTTPException(detail=中文)`. 路径校验位于 `support/path_validation.py` (存在 / 类型 / `safe_dirs` → 400 / 403 / 404; `ALLOW_ALL` 时跳过边界层). `/files` 的失败映射: 不存在 → 404, 不在 `safe_dirs` → 403, 空名单 → 500, `os.scandir` 的 `OSError` (含网络盘挂载失效) → 500 + strerror detail, `PermissionError` → 403. 错误日志统一由 LoggingMiddleware 打点 (见 [observability.md](observability.md)), handler 内不自行打印.
 
-**列表**: `media` / `metadata` / `tasks` / `facets` / `actors` 同构 `offset` + `limit` + `sort_by` + `order`, 响应 `{items, total}`; `sort_by` 是各资源 `*SortField` 枚举, repo 用 enum→Column, 禁止反射列名. 清理清单的 `cleanup/inventory/nodes` 同样是 `offset` / `limit` + `{items, total}`, 顺序由树决定, 因此没有排序参数 (见 [task-system.md](task-system.md)). `libraries` / `schedules` / `feeds` 全量无分页. `GET /actors` 列表项不填简介 / 别名 / 用户标签 / 源字典 / `raw` (详情仍全量); `GET /tasks` 与其 `/children` 同样不带 `payload` 与 `result`, 展开单个任务时才取详情.
+**列表**: `media` / `metadata` / `tasks` / `facets` / `actors` 同构 `offset` + `limit` + `sort_by` + `order`, 响应 `{items, total}`; `sort_by` 是各资源 `*SortField` 枚举, 显式映射到列或计算表达式 (片库评分按 `scores` 首值, 与响应 `score` 同源), 禁止反射列名. 清理清单的 `cleanup/inventory/nodes` 同样分页, 顺序由树决定, 因此没有排序参数 (见 [task-system.md](task-system.md)). `libraries` / `schedules` / `feeds` 全量无分页. `GET /actors` 列表项不填简介 / 别名 / 用户标签 / 源字典 / `raw` (详情仍全量); `GET /tasks` 与其 `/children` 同样不带 `payload` 与 `result`, 展开单个任务时才取详情.
 
 **状态码**: 创建 201、任务入队 202、无返回体 204; 空 PATCH / 非法 cron → 422; 任务状态不允许的 record → 409.
 
 **资源缓存**: `/resources/{hash}` 与 `/proxy` 因就地超分 URL 不变, 不可 immutable — `Cache-Control: public, no-cache` + `content_hash` ETag. proxy 上游失败 502, 进程内负缓存 15 分钟 (不纳入配置), 同 URL singleflight; 刮削下载不经由该缓存.
 
-**批量**: 不存在的 id 计入 `missing` / `skipped`, 存在的照常处理 (非事务 all-or-nothing). `POST /tasks/batch` 的选择集是 `task_ids` **或**与列表同形的 `status` / `type` (未传则不限): `cancel` 把排队 / 运行中标 `failed` 而不删行, `delete` 只动终态并清除磁盘产物, `retry` 只对 `failed` 按原 type / payload / priority 再入队并返回新 `task_ids`; 筛选范围与 action 允许状态求交后为空则 `affected=0`. FeedItem 的批量是单一 `POST /feeds/{feed_id}/items/batch`, 一个请求只携带一个 action, 语义见 [feeds.md](feeds.md). 用户标签挂载同样只有批量入口 (`POST /api/metadata/batch/user-tags`, 影片与标签两个维度都是集合, `action` 决定并入或移除): 未知标签 id 属请求级错误返回 404, 不存在的影片 id 计入 `missing`, 已处于目标态的影片计入 `unchanged`. 标签新建也是单一批量入口 (`POST /api/facets/user_tag`): 按名称取回或新建, 已存在的名称直接复用而不报错, 响应与入参同序. `GET /api/metadata` 列表项附带当页 `user_tags` (供海报快捷开关判态). 演员侧挂载与影片侧同形 (`POST /api/actors/batch/user-tags`), 筛选参数为 `user_tag_ids`(多值为 AND).
+- **批量**: 命名分两层 — `batch` 后接**主体** (不接即资源本身), 动作进 body 的 `action` 当且仅当同一主体下的动作共享同一份参数 (`/tasks/batch` 的 cancel / delete / retry, `/facets/{kind}/batch` 的收藏, `/feeds/{id}/items/batch`, 两条 `batch/user-tags` 的 attach / detach); 参数形状不同或只有单动作时动作进路径 (`/metadata/batch/{delete,scrape}`, `/media/batch/delete`, `/actors/batch/{gender,clear-person}`, `/tasks/batch/submit`). 不存在的 id 计入 `missing` 而不报 404, 请求内重复条目计入 `skipped`, 参数级错误 (403 路径越界 / 422 参数互斥) 仍是整请求错误, 其余条目照常处理 (不是 all-or-nothing 事务); 计数口径为"实际处理数 + `missing` (+ `skipped`) = 请求条目数". 单条写入复用所属批量端点 (单元素列表).
+- **批量落库**: 一个批量请求不在服务端逐条提交 — 实体批量写各自一次事务与一次 `IN` 查询; 任务批量入队 (`/tasks/batch/submit`) 逐项与 `POST /tasks` 同形且不设类型白名单, 按 `task_type` 合并为每类一次入队事务, 其 `missing` 只覆盖目标实体不存在的 404, 同番号不同文件各建一条 (逐文件结算不合并). 逐条循环提交不允许, 前端多选一律走批量端点 (见 [frontend.md](frontend.md)). `/tasks/batch` 的选择集是 `task_ids` **或**与列表同形的 `status` / `type` (两者互斥, 未传则不限): `cancel` 把排队 / 运行中标 `failed` 而不删行, `delete` 只动终态并清除磁盘产物, `retry` 只对 `failed` 按原 type / payload / priority 再入队并返回新 `task_ids`, 求交后为空则 `affected=0`. FeedItem 的历史操作是单端点 + 单一 action, 语义见 [feeds.md](feeds.md). 用户标签挂载 (影片 / 演员各一端点) 与标签新建 (`POST /facets/user_tag`: 按名称取回或新建, 响应与入参同序) 都只有批量入口: 未知标签 id 是请求级 404, 不存在的实体计入 `missing`, 已处于目标态计入 `unchanged`. `GET /api/metadata` 列表项附带当页 `user_tags`, 供海报快捷开关判态.
 
 ## WebSocket
 

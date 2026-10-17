@@ -33,7 +33,7 @@
 
 descriptor 声明来源能力、支持的内容类型、语言、访问 URL、`traits` 行为开关和默认速率. 路由校验在启动与配置热更新时执行: 已安装来源须声明影片元数据能力, 且若声明了内容类型集合则必须覆盖所配置的 `ContentType`; 尚未安装的合法第三方来源 ID 可以留在路由里, 只记日志.
 
-`traits` 承载来源的行为开关, 取值见 `SourceTrait`: `needs_partial` 决定来源是否排在聚合第二段, `multi_language` 决定是否按字段语言展开 `(source, language)` 获取节点, `uses_file_hash` 决定刮削前是否计算 oshash 并经 `SearchQuery.file_hash` 传入. 不允许只在爬虫内部根据配置猜测这些行为, 也不允许为同一开关另开 descriptor 字段; 未知取值被忽略, 插件可以声明为更新宿主准备的能力. `SearchQuery.partial_result` 属于插件契约且只读: 为 `None` 当且仅当该来源不在第二段, 单源路由下是空对象. 它是 `SearchQuery` 上唯一属于契约的注入状态; 主机侧的中间结果与站点快照不属于插件契约, 增删不递增 `PLUGIN_API_VERSION`. 内置影片来源的 descriptor 由 `crawlers/site_roles.py::builtin_descriptors` 从对应爬虫的 `CrawlerProfile` 合成, 不另维护名单; 刮削任务的调度事实只从这份目录读取, 与来源是内置还是插件无关.
+`traits` 承载来源的行为开关, 取值见 `SourceTrait`: `needs_partial` 决定来源是否排在聚合第二段, `multi_language` 决定是否按字段语言展开 `(source, language)` 获取节点, `uses_file_hash` 决定刮削前是否计算 oshash 并经 `SearchQuery.file_hash` 传入. 不允许只在爬虫内部根据配置猜测这些行为, 也不允许为同一开关另开 descriptor 字段; 未知取值被忽略, 插件可以声明为更新宿主准备的能力. `SearchQuery.partial_result` 属于插件契约且只读: 为 `None` 当且仅当该来源不在第二段, 单源路由下是空对象; 内容是前序已定值的单源标量与第一段各来源贡献的图片地址 (封面 / 缩略图 / 预告片, 顺序同字段链), 第二段自身的贡献不在其中, 因此它不等于最终图片列表的前缀. 它是 `SearchQuery` 上唯一属于契约的注入状态; 主机侧的中间结果与站点快照不属于插件契约, 增删不递增 `PLUGIN_API_VERSION`. 内置影片来源的 descriptor 由 `crawlers/site_roles.py::builtin_descriptors` 从对应爬虫的 `CrawlerProfile` 合成, 不另维护名单; 刮削任务的调度事实只从这份目录读取, 与来源是内置还是插件无关.
 
 ## 配置
 
@@ -56,7 +56,7 @@ descriptor 声明来源能力、支持的内容类型、语言、访问 URL、`t
 
 主机不提供内置播放源: 播放源只来自插件, 本地文件播放由插件声明 `file` 目标实现. 播放目标由主机执行, 插件只声明:
 
-- `file`: 已入库文件. 插件回送快照 `query.files` 里的路径, 主机自行打开并输出. 主机只接受该条目已索引文件之一 (两侧都执行 `resolve()` 后逐条比较, 索引里的符号链接与插件回送的等价形式视为同一个文件, 因此指向库外的符号链接照常可播); 不检查库根与 `safe_dirs`. 路径不在索引中、或索引里的文件已从磁盘消失, 均返回 502 与可读原因; 条目没有已索引文件时一律拒绝. 长度为 0 的文件由插件在探测阶段拒绝, 主机对它发出的任何 Range 都不可满足.
+- `file`: 已入库文件. 插件回送快照 `query.files` 里的路径, 主机自行打开并输出. 快照的 `content_type` 是**条目**类型, 这一份文件自己的来路标记看 `mosaic` (判无码用 `content_type == "uncensored" or mosaic == "uncensored"`, 与主机 `parsing/file_info.py::shows_uncensored` 同口径). 主机只接受该条目已索引文件之一 (两侧都执行 `resolve()` 后逐条比较, 索引里的符号链接与插件回送的等价形式视为同一个文件, 因此指向库外的符号链接照常可播); 不检查库根与 `safe_dirs`. 路径不在索引中、或索引里的文件已从磁盘消失, 均返回 502 与可读原因; 条目没有已索引文件时一律拒绝. 长度为 0 的文件由插件在探测阶段拒绝, 主机对它发出的任何 Range 都不可满足.
 - `upstream`: 上游 URL 与仅服务端使用的请求头. 主机反向代理并转发单段 Range, 密钥不得出现在响应头或重定向 Location; 指向播放列表的 `upstream` 仍拒绝, 清单必须经由 `hls`.
 - `hls`: 插件提供 locator, 主机把清单 URI 改写到本机前缀并反向代理分片、密钥与子清单; 相对 URI 解析后必须与该份清单 Origin 相同, 清单内不得残留上游 Origin. 无法定位的 URI 只作废自己 (登记一个必定失败的 token, 请求时返回 502 与原因), 清单其余部分照常可播; 密钥标签的 URI 例外 — 缺密钥整份清单都播不了, 直接让整份清单 502.
 

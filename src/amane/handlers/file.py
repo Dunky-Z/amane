@@ -33,7 +33,7 @@ from ..organize import (
     video_dest,
 )
 from ..organize.link import create_video_link
-from ..parsing import FileInfo, parse_file_info
+from ..parsing import ContentType, FileInfo, parse_file_info
 from ..utils.path import existing_disk_path as existing_disk_path_sync
 from ..utils.path import is_descendant, nfc_path, path_is_under
 from ..utils.threads import existing_disk_path, in_thread, path_is_dir
@@ -74,24 +74,26 @@ async def execute_file_operations(
     paths: ResolvedPaths,
     move_mode: MoveMode,
     resource_store: ResourceStore,
+    file_info: FileInfo,
     download_images: bool = True,
     write_nfo: bool = True,
     copy_resources: Sequence[DownloadableResource] | None = None,
     web_client: WebClient | None = None,
     config: HotSettings | None = None,
     library: Library | None = None,
-    file_info: FileInfo | None = None,
     safe_dirs: Sequence[Path] | None = (),
     watermark_dir: Path | None = None,
     actor_genders: dict[str, ActorGender] | None = None,
     prediscovered_subtitles: Sequence[Path] | None = None,
 ) -> FileOperationsResult:
+    """``file_info`` 由渲染路径的那一次 ``parse_file_info`` 产出, 必须带上 ``has_external_subtitle``.
+
+    未带库列时函数不报错, 直接少打中字角标 — 调用方负责构造.
+    """
     source_path = await existing_disk_path(Path(media_file.path))
     if source_path is None:
         logger.warning("source file missing", path=media_file.path)
         return FileOperationsResult(outcome=PlaceOutcome.FAILED, error=f"源文件不存在: {media_file.path}")
-
-    info = file_info if file_info is not None else parse_file_info(source_path)
 
     # 目标被别的文件占用时立即返回: 不下载图片, 不写附属文件, 不改库内任何路径.
     # 读不出目标状态时同样立即返回, 但记为失败而不是冲突.
@@ -116,17 +118,18 @@ async def execute_file_operations(
             paths,
             config,
             kinds,
-            file_info=info,
+            file_info=file_info,
+            content_type=metadata.content_type,
             watermark_dir=watermark_dir,
         )
 
-    # 发现字幕: 必须在视频移动前检查同目录; 调用方可预发现以免重复扫描.
+    # 发现字幕: 必须在视频移动前检查同目录; 调用方已预发现时不再扫第二次.
     if prediscovered_subtitles is not None:
         subtitles = list(prediscovered_subtitles)
     else:
         subtitles = []
         if library is not None:
-            subtitles = await discover_subtitles(source_path, library.subtitle_extensions, info)
+            subtitles = await discover_subtitles(source_path, library.subtitle_extensions, file_info)
 
     org_result = await execute_organize(
         source=source_path,
@@ -150,7 +153,7 @@ async def execute_file_operations(
                     Path(library.path),
                     metadata,
                     source_path=source_path,
-                    file_info=info,
+                    file_info=file_info,
                     link=paths.link,
                     actor_genders=actor_genders,
                 )
@@ -173,7 +176,7 @@ async def execute_file_operations(
             video_dest=org_result.dest,
             library=library,
             metadata=metadata,
-            file_info=info,
+            file_info=file_info,
             mode=move_mode,
             safe_dirs=safe_dirs,
             link_dir=paths.link.parent if paths.link is not None else None,
@@ -217,8 +220,8 @@ async def apply_file_operations(
 
     # 渲染路径后执行落盘. 同目录已有配对字幕时提升中字相位, 使 ``{sub?}`` 写出 -C.
     ext = Path(media_file.path).suffix.lstrip(".")
-    file_info = parse_file_info(media_file.path)
     source_path = Path(media_file.path)
+    file_info = parse_file_info(media_file.path, has_external_subtitle=media_file.has_external_subtitle)
     prediscovered: list[Path] = []
     if await existing_disk_path(source_path) is not None:
         prediscovered = await discover_subtitles(source_path, library.subtitle_extensions, file_info)
@@ -234,18 +237,18 @@ async def apply_file_operations(
         actor_genders=actor_genders,
     )
     return await execute_file_operations(
-        media_file=media_file,
-        metadata=metadata,
-        paths=paths,
-        move_mode=library.move_mode,
-        resource_store=resource_store,
+        media_file,
+        metadata,
+        paths,
+        library.move_mode,
+        resource_store,
+        file_info,
         download_images=True,
         write_nfo=write_nfo,
         copy_resources=copy_resources,
         web_client=web_client,
         config=config,
         library=library,
-        file_info=file_info,
         safe_dirs=safe_dirs,
         watermark_dir=watermark_dir,
         actor_genders=actor_genders,
@@ -318,15 +321,16 @@ def _place_library_images(
     kinds: set[DownloadableResource],
     config: HotSettings | None,
     file_info: FileInfo | None,
+    content_type: ContentType,
     watermark_dir: Path | None,
 ) -> None:
-    # 复制封面 / 海报 / 预告片 / extrafanart 到库路径.
+    # 复制封面 / 海报 / 预告片 / extrafanart 到库路径, 不判断目标上是否已有产物.
+    # fanart 没有刮削来源, 内容取 thumb, 随 thumb 一同重写.
     if thumb_local is not None and DownloadableResource.thumb in kinds:
         paths.thumb.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(thumb_local, paths.thumb)
         paths.fanart.parent.mkdir(parents=True, exist_ok=True)
-        if not paths.fanart.exists():
-            shutil.copy2(thumb_local, paths.fanart)
+        shutil.copy2(thumb_local, paths.fanart)
 
     if DownloadableResource.poster in kinds:
         if poster_local is not None:
@@ -358,6 +362,7 @@ def _place_library_images(
             apply_cover_watermarks_from_info(
                 paths.thumb,
                 file_info,
+                content_type,
                 jpeg_quality=jpeg_quality,
                 watermark_dir=watermark_dir,
                 scale=wm.scale,
@@ -367,6 +372,7 @@ def _place_library_images(
             apply_cover_watermarks_from_info(
                 paths.poster,
                 file_info,
+                content_type,
                 jpeg_quality=jpeg_quality,
                 watermark_dir=watermark_dir,
                 scale=wm.scale,
@@ -381,7 +387,8 @@ async def _download_images_via_store(
     paths: ResolvedPaths,
     config: HotSettings | None,
     kinds: set[DownloadableResource],
-    file_info: FileInfo | None = None,
+    file_info: FileInfo | None,
+    content_type: ContentType,
     watermark_dir: Path | None = None,
 ) -> None:
     """优先用 Resource 已有文件; 缺失则现场 acquire."""
@@ -416,6 +423,7 @@ async def _download_images_via_store(
         kinds=kinds,
         config=config,
         file_info=file_info,
+        content_type=content_type,
         watermark_dir=watermark_dir,
     )
 

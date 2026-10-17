@@ -4,7 +4,7 @@
 只有字符串则按自由文本 (RSS 标题、已有番号), 未命中则 ``number is None``, 不能把原文冒充番号.
 常用字段投影是同一函数的包装.
 
-文件相位 (cd / 中字 / 马赛克 / 分辨率) 与类型正交: cd / 中字 / 分辨率只依据文件名; 马赛克依据文件名与目录整段词表, 未命中时再依据番号分类 (有码类型为 censored, 无码类型为 uncensored; 其它类型为空).
+类型与文件相位分离: 类型是番号的属性, 落在番号条目上; 文件相位 (cd / 中字 / 马赛克标记 / 分辨率) 只描述这一份文件, 一律依据路径 —— cd / 中字 / 分辨率依据文件名, 马赛克标记依据文件名与目录整段词表.
 """
 
 from __future__ import annotations
@@ -34,6 +34,19 @@ class ContentType(StrEnum):
 
 
 class Mosaic(StrEnum):
+    """马赛克标记; 有码是条目类型, 不在此列."""
+
+    UNCENSORED = "uncensored"
+    CRACKED = "cracked"
+    LEAKED = "leaked"
+
+
+class MosaicNature(StrEnum):
+    """马赛克性质: 展示口径的 有码 / 无码 / 破解 / 流出, 不落库.
+
+    比 ``Mosaic`` 多一个 ``CENSORED``: 标记是这一份文件自己的证据, 性质是标记与条目类型合成后的结果.
+    """
+
     CENSORED = "censored"
     UNCENSORED = "uncensored"
     CRACKED = "cracked"
@@ -46,15 +59,20 @@ class FileInfo:
     content_type: ContentType
     prefix: str
     cd: int | None = None
-    has_subtitle: bool = False
+    has_subtitle_in_name: bool = False
+    has_external_subtitle: bool = False
     mosaic: Mosaic | None = None
     definition: str | None = None
 
+    @property
+    def has_subtitle(self) -> bool:
+        """文件名标记与同目录外挂字幕命中任一即真; 后者由调用方经 ``parse_file_info`` 传入."""
+        return self.has_subtitle_in_name or self.has_external_subtitle
+
 
 class FilePhase(TypedDict):
-    """MediaFile 上持久化的文件相位 (path 的投影, 不含 number/cd)."""
+    """MediaFile 上持久化的文件相位 (path 的投影, 不含 number/cd/类型)."""
 
-    content_type: ContentType
     mosaic: Mosaic | None
     has_subtitle: bool
     definition: str | None
@@ -62,9 +80,10 @@ class FilePhase(TypedDict):
 
 @dataclass(frozen=True)
 class FilePhaseSummary:
-    """多文件相位聚合: 任一文件具备某性质即为真; definition 取最高档."""
+    """条目级聚合: 有码 / 无码取条目类型并并上文件标记, 其余任一文件具备即为真, definition 取最高档."""
 
     has_subtitle: bool = False
+    censored: bool = False
     uncensored: bool = False
     mosaics: tuple[Mosaic, ...] = ()
     definition: str | None = None
@@ -84,7 +103,9 @@ _UNCENSORED_PREFIXES = (
     "DSAM-",
     "DRC-",
     "DRG-",
+    "DRGBD-",
     "GACHI-",
+    "GACHIG-",
     "HEYDOUGA",
     "JAV-",
     "LAF-",
@@ -108,6 +129,8 @@ _UNCENSORED_PREFIXES = (
     "SKY-",
     "SKYHD-",
     "SMD-",
+    "SMBD-",
+    "SMDV-",
     "SSDV-",
     "SSKP-",
     "TRG-",
@@ -123,12 +146,14 @@ _UNCENSORED_PREFIXES = (
     "MCB3D",
 )
 
-_SUREN_PREFIXES: dict[str, str] = {
-    "LUXU-": "259LUXU-",
-    "ARA-": "200GANA-",
-    "MIUM-": "300MIUM-",
-    "NTK-": "300NTK-",
-    "MAAN-": "300MAAN-",
+#: 素人系标签 → 站内番号开头的数字段. 文件名常省略数字段 (ARA-423), 站内两种写法并存
+#: (261ARA-423 与 MAAN-968); 数字段只用于补齐, 不参与相等判定.
+SUREN_LABELS: dict[str, str] = {
+    "LUXU-": "259",
+    "ARA-": "261",
+    "MIUM-": "300",
+    "NTK-": "300",
+    "MAAN-": "300",
 }
 
 _WESTERN_NAMES: dict[str, str] = {
@@ -197,6 +222,7 @@ _MOSAIC_DIR_TOKENS: dict[str, Mosaic] = {
     )
 }
 MOSAIC_VALUES: tuple[Mosaic, ...] = tuple(Mosaic)
+MOSAIC_NATURE_VALUES: tuple[MosaicNature, ...] = tuple(MosaicNature)
 CONTENT_TYPE_VALUES: tuple[ContentType, ...] = tuple(ContentType)
 
 # 分辨率: 元组顺序即优先级; 2160p 归一为 4K.
@@ -223,7 +249,11 @@ DEFINITION_VALUES: tuple[str, ...] = tuple(dict.fromkeys(value for value, _ in _
 
 
 def parse_file_info(
-    path: str | Path | None = None, *, text: str | None = None, escape_strings: list[str] | None = None
+    path: str | Path | None = None,
+    *,
+    text: str | None = None,
+    has_external_subtitle: bool = False,
+    escape_strings: list[str] | None = None,
 ) -> FileInfo:
     """有路径则解析路径, 否则解析 ``text``. 两者至少要有一个.
 
@@ -231,6 +261,9 @@ def parse_file_info(
     目录关键词 (欧美 / 里番 / getchu) 可覆盖类型. 分集还可认直接父目录 CD/PART.
     文本: 只执行番号规则, 未命中 ``number is None`` (不能把原文当番号). 文件相位只依据该字符串
     (``Path(text).stem``, 与中字分集检测一致), 不依据目录.
+
+    ``has_external_subtitle`` 是路径之外的输入 (库里记录的同目录字幕命中), 只并进 ``has_subtitle``,
+    不参与其它相位.
     """
     if path is None and text is None:
         raise ValueError("path or text required")
@@ -260,8 +293,9 @@ def parse_file_info(
         content_type=content_type,
         prefix=_prefix(number) if number else "",
         cd=cd,
-        has_subtitle=_detect_subtitle(basename),
-        mosaic=_fill_mosaic(mosaic, content_type),
+        has_subtitle_in_name=_detect_subtitle(basename),
+        has_external_subtitle=has_external_subtitle,
+        mosaic=mosaic,
         definition=_detect_definition(basename),
     )
 
@@ -302,19 +336,45 @@ def is_amateur(number: str) -> bool:
     return infer_content_type(number) == ContentType.AMATEUR
 
 
+# 站点 genre 的惯用写法, 判定要求整体相等: 含 VR 字样的其它标签 (VRっぽい / 8K VR) 不命中.
+VR_TAGS = frozenset({"vr", "vr専用", "8kvr", "ハイクオリティvr", "vr専用作品", "vr作品"})
+
+
+def is_vr(tags: Iterable[str]) -> bool:
+    """VR 判定只依据标签. 番号里的 VR 混在厂商前缀里 (MDVR-123 是 VR, SVR-123 不是), 故不按番号判定.
+
+    站点不给 VR 标签时判定为否: 漏标可接受, 误标不可接受. 读取侧 ``Metadata.vr`` 与列表筛选共用本函数与 ``VR_TAGS``.
+    """
+    return any(tag.strip().casefold() in VR_TAGS for tag in tags)
+
+
 def file_phase_from_path(path: str | Path) -> FilePhase:
+    """入库相位只取路径能给出的部分: 外挂字幕命中不在路径里, 由 MediaFile 各自的列承载."""
     info = parse_file_info(path)
     return FilePhase(
-        content_type=info.content_type,
         mosaic=info.mosaic,
-        has_subtitle=info.has_subtitle,
+        has_subtitle=info.has_subtitle_in_name,
         definition=info.definition,
     )
 
 
-def file_shows_uncensored(mosaic: Mosaic | None, content_type: ContentType) -> bool:
-    """无码角标/筛选: 文件名无码标记或内容类型为无码 (HEYZO 等不必带文件名无码标记)."""
-    return mosaic == Mosaic.UNCENSORED or content_type == ContentType.UNCENSORED
+def shows_uncensored(mosaic: Mosaic | None, content_type: ContentType | None) -> bool:
+    """无码: 条目类型为无码 (HEYZO 等不必带文件名无码标记), 或这一份文件带无码标记.
+
+    ``content_type`` 为 None 时只看这一份文件 (未绑定条目的文件):
+    """
+    return mosaic is Mosaic.UNCENSORED or content_type is ContentType.UNCENSORED
+
+
+def mosaic_nature(mosaic: Mosaic | None, content_type: ContentType | None) -> MosaicNature | None:
+    """马赛克性质: 标记优先, 没命中时继承条目类型的有码 / 无码, 其余类型为空."""
+    if mosaic is not None:
+        return MosaicNature(mosaic)
+    if content_type is ContentType.CENSORED:
+        return MosaicNature.CENSORED
+    if content_type is ContentType.UNCENSORED:
+        return MosaicNature.UNCENSORED
+    return None
 
 
 def max_definition(values: Iterable[str | None]) -> str | None:
@@ -332,15 +392,14 @@ def max_definition(values: Iterable[str | None]) -> str | None:
     return best
 
 
-def summarize_file_phases(phases: Iterable[FilePhase]) -> FilePhaseSummary:
-    """按「任一文件具备」聚合; mosaics 按 MOSAIC_VALUES 去重保序."""
+def summarize_file_phases(phases: Iterable[FilePhase], content_type: ContentType) -> FilePhaseSummary:
+    """``content_type`` 是条目类型: 有码取类型为有码, 无码取类型为无码或任一文件带无码标记; 其余按「任一文件具备」聚合."""
     items = list(phases)
-    if not items:
-        return FilePhaseSummary()
     mosaic_present = {phase["mosaic"] for phase in items if phase["mosaic"] is not None}
     return FilePhaseSummary(
         has_subtitle=any(phase["has_subtitle"] for phase in items),
-        uncensored=any(file_shows_uncensored(phase["mosaic"], phase["content_type"]) for phase in items),
+        censored=content_type is ContentType.CENSORED,
+        uncensored=content_type is ContentType.UNCENSORED or Mosaic.UNCENSORED in mosaic_present,
         mosaics=tuple(mosaic for mosaic in MOSAIC_VALUES if mosaic in mosaic_present),
         definition=max_definition(phase["definition"] for phase in items),
     )
@@ -475,9 +534,9 @@ def _match(basename: str, escape_strings: list[str], *, generic: bool) -> tuple[
         return m.group(), ContentType.AMATEUR
     if m := _CATALOG_NUMBER.search(c):
         file_number = m.group()
-        for key, value in _SUREN_PREFIXES.items():
-            if key in file_number:
-                file_number = value.replace(key, "") + file_number
+        for label, digits in SUREN_LABELS.items():
+            if file_number.startswith(label):
+                file_number = f"{digits}{file_number}"
                 break
         return file_number, _type_of_catalog_id(file_number)
     if m := _SIX_DIGIT_CATALOG.search(c):
@@ -490,7 +549,8 @@ def _match(basename: str, escape_strings: list[str], *, generic: bool) -> tuple[
         or (m := re.search(r"\d{3,}-[A-Z]{3,}", c))
     ):
         return m.group(), _type_of_catalog_id(m.group())
-    if m := re.search(r"([^A-Z]|^)(N\d{4})(\D|$)", c):
+    # 東京熱番号分 n / k 两系 (K1363), 两系都是无码.
+    if m := re.search(r"([^A-Z]|^)([NK]\d{4})(\D|$)", c):
         return m.group(2).lower(), ContentType.UNCENSORED
     if m := re.search(r"H_\d{3,}([A-Z]{2,})(\d{2,})", c):
         number = f"{m[1]}-{m[2]}"
@@ -531,7 +591,7 @@ def _type_of_catalog_id(number: str) -> ContentType:
         return ContentType.UNCENSORED
     if "SIRO" in upper or re.search(r"\d{3,}[A-Z]+-\d{2}", upper):
         return ContentType.AMATEUR
-    if any(upper.startswith(key.upper()) for key in _SUREN_PREFIXES):
+    if any(upper.startswith(label.upper()) for label in SUREN_LABELS):
         return ContentType.AMATEUR
     if re.search(r"([^A-Z]|^)MD[A-Z-]*\d{4,}", upper) and "MDVR" not in upper:
         return ContentType.CHINESE
@@ -607,19 +667,8 @@ def _detect_subtitle(basename: str) -> bool:
     return bool(re.search(r"[字幕中文]", basename))
 
 
-def _fill_mosaic(mosaic: Mosaic | None, content_type: ContentType) -> Mosaic | None:
-    """词表未命中时: 有码类型为 censored, 无码类型为 uncensored; 其它类型为空. 已有标记不覆盖."""
-    if mosaic is not None:
-        return mosaic
-    if content_type is ContentType.CENSORED:
-        return Mosaic.CENSORED
-    if content_type is ContentType.UNCENSORED:
-        return Mosaic.UNCENSORED
-    return None
-
-
 def _detect_mosaic(basename: str) -> Mosaic | None:
-    """basename 已大写. `CRACKED` / `-U` / `-UC` 是破解; 多标记时破解优先于流出, 流出优先于无码."""
+    """basename 已大写. `CRACKED` / `-U` / `-UC` 是破解; 多标记优先级见 docs/dev/data-model.md."""
     if re.search(r"破解|克破|CRACKED", basename) or re.search(r"-U(C)?(?![A-Z0-9])", basename):
         return Mosaic.CRACKED
     if re.search(r"流出|LEAKED", basename):

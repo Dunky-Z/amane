@@ -20,11 +20,11 @@ logger = structlog.get_logger()
 def promote_subtitle_marker(file_info: FileInfo, *, found_subtitles: bool) -> FileInfo:
     """同目录已发现配对字幕时, 把中字相位升为真, 供路径模板与水印使用.
 
-    文件名尚无 ``-C`` 等标记时, 仅靠 sidecar 仍须写出 ``{sub?}`` 与中字水印;
-    整理落盘后的路径再投影到 ``MediaFile.has_subtitle``.
+    文件名尚无中字标记且库列尚未记外挂字幕时, 仅靠 sidecar 仍须写出 ``{sub?}`` 与中字水印.
+    升标写在 ``has_external_subtitle``, 不改文件名投影.
     """
     if found_subtitles and not file_info.has_subtitle:
-        return replace(file_info, has_subtitle=True)
+        return replace(file_info, has_external_subtitle=True)
     return file_info
 
 

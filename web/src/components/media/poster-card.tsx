@@ -16,6 +16,7 @@ import type { MetadataResponse, UserTagResponse } from "@/client/types.gen";
 import { FilePhaseOverlay } from "@/components/media/file-phase-badges";
 import { OverlayChip, OverlayChipLabel } from "@/components/media/overlay-chip";
 import { ProxyImage } from "@/components/media/proxy-image";
+import { VrOverlayChip } from "@/components/media/vr-badge";
 import { extractErrorMessage } from "@/lib/api-error";
 import { ageAtRelease } from "@/lib/format-birthday";
 import { formatReleaseYearMonth } from "@/lib/format-release";
@@ -137,17 +138,21 @@ export function PosterCard({ item, actorBirthday }: PosterCardProps) {
               ) : undefined
             }
           />
-          {item.score != null && (
-            <Box pos="absolute" top={6} right={6}>
-              <OverlayChip>
-                <IconStar
-                  size={11}
-                  color="var(--mantine-color-yellow-4)"
-                  fill="var(--mantine-color-yellow-4)"
-                />
-                <OverlayChipLabel>{item.score.toFixed(1)}</OverlayChipLabel>
-              </OverlayChip>
-            </Box>
+          {/* 与评分同角成组: 左上角被相位水印 (马赛克标记) 占用, 单独放会与它重叠. */}
+          {(item.vr || item.score != null) && (
+            <Group pos="absolute" top={6} right={6} gap={4} wrap="nowrap">
+              {item.vr && <VrOverlayChip />}
+              {item.score != null && (
+                <OverlayChip>
+                  <IconStar
+                    size={11}
+                    color="var(--mantine-color-yellow-4)"
+                    fill="var(--mantine-color-yellow-4)"
+                  />
+                  <OverlayChipLabel>{item.score.toFixed(1)}</OverlayChipLabel>
+                </OverlayChip>
+              )}
+            </Group>
           )}
           {releaseLabel && (
             <Box pos="absolute" bottom={6} right={6}>

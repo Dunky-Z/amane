@@ -5,15 +5,20 @@ from parsel import Selector
 
 from amane.crawlers.parsing import (
     CSSSelector,
+    NumberMatch,
     clean_string,
     extract_all_texts,
     extract_text,
+    fc2_article_id,
     fold_name,
     is_same_name,
     is_same_number,
     leading_token,
     normalize_name,
+    number_match,
+    number_variants,
     parse_western_number,
+    select_number_index,
 )
 
 SAMPLE_HTML = """
@@ -122,6 +127,11 @@ def test_parse_western_number(number: str, expected: tuple[str, str, str] | None
         ("ABF-35", "ABF-355", False),
         ("SSIS-497", "SSIS-4970", False),
         ("FC2-2476386", "FC2-3476386", False),
+        # FC2 的 PPV 词缀不参与同一性, 商品 ID 相同才是同一部
+        ("FC2-PPV-4203531", "FC2-4203531", True),
+        ("FC2PPV4203531", "fc2_4203531", True),
+        ("FC2-PPV-4203531", "FC2-PPV-4203532", False),
+        ("FC2-4203531", "4203531", False),
         # 欧美日期号: 年份 2 位与 4 位同番号; 片商或发布日期不同则不是
         ("Blacked.26.03.29", "Blacked.2026.03.29", True),
         ("Blacked.26.03.29", "Blacked.2026.03.24", False),
@@ -129,10 +139,118 @@ def test_parse_western_number(number: str, expected: tuple[str, str, str] | None
         # ``_`` 与 ``-`` 是两部片
         ("010115_001", "010115-001", False),
         ("", "ABF-355", False),
+        # 数字段的宽松判定是 opt-in, 不进 is_same_number
+        ("JAC-079", "390JAC-079", False),
     ],
 )
 def test_is_same_number(left: str, right: str, expected: bool) -> None:
     assert is_same_number(left, right) is expected
+
+
+NUMBER_MATCH_CASES: list[tuple[str, str, NumberMatch]] = [
+    # 折叠后相等
+    ("ABF355", "ABF-355", NumberMatch.EXACT),
+    ("Heyzo-3607", "HEYZO3607", NumberMatch.EXACT),
+    # 欧美日期号: 年份 2 位与 4 位同番号
+    ("Blacked.2026.03.29", "Blacked.26.03.29", NumberMatch.EXACT),
+    # FC2: 官方电子市场写带 PPV 的写法, 索引站多写不带的写法, 商品 ID 相同即同一部
+    ("FC2-PPV-4203531", "FC2-4203531", NumberMatch.EXACT),
+    ("FC2-PPV-4203531", "FC2PPV4203531", NumberMatch.EXACT),
+    ("FC2-PPV-4203531", "FC2-PPV-4203532", NumberMatch.NONE),
+    # 裸商品 ID 不是番号写法
+    ("4203531", "FC2-4203531", NumberMatch.NONE),
+    # 只有一侧写了开头的数字段: 站点省略系列代码, 或入参本身没写
+    ("JAC-079", "390JAC-079", NumberMatch.WITHOUT_LEADING_DIGITS),
+    ("390JAC-079", "JAC-079", NumberMatch.WITHOUT_LEADING_DIGITS),
+    ("300MIUM-1219", "MIUM-1219", NumberMatch.WITHOUT_LEADING_DIGITS),
+    ("MIUM-1000", "200MIUM-1000", NumberMatch.WITHOUT_LEADING_DIGITS),
+    ("107HYPN-037", "HYPN-037", NumberMatch.WITHOUT_LEADING_DIGITS),
+    # 两侧都写了数字段却不同 = 不同系列号的同名番号
+    ("200MIUM-1000", "300MIUM-1000", NumberMatch.NONE),
+    # 相近番号与序号位数都不折叠
+    ("ABF-35", "ABF-355", NumberMatch.NONE),
+    ("SSIS-497", "SSIS-4970", NumberMatch.NONE),
+    ("JAC-79", "390JAC-079", NumberMatch.NONE),
+    ("JAC-079", "390JAC-078", NumberMatch.NONE),
+    # 裸数字号与无字母可剥的号不退化成空, 因此不会互相命中
+    ("010115-001", "001", NumberMatch.NONE),
+    ("n1234", "1234", NumberMatch.NONE),
+    ("010115_001", "010115-001", NumberMatch.NONE),
+    # 任一侧为空
+    ("", "390JAC-079", NumberMatch.NONE),
+    ("390JAC-079", "", NumberMatch.NONE),
+]
+
+
+@pytest.mark.parametrize(("found", "query", "expected"), NUMBER_MATCH_CASES)
+def test_number_match(found: str, query: str, expected: NumberMatch) -> None:
+    assert number_match(found, query) is expected
+
+
+SELECT_NUMBER_CASES: list[tuple[list[str], str, int | None]] = [
+    # 精确命中优先于宽松命中, 即使它排在后面
+    (["JAC-078", "JAC-079", "390JAC-079"], "JAC-079", 1),
+    # 只剩站点省略数字段这一种可能时取它
+    (["JAC-078", "JAC-079"], "390JAC-079", 1),
+    (["HYPN-038", "HYPN-037"], "107HYPN-037", 1),
+    # 宽松候选不唯一 = 站点上确有同名不同系列号的条目, 视为未命中
+    (["200MIUM-1000", "300MIUM-1000"], "MIUM-1000", None),
+    # 候选写了数字段且与入参不同, 不是同一部
+    (["200MIUM-1000"], "300MIUM-1000", None),
+    # 无命中 / 空候选
+    (["ABF-355"], "390JAC-079", None),
+    ([], "390JAC-079", None),
+    ([""], "390JAC-079", None),
+]
+
+
+@pytest.mark.parametrize(("found", "query", "expected"), SELECT_NUMBER_CASES)
+def test_select_number_index(found: list[str], query: str, expected: int | None) -> None:
+    assert select_number_index(found, query) == expected
+
+
+NUMBER_VARIANT_CASES: list[tuple[str, tuple[str, ...]]] = [
+    # 数字段写在番号里: 补上站点可能省略的写法
+    ("390JAC-079", ("390JAC-079", "JAC-079")),
+    ("107HYPN-037", ("107HYPN-037", "HYPN-037")),
+    ("300MIUM-1219", ("300MIUM-1219", "MIUM-1219")),
+    # 素人系标签已知站内写法: 补出数字段
+    ("MIUM-1219", ("MIUM-1219", "300MIUM-1219")),
+    ("ARA-423", ("ARA-423", "261ARA-423")),
+    # FC2: 补出另一种写法, 原样仍在前
+    ("FC2-4203531", ("FC2-4203531", "FC2-PPV-4203531")),
+    ("FC2-PPV-4203531", ("FC2-PPV-4203531", "FC2-4203531")),
+    ("FC2PPV-4203531", ("FC2PPV-4203531", "FC2-PPV-4203531", "FC2-4203531")),
+    # 只有原样: 标签须自番号开头起算, 裸数字号与无数字段的号不派生
+    ("GARA-006", ("GARA-006",)),
+    ("MIDV-123", ("MIDV-123",)),
+    ("n1234", ("n1234",)),
+    ("010115-001", ("010115-001",)),
+    ("", ("",)),
+]
+
+
+@pytest.mark.parametrize(("number", "expected"), NUMBER_VARIANT_CASES)
+def test_number_variants(number: str, expected: tuple[str, ...]) -> None:
+    assert number_variants(number) == expected
+
+
+FC2_ARTICLE_ID_CASES: list[tuple[str, str | None]] = [
+    ("FC2-4203531", "4203531"),
+    ("FC2-PPV-4203531", "4203531"),
+    ("fc2ppv4203531", "4203531"),
+    ("FC2_PPV_4203531", "4203531"),
+    # 非 FC2 形态与裸商品 ID 都不认
+    ("FC2PPVDB-123", None),
+    ("FC2-", None),
+    ("4203531", None),
+    ("", None),
+]
+
+
+@pytest.mark.parametrize(("number", "expected"), FC2_ARTICLE_ID_CASES)
+def test_fc2_article_id(number: str, expected: str | None) -> None:
+    assert fc2_article_id(number) == expected
 
 
 @pytest.mark.parametrize(

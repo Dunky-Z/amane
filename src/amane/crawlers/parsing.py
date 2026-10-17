@@ -3,10 +3,13 @@
 import json
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 from re import Pattern
 from typing import TYPE_CHECKING, Any
 
+from ..parsing.file_info import SUREN_LABELS
 from ..utils.dates import normalize_calendar_date
 
 if TYPE_CHECKING:
@@ -127,14 +130,112 @@ def parse_western_number(number: str) -> WesternNumber | None:
     return WesternNumber(studio=fold_studio(match["studio"]), date=date, alternate=alternate)
 
 
+#: 番号开头的数字段 (素人系的系列代码, 如 ``390JAC-079`` 的 ``390``). 站点写不写它不一致:
+#: javdb 与 javbus 恒不写, jav321 恒写出, mgstage 逐部不同. 后面不是字母时不剥 (裸数字号不参与).
+_LEADING_DIGITS = re.compile(r"^\d+(?=[a-z])", re.IGNORECASE)
+
+
+def _split_leading_digits(number: str) -> tuple[str, str]:
+    """折叠后的番号 → (开头的数字段, 其余部分); 没有数字段时数字段为空串."""
+    folded = fold_number(number)
+    match = _LEADING_DIGITS.match(folded)
+    return (match.group(), folded[match.end() :]) if match else ("", folded)
+
+
+#: FC2 番号: 官方电子市场写 ``FC2-PPV-<id>``, 索引站多写 ``FC2-<id>``. 对折叠后的串匹配, 分隔符只可能剩 ``_``.
+_FC2_NUMBER = re.compile(r"^fc2(?:_?ppv)?_?(\d+)$")
+
+
+def fc2_article_id(number: str) -> str | None:
+    """FC2 番号的商品 ID; 不是 FC2 形态时 None. ``PPV`` 词缀与分隔符不参与识别."""
+    match = _FC2_NUMBER.match(fold_number(number))
+    return match.group(1) if match else None
+
+
+def fc2_number(article_id: str, *, ppv: bool) -> str:
+    """商品 ID → FC2 番号写法: ``ppv`` 为真给出官方市场的 ``FC2-PPV-<id>``, 否则 ``FC2-<id>``."""
+    return f"FC2-PPV-{article_id}" if ppv else f"FC2-{article_id}"
+
+
+def number_variants(number: str) -> tuple[str, ...]:
+    """该番号在站点上可能的检索词, 原样写法在前, 去重保序.
+
+    数字段以外的写法差异由来源自行承担, 例外是 FC2 的 ``PPV`` 词缀: 官方电子市场与索引站各写一种, 由这里
+    一并给出. 来源逐个尝试, 原样命中即不再试其余写法.
+    """
+    variants = [number]
+    if (article_id := fc2_article_id(number)) is not None:
+        variants.extend((fc2_number(article_id, ppv=True), fc2_number(article_id, ppv=False)))
+    elif match := _LEADING_DIGITS.match(number):
+        variants.append(number[match.end() :])
+    else:
+        upper = number.upper()
+        for label, digits in SUREN_LABELS.items():
+            if upper.startswith(label):
+                variants.append(f"{digits}{number}")
+                break
+    return tuple(dict.fromkeys(variants))
+
+
+class NumberMatch(StrEnum):
+    """站内番号与检索番号的同一性, 声明顺序即精确度."""
+
+    NONE = "none"
+    WITHOUT_LEADING_DIGITS = "without_leading_digits"
+    EXACT = "exact"
+
+
+def number_match(found: str, query: str) -> NumberMatch:
+    """站内番号与检索番号是否同一部, 以及精确度; 任一侧为空为 ``NONE``.
+
+    ``EXACT``: 折叠后相等, 同为欧美日期号且片商与发布日期相同, 或同为 FC2 番号且商品 ID 相同 (官方电子
+    市场只写带 ``PPV`` 的写法, 索引站多写不带 PPV 的写法).
+    ``WITHOUT_LEADING_DIGITS``: 只有一侧写了开头的数字段 (站点省略系列代码, 或入参本身没写), 其余部分
+    仍须**全等** — 这样 ``ABF-35`` 不会命中 ``ABF-375``, 两侧都写了数字段却不同也判为不是同一部
+    (``200MIUM-1000`` 不是 ``300MIUM-1000``).
+    """
+    if not found or not query:
+        return NumberMatch.NONE
+    if fold_number(found) == fold_number(query):
+        return NumberMatch.EXACT
+    if (article_id := fc2_article_id(found)) is not None and article_id == fc2_article_id(query):
+        return NumberMatch.EXACT
+    western = parse_western_number(found)
+    if western is not None and western == parse_western_number(query):
+        return NumberMatch.EXACT
+    found_digits, found_rest = _split_leading_digits(found)
+    query_digits, query_rest = _split_leading_digits(query)
+    if found_rest == query_rest and not (found_digits and query_digits):
+        return NumberMatch.WITHOUT_LEADING_DIGITS
+    return NumberMatch.NONE
+
+
 def is_same_number(left: str, right: str) -> bool:
-    """两个番号是否同指一部: 折叠后相等, 或同为欧美日期号且片商与发布日期相同; 任一侧为空为假."""
-    if not left or not right:
-        return False
-    if fold_number(left) == fold_number(right):
-        return True
-    western = parse_western_number(left)
-    return western is not None and western == parse_western_number(right)
+    """两个番号是否同指一部: 折叠后相等, 同为欧美日期号且片商与发布日期相同, 或同为 FC2 番号且商品 ID
+    相同; 任一侧为空为假."""
+    return number_match(left, right) is NumberMatch.EXACT
+
+
+def select_number_index(found: Sequence[str], query: str) -> int | None:
+    """候选番号中与 ``query`` 同一部者的下标; 无命中返回 ``None``.
+
+    精确优先; 退而只在「仅差数字段」的候选**唯一**时取它 — 出现两个及以上说明站点上确有同名不同系列号的
+    条目, 猜一个会返回无关影片, 因此视为未命中. 调用方按下标回填自己的条目 (URL 等).
+    """
+    exact: int | None = None
+    loose: list[int] = []
+    for index, item in enumerate(found):
+        match number_match(item, query):
+            case NumberMatch.EXACT:
+                if exact is None:
+                    exact = index
+            case NumberMatch.WITHOUT_LEADING_DIGITS:
+                loose.append(index)
+            case NumberMatch.NONE:
+                pass
+    if exact is not None:
+        return exact
+    return loose[0] if len(loose) == 1 else None
 
 
 def normalize_name(value: str) -> str:

@@ -2,13 +2,13 @@ from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime
 from typing import Unpack, cast
 
-from sqlalchemy import func, or_, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_, text
 from sqlalchemy.sql.functions import count
 from sqlmodel import col, select
 
 from ...enums import ActorGender, MetadataField
-from ...parsing import ContentType, Mosaic
+from ...parsing import ContentType, Mosaic, infer_content_type
+from ...utils.collections import unique_ids
 from ...utils.text import normalize_long_text
 from ..models import (
     MediaFile,
@@ -25,14 +25,16 @@ from ..models import (
     Studio,
     UserTag,
     has_subtitle_predicate,
+    metadata_number_predicate,
+    metadata_vr_predicate,
 )
 from ..repo_types import (
     MetadataFields,
     WriteMode,
-    _media_file_uncensored_predicate,
     _metadata_has_files_clause,
     _metadata_linked_file_exists,
     _metadata_primary_order,
+    _metadata_uncensored_predicate,
     _utcnow,
 )
 from ..user_tag_names import WATCHED_USER_TAG
@@ -43,7 +45,6 @@ from .facet_helpers import (
     clean_actor_names,
     resolve_scalar_facet_names,
     sync_metadata_facets,
-    unique_ids,
 )
 
 
@@ -130,6 +131,7 @@ class MetadataRepoMixin(RepositoryMixinBase):
         watched: bool | None = None,
         has_files: bool | None = None,
         has_subtitle: bool | None = None,
+        vr: bool | None = None,
         mosaic: Mosaic | None = None,
         uncensored: bool | None = None,
         definition: str | None = None,
@@ -203,20 +205,23 @@ class MetadataRepoMixin(RepositoryMixinBase):
                 base = base.where(col(Metadata.series).in_(series_names))
             if has_files is not None:
                 base = base.where(_metadata_has_files_clause(has_files=has_files))
+            if vr is True:
+                base = base.where(metadata_vr_predicate())
+            elif vr is False:
+                base = base.where(~metadata_vr_predicate())
             if has_subtitle is True:
                 base = base.where(_metadata_linked_file_exists(has_subtitle_predicate()))
             elif has_subtitle is False:
                 base = base.where(~_metadata_linked_file_exists(has_subtitle_predicate()))
             if mosaic is not None:
                 base = base.where(_metadata_linked_file_exists(col(MediaFile.mosaic) == mosaic))
-            if uncensored is True:
-                base = base.where(_metadata_linked_file_exists(_media_file_uncensored_predicate()))
-            elif uncensored is False:
-                base = base.where(~_metadata_linked_file_exists(_media_file_uncensored_predicate()))
+            if uncensored is not None:
+                flag = _metadata_uncensored_predicate()
+                base = base.where(flag if uncensored else ~flag)
             if definition is not None:
                 base = base.where(_metadata_linked_file_exists(col(MediaFile.definition) == definition))
             if content_type is not None:
-                base = base.where(_metadata_linked_file_exists(col(MediaFile.content_type) == content_type))
+                base = base.where(col(Metadata.content_type) == content_type)
             if updated_before is not None:
                 base = base.where(col(Metadata.updated_at) < updated_before)
 
@@ -237,56 +242,65 @@ class MetadataRepoMixin(RepositoryMixinBase):
     async def get_metadata_by_number(self, number: str) -> Metadata | None:
         """大小写不敏感; 返回行保留库内原始大小写."""
         async with self._session() as session:
-            stmt = select(Metadata).where(func.lower(Metadata.number) == number.lower())
+            stmt = select(Metadata).where(metadata_number_predicate(number))
             result = await session.exec(stmt)
             return result.first()
+
+    async def content_types_by_metadata_ids(self, metadata_ids: Sequence[int]) -> dict[int, ContentType]:
+        """文件行派生相位用; 不存在的 id 不在结果里, 调用方按"没有条目"处理."""
+        unique = list(dict.fromkeys(metadata_ids))
+        if not unique:
+            return {}
+        async with self._session() as session:
+            stmt = select(col(Metadata.id), col(Metadata.content_type)).where(col(Metadata.id).in_(unique))
+            rows = (await session.exec(stmt)).all()
+            return {row_id: content_type for row_id, content_type in rows if row_id is not None}
 
     async def upsert_metadata(
         self,
         number: str,
         *,
+        content_type: ContentType | None = None,
         actor_genders: Mapping[str, ActorGender] | None = None,
         **kwargs: Unpack[MetadataFields],
     ) -> Metadata:
-        """查重忽略大小写; 已存在时不改写 number 的原始大小写.
+        """查重忽略大小写; 已存在时不改写 number 的原始大小写, 也不改写类型.
         自动刮削写入; 锁定行为见 docs/dev/data-model.md.
+        判定与写入同处一个写事务, 见 docs/dev/database.md; 临界区内不允许出现等待.
         ``actor_genders`` 只填 ``Actor.gender`` 空位, 不是 Metadata 列.
-        并发新建同番号时 UNIQUE 冲突回退为更新已有行, 并套用字段锁.
+        ``content_type`` 只在插入时落库, None 按番号推断; 已存在时不改写 (契约见 docs/dev/data-model.md).
         """
         fields = _normalize_text_fields(kwargs)
         async with self._session() as session:
-            stmt = select(Metadata).where(func.lower(Metadata.number) == number.lower())
-            existing = (await session.exec(stmt)).first()
-            if existing is None:
-                meta = Metadata(number=number, **fields)
-                session.add(meta)
-                try:
-                    await session.flush()
-                    existing = meta
-                except IntegrityError:
-                    await session.rollback()
-                    existing = (await session.exec(stmt)).first()
-                    if existing is None:
-                        raise
-                    fields = _filter_locked(fields, _locked_fields_of(existing), existing.field_sources or {})
-                    for key, value in fields.items():
-                        setattr(existing, key, value)
-                    existing.updated_at = _utcnow()
-                    session.add(existing)
-                    await session.flush()
-            else:
+            # pysqlite 只在 DML 之前发出 BEGIN, 查号落在事务之外时并发同号写入会双双判定为"无行",
+            # 后者在插入时违反 ix_metadata_number. 手工取得写锁后判定与写入同处一个事务.
+            connection = await session.connection()
+            await connection.exec_driver_sql("BEGIN IMMEDIATE")
+            stmt = select(Metadata).where(metadata_number_predicate(number))
+            result = await session.exec(stmt)
+            existing = result.first()
+            if existing:
                 fields = _filter_locked(fields, _locked_fields_of(existing), existing.field_sources or {})
                 for key, value in fields.items():
                     setattr(existing, key, value)
                 existing.updated_at = _utcnow()
                 session.add(existing)
                 await session.flush()
-            await clean_actor_names(session, existing, actor_genders)
-            await apply_facet_rules_to_metadata(session, existing)
-            await sync_metadata_facets(session, existing)
+                await clean_actor_names(session, existing, actor_genders)
+                await apply_facet_rules_to_metadata(session, existing)
+                await sync_metadata_facets(session, existing)
+                await session.commit()
+                await session.refresh(existing)
+                return existing
+            meta = Metadata(number=number, content_type=content_type or infer_content_type(number), **fields)
+            session.add(meta)
+            await session.flush()
+            await clean_actor_names(session, meta, actor_genders)
+            await apply_facet_rules_to_metadata(session, meta)
+            await sync_metadata_facets(session, meta)
             await session.commit()
-            await session.refresh(existing)
-            return existing
+            await session.refresh(meta)
+            return meta
 
     async def update_metadata(
         self,

@@ -85,7 +85,7 @@ Authorization = "Bearer <Amane API Token>"
 | `{cd?}` | CD/分集编号 | `1` / `2` / 空 |
 | `{sub?}` | 中字标记 | `C` / 空 |
 | `{content_type}` | 内容类型 | `censored` / `uncensored` / `chinese` / `western` / `fc2` / `amateur` / `hentai` |
-| `{mosaic?}` | 马赛克标记 | `censored` / `uncensored` / `cracked` / `leaked` / 空 |
+| `{mosaic?}` | 马赛克性质 | `censored` / `uncensored` / `cracked` / `leaked` / 空 |
 | `{def?}` | 分辨率 | `4K` / `1080p` / `HD` / 空 |
 | `{raw_name}` | 源视频文件名 | `A/B.mp4` → `B` |
 | `{raw_dir}` | 源文件父目录名 | `A/B/C.mp4` → `B` |
@@ -96,7 +96,7 @@ Authorization = "Bearer <Amane API Token>"
 | `{link_name}` | 整理后链接文件名, 不含扩展名 | — |
 | `{raw_srt_name}` | 字幕原文件名, 不含扩展名 | `foo.zh.srt` → `foo.zh` |
 
-马赛克类型依据关键词与番号解析判定. 文件名 `CRACKED` / `-U` / `-UC` 为破解 (`-UC` 同时为中字); `无码` / `UNCENSORED` 为无码; `流出` / `LEAKED` 为流出. 目录名为整段 `uncensored` / `cracked` / `leaked` / `无码` / `破解` / `流出` 时同样判定. 番号解析为有码且无上述标记时为 `censored`; 解析为无码且无上述标记时为 `uncensored`. 国产 / FC2 / 欧美等无法判定时为空.
+马赛克性质由文件的关键词与条目的类型共同决定. 文件名 `CRACKED` / `-U` / `-UC` 为破解 (`-UC` 同时为中字); `无码` / `UNCENSORED` 为无码; `流出` / `LEAKED` 为流出. 目录名为整段 `uncensored` / `cracked` / `leaked` / `无码` / `破解` / `流出` 时同样判定. 没有上述标记时继承条目类型: 有码条目为 `censored`, 无码条目为 `uncensored`; 国产 / FC2 / 欧美等为空.
 
 `{actress}` / `{actresses}` 排除已标为男性的演员; 女性与尚未识别性别的名字保留. 名单为空时输出 `Unknown`.
 
@@ -159,7 +159,7 @@ NFO: {link_dir}/{video_name}.nfo
 ```
 
 - 未列出的值保持原样 (如 `{mosaic?|cracked=U}`, censored / uncensored / leaked 仍为规范值)
-- `{name|=缺省}` 将空值映成缺省 (无法判定马赛克时, 如国产)
+- `{name|=缺省}` 将空值映成缺省 (无法判定性质时, 如国产、FC2)
 - 可以映射成空串 (配合可选组让某个值不出现在路径中)
 - 目录段和文件名段可以分别写映射, 比如目录用规范值便于管理, 文件名用短标记节省字符:
 
@@ -235,7 +235,7 @@ Amane 支持自动识别分集文件名, 目前支持以下几种常见标记:
 - 多个字幕全部带走, 保持原文件名和扩展名, 默认放到整理后视频的同一目录.
 - 字幕文件名能解析出番号时, 必须与当前视频番号相同, 并按分集标记配对.
 - 解析不出番号时, 按同目录分集规则配对: 有标记的跟当前视频同号; 解析不出分集的跟无分集或 CD1 的视频.
-- 发现配对字幕且源视频文件名尚无中字标记时, 整理会按有中字处理: 视频名写入 `-C` (取决于 `{sub?}` 模板), 封面可打中字水印, 索引里的 `has_subtitle` 随落盘路径更新.
+- 同目录命中字幕, 或文件名自带中字标记时, `{sub?}` 占位符输出 `C`, 封面与海报打上中字角标. 库里的外挂字幕标记尚未写上、但整理时发现配对字幕, 同样按有中字处理.
 
 ## 预告片跳过
 
