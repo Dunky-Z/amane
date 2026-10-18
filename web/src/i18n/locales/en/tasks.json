@@ -242,6 +242,10 @@
             "trans": "Translation Cache"
           }
         }
+      },
+      "subtitle_only": {
+        "label": "Subtitles only",
+        "description": "Delete paired subtitles and fetch again without changing metadata"
       }
     },
     "upscale": {

@@ -218,6 +218,10 @@
             "trans": "译文缓存"
           }
         }
+      },
+      "subtitle_only": {
+        "label": "仅刮削字幕",
+        "description": "删除配对字幕后重新获取, 不修改元数据"
       }
     },
     "upscale": {
