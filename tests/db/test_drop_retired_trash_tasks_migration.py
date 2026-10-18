@@ -41,12 +41,15 @@ def test_drop_retired_trash_tasks(alembic_cfg: Config) -> None:
     with engine.begin() as conn:
         trash_parent = _insert_task(conn, "trash")
         trash_child = _insert_task(conn, "trash")
+        # 历史库把枚举成员名原样写入, 与小写取值不是同一批行.
+        trash_named = _insert_task(conn, "TRASH")
         keep_parent = _insert_task(conn, "organize")
         keep_child = _insert_task(conn, "scrape")
         for parent, child in (
             (trash_parent, trash_child),
             (trash_parent, keep_child),
             (keep_parent, trash_child),
+            (keep_parent, trash_named),
             (keep_parent, keep_child),
         ):
             conn.execute(
