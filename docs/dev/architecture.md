@@ -54,6 +54,13 @@ EventBus → 日志 → 来源插件发现 → 主 DB engine + Repository → r1
 
 停机时 lifespan `aclose` **先** `EventBus.close_all()` 再停 worker, 否则常驻 WS 会拖死 uvicorn graceful. 重启不是进程内 exec: 服务以退出码 3 退出 (避开 argparse 的 2), 由进程外监督者再次启动 (桌面壳的监督循环, Docker `unless-stopped`). uvicorn 的启动失败码同为 3, `amane.server.main` 将其改写为 4 供监督者区分启动失败与请求重启. Docker 不区分退出码, 容器内两种退出仍会再次启动, `docker stop` 发送 SIGTERM 则 `exit 0`. 仅 `AMANE_SUPERVISED=1` 时重启端点可用, 见 [desktop.md](desktop.md) / [config.md](config.md).
 
+## NAS 部署
+
+Windows 构建与局域网镜像切换经根 `Justfile` 的 `docker-build` / `nas-*` 入口,
+由 `scripts/deploy-nas.ps1` 与 `scripts/deploy-nas.sh` 执行。
+快速部署只接受生产数据库已处于目标镜像迁移 head 的情况, 以保证失败时可仅回滚镜像；
+生产位置、授权边界与操作约定见 [nas-ops](../../skills/nas-ops/amane-media.md#windows-快速迭代)。
+
 ## 跨切面
 
 - **限速** — per-host 漏桶; 优先级见 [crawlers.md](crawlers.md).

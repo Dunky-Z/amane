@@ -135,6 +135,24 @@ build: generate _web-build
 _web-build:
     pnpm build
 
+# Windows Docker Desktop 构建 linux/amd64 镜像
+[windows]
+docker-build *args:
+    pwsh -NoProfile -File scripts/deploy-nas.ps1 -BuildOnly {{ args }}
+
+# 本机构建并经局域网部署到 NAS; 已有镜像使用 -SkipBuild -Image
+[windows]
+nas-deploy *args:
+    pwsh -NoProfile -File scripts/deploy-nas.ps1 {{ args }}
+
+[windows]
+nas-check *args:
+    pwsh -NoProfile -File scripts/deploy-nas.ps1 -CheckOnly {{ args }}
+
+[windows]
+nas-rollback *args:
+    pwsh -NoProfile -File scripts/deploy-nas.ps1 -Rollback {{ args }}
+
 [env('AMANE_HOST', host)]
 [env('AMANE_PORT', port)]
 start: build
