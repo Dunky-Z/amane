@@ -9,7 +9,6 @@ from amane.crawlers.local_source import (
     collect_sidecar,
     find_in_roots,
     probe,
-    probe_directory,
 )
 
 

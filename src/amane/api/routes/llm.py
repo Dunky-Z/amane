@@ -26,14 +26,14 @@ async def translate_text(req: TranslateRequest, runtime: RuntimeDep, config: Con
             result = await translator.translate(req.text, target, field)
         except Exception:
             raise HTTPException(status_code=503, detail="翻译失败") from None
-        return TranslateResponse(text=result if result else req.text)
+        return TranslateResponse(text=result or req.text)
 
     assert req.texts is not None
     out: list[str] = []
     for item in req.texts:
         try:
             result = await translator.translate(item, target, field)
-            out.append(result if result else item)
+            out.append(result or item)
         except Exception:
             out.append(item)
     return TranslateResponse(texts=out)

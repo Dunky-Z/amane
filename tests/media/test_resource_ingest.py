@@ -58,9 +58,7 @@ async def test_ingest_file_concurrent_same_locator(resource_store: ResourceStore
 
     resource_store.resolve = delayed_resolve  # type: ignore[method-assign]
 
-    urls = await asyncio.gather(
-        *[resource_store.ingest_file(src, locator=locator) for _ in range(8)]
-    )
+    urls = await asyncio.gather(*[resource_store.ingest_file(src, locator=locator) for _ in range(8)])
     assert all(u is not None for u in urls)
     assert len(set(urls)) == 1
 

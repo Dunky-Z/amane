@@ -429,7 +429,6 @@ class ScrapingConfig(BaseModel):
             assert_sites_allowed(sites, allowed, field=f"content_routes.{ct}", allow_external=True)
         return v
 
-
     @field_validator("local_roots")
     @classmethod
     def _validate_local_roots(cls, v: list[str]) -> list[str]:

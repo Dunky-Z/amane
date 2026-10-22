@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from amane.config import HotSettings, ScrapingConfig
-from amane.crawlers.models import MediaMetadata
+from amane.crawlers.models import FilmActor, MediaMetadata
 from amane.db.models import MediaFileStatus
 from amane.enums import SiteName
 from amane.handlers import ScrapeHandler, ScrapePayload
@@ -46,7 +46,7 @@ class OnlineCrawler:
 
     async def fetch(self, query, options=None) -> MediaMetadata | None:
         self.called = True
-        return MediaMetadata(number=query.number, title="Online Title", actors=["A"])
+        return MediaMetadata(number=query.number, title="Online Title", actors=[FilmActor(name="A")])
 
 
 def _write_full_sidecar(directory: Path, number: str) -> Path:
@@ -81,11 +81,10 @@ def _settings_with_local(tmp_path: Path | None = None) -> HotSettings:
 
 
 @pytest.mark.asyncio
-async def test_parent_full_hit_skips_online_crawlers(
-    repo: Repository, resource_store: ResourceStore, tmp_path: Path
-):
+async def test_parent_full_hit_skips_online_crawlers(repo: Repository, resource_store: ResourceStore, tmp_path: Path):
     video = _write_full_sidecar(tmp_path / "MIDV-123", "MIDV-123")
     media = await repo.create_media_file(library_id=1, path=str(video))
+    assert media.id is not None
 
     online = OnlineCrawler()
     factory = TrackingFactory({"javdb": online, "local": None})
@@ -116,9 +115,7 @@ async def test_parent_full_hit_skips_online_crawlers(
 
 
 @pytest.mark.asyncio
-async def test_nfo_only_falls_through_to_aggregate(
-    repo: Repository, resource_store: ResourceStore, tmp_path: Path
-):
+async def test_nfo_only_falls_through_to_aggregate(repo: Repository, resource_store: ResourceStore, tmp_path: Path):
     d = tmp_path / "MIDV-200"
     d.mkdir()
     video = d / "MIDV-200.mp4"
@@ -149,9 +146,7 @@ async def test_nfo_only_falls_through_to_aggregate(
 
 
 @pytest.mark.asyncio
-async def test_root_full_hit_without_media_path(
-    repo: Repository, resource_store: ResourceStore, tmp_path: Path
-):
+async def test_root_full_hit_without_media_path(repo: Repository, resource_store: ResourceStore, tmp_path: Path):
     hit = tmp_path / "out" / "MIDV-300"
     _write_full_sidecar(hit, "MIDV-300")
 
@@ -163,9 +158,7 @@ async def test_root_full_hit_without_media_path(
         resource_store=resource_store,
         pipeline_config=_settings_with_local(tmp_path / "out"),
     )
-    result = await handler.handle(
-        ScrapePayload(number="MIDV-300", content_type=ContentType.CENSORED)
-    )
+    result = await handler.handle(ScrapePayload(number="MIDV-300", content_type=ContentType.CENSORED))
     assert result.success is True
     assert factory.get_crawlers_calls == []
     meta = await repo.get_metadata_by_number("MIDV-300")

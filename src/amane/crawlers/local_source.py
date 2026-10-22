@@ -196,9 +196,16 @@ def _dir_matches_number(directory: Path, number: str) -> bool:
         for entry in directory.iterdir():
             if not entry.is_file():
                 continue
-            if entry.suffix.lower() in {".nfo", ".mp4", ".mkv", ".avi", ".wmv", ".mov", ".ts", ".m4v"} and name_contains_number(
-                entry.name, number
-            ):
+            if entry.suffix.lower() in {
+                ".nfo",
+                ".mp4",
+                ".mkv",
+                ".avi",
+                ".wmv",
+                ".mov",
+                ".ts",
+                ".m4v",
+            } and name_contains_number(entry.name, number):
                 return True
     except OSError:
         return False

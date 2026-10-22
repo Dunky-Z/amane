@@ -10,7 +10,7 @@
 import asyncio
 import copy
 from collections import defaultdict
-from collections.abc import Callable, Collection, Coroutine, Mapping, Sequence
+from collections.abc import Callable, Collection, Coroutine, Mapping, Sequence, Set
 from dataclasses import dataclass
 from dataclasses import field as _f
 from typing import Any, Protocol
@@ -117,7 +117,7 @@ async def aggregate(
     field_language: FieldLanguage | None = None,
     cache: Mapping[str, dict] | None = None,
     on_progress: ProgressCallback | None = None,
-    multi_lang_sites: frozenset[SourceName] = MULTI_LANGUAGE_SOURCE_IDS,
+    multi_lang_sites: Set[SourceName] = MULTI_LANGUAGE_SOURCE_IDS,
     deferred_sites: frozenset[SourceName] = frozenset(),
 ) -> AggregateResult:
     fl = field_language or {}
@@ -272,7 +272,7 @@ def _resolve_lang(
     field: MetadataField,
     field_language: FieldLanguage,
     multi_lang_fields: frozenset[MetadataField] = LANG_METADATA_FIELD_SET,
-    multi_lang_sites: frozenset[SourceName] = MULTI_LANGUAGE_SOURCE_IDS,
+    multi_lang_sites: Set[SourceName] = MULTI_LANGUAGE_SOURCE_IDS,
 ) -> Language | None:
     lang = field_language.get(field)
     return lang if field in multi_lang_fields and site in multi_lang_sites else None
@@ -309,7 +309,7 @@ def build_graph(
     field_priority: FieldPriority,
     field_language: FieldLanguage,
     multi_lang_fields: frozenset[MetadataField] = LANG_METADATA_FIELD_SET,
-    multi_lang_sites: frozenset[SourceName] = MULTI_LANGUAGE_SOURCE_IDS,
+    multi_lang_sites: Set[SourceName] = MULTI_LANGUAGE_SOURCE_IDS,
 ) -> FetchGraph:
     # 节点集合由字段链的并集推导: 被全部字段排除的站点不产生节点.
     # 登记顺序 = 字段与优先级链上的首次出现顺序, 该顺序决定 sites_queried / failed 的写入顺序.

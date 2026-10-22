@@ -131,8 +131,9 @@ async def list_metadata(
     for m in items:
         summary = summaries.get(m.id) if m.id is not None else None
         response = to_resp(MetadataResponse, m)
+        tags = tags_by_id.get(m.id, []) if m.id is not None else []
         update: dict[str, object] = {
-            "user_tags": [to_resp(UserTagResponse, tag) for tag in tags_by_id.get(m.id, [])],
+            "user_tags": [to_resp(UserTagResponse, tag) for tag in tags],
         }
         if summary is not None:
             update["file_count"] = summary.file_count

@@ -564,7 +564,6 @@ class FacetsRepoMixin(RepositoryMixinBase):
             result = await session.exec(stmt)
             return list(result.all())
 
-
     async def list_user_tags_for_metadata_ids(self, metadata_ids: Sequence[int]) -> dict[int, list[UserTag]]:
         """批量读取影片挂载的用户标签; 无挂载的 id 不出现在结果中."""
         if not metadata_ids:
@@ -581,7 +580,6 @@ class FacetsRepoMixin(RepositoryMixinBase):
             for metadata_id, tag in rows:
                 out.setdefault(int(metadata_id), []).append(tag)
             return out
-
 
     async def list_actor_user_tags(self, actor_id: int) -> list[UserTag]:
         async with self._session() as session:

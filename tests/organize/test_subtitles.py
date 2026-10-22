@@ -233,7 +233,5 @@ def test_promote_subtitle_marker_from_sidecar() -> None:
     promoted = promote_subtitle_marker(base, found_subtitles=True)
     assert promoted.has_subtitle is True
     assert promoted.number == "MIDV-123"
-    already = FileInfo(
-        number="MIDV-123", content_type=ContentType.CENSORED, prefix="MIDV", has_subtitle_in_name=True
-    )
+    already = FileInfo(number="MIDV-123", content_type=ContentType.CENSORED, prefix="MIDV", has_subtitle_in_name=True)
     assert promote_subtitle_marker(already, found_subtitles=True) is already

@@ -37,4 +37,4 @@ def test_unlink_indexed_files(tmp_path: Path) -> None:
     with pytest.raises(SourceDeleteError, match="绝对路径"):
         unlink_indexed_files.sync(["clip.mp4"])
     with pytest.raises(SourceDeleteError, match="根路径"):
-        unlink_indexed_files.sync(["/"])
+        unlink_indexed_files.sync([tmp_path.anchor])

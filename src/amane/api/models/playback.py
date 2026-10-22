@@ -60,4 +60,3 @@ class PlaybackProgressPutRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     position_seconds: float = Field(ge=0)
-

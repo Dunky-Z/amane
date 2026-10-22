@@ -85,9 +85,7 @@ class TestSubmitTask:
         assert sorted(scrape.json()["payload"]["use_cache"]) == ["metadata", "trans"]
         assert scrape.json()["payload"]["content_type"] == "censored"
         assert scrape.json()["payload"]["subtitle_only"] is False
-        subtitle = await client.post(
-            "tasks", json={"type": "scrape", "number": "MIDV-123", "subtitle_only": True}
-        )
+        subtitle = await client.post("tasks", json={"type": "scrape", "number": "MIDV-123", "subtitle_only": True})
         assert subtitle.status_code == 202
         assert subtitle.json()["payload"]["subtitle_only"] is True
         for number, expected in (

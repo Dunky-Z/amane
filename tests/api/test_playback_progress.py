@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.asyncio
-async def test_playback_progress_roundtrip(client: "AsyncClient", repo: "Repository") -> None:
+async def test_playback_progress_roundtrip(client: AsyncClient, repo: Repository) -> None:
     metadata_id = await _seed_title(repo, number="PROG-001")
 
     empty = await client.get(f"playback/progress/{metadata_id}")
@@ -34,20 +34,20 @@ async def test_playback_progress_roundtrip(client: "AsyncClient", repo: "Reposit
 
 
 @pytest.mark.asyncio
-async def test_playback_progress_unknown_metadata(client: "AsyncClient") -> None:
+async def test_playback_progress_unknown_metadata(client: AsyncClient) -> None:
     assert (await client.get("playback/progress/999999")).status_code == 404
     assert (await client.put("playback/progress/999999", json={"position_seconds": 1})).status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_playback_progress_rejects_negative(client: "AsyncClient", repo: "Repository") -> None:
+async def test_playback_progress_rejects_negative(client: AsyncClient, repo: Repository) -> None:
     metadata_id = await _seed_title(repo, number="PROG-NEG")
     res = await client.put(f"playback/progress/{metadata_id}", json={"position_seconds": -1})
     assert res.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_playback_progress_deleted_with_metadata(client: "AsyncClient", repo: "Repository") -> None:
+async def test_playback_progress_deleted_with_metadata(client: AsyncClient, repo: Repository) -> None:
     metadata_id = await _seed_title(repo, number="PROG-DEL")
     assert (await client.put(f"playback/progress/{metadata_id}", json={"position_seconds": 42})).status_code == 200
     assert await repo.delete_metadata(metadata_id) is True

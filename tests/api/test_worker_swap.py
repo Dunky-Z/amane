@@ -41,8 +41,8 @@ class BlockingRefresh:
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         original = runtime_module.build_handlers
 
-        def wrapped(*args: Any, **kwargs: Any) -> dict[TaskType, TaskHandler[Any, Any]]:
-            handlers = original(*args, **kwargs)
+        def wrapped(*args: Any, **kwargs: Any) -> runtime_module.HandlerBundle:
+            bundle = original(*args, **kwargs)
             hot: HotSettings = args[4]
             started = asyncio.Event()
             release = asyncio.Event()
@@ -57,8 +57,8 @@ class BlockingRefresh:
                     await release.wait()
                     return TaskResult(success=True)
 
-            handlers[TaskType.REFRESH] = BlockingHandler()
-            return handlers
+            bundle.handlers[TaskType.REFRESH] = BlockingHandler()
+            return bundle
 
         monkeypatch.setattr(runtime_module, "build_handlers", wrapped)
         monkeypatch.setattr(bootstrap_module, "build_handlers", wrapped)

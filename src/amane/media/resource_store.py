@@ -405,7 +405,6 @@ class ResourceStore:
                 await session.commit()
             return UpscaleOutcome.UPSCALED
 
-
     async def ingest_file(self, src: Path, *, locator: str | None = None) -> str | None:
         """将本地文件硬链/复制入库, 返回内部 URL ``/api/resources/{hash}``.
 

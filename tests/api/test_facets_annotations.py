@@ -121,7 +121,6 @@ class TestUserTagsApi:
         assert [t["name"] for t in item["user_tags"]] == ["已播放"]
 
 
-
 class TestCommentsApi:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_comment_lifecycle(self, client: AsyncClient, repo: Repository) -> None:

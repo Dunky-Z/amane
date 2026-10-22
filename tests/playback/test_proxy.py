@@ -464,13 +464,14 @@ async def test_proxy_decodes_encoded_upstream_without_stale_length() -> None:
 
 
 @pytest.mark.asyncio
-async def test_upstream_request_errors_do_not_leak_gate_permits() -> None:
+async def test_upstream_request_errors_do_not_leak_gate_permits(monkeypatch: pytest.MonkeyPatch) -> None:
     """上游连接失败必须归还出口额度.
 
     连接被拒时 httpx 抛 ``RequestError``. 额度一旦在该分支漏掉, 累积到全局上限
     (``GLOBAL_CONCURRENCY``) 之后所有播放请求固定 503. 这里先发起远多于上限的失败请求,
     再确认同一客户端仍能完成正常请求.
     """
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1,::1")
     server, _captured, _cancelled = _serve()
     stream = StreamClient()
     refused = UpstreamPlaybackTarget(url="http://127.0.0.1:9/video")

@@ -57,6 +57,7 @@ class SubtitlePlugin:
 
 async def _seed_video(repo: Repository, tmp_path: Path, number: str, *, with_sidecar: bool) -> tuple[Path, int]:
     lib = await repo.create_library(name="lib", path=str(tmp_path))
+    assert lib.id is not None
     video = tmp_path / f"{number}.mp4"
     video.write_bytes(b"video")
     if with_sidecar:
@@ -105,9 +106,7 @@ async def test_subtitle_only_clears_when_no_match(
     factory = TrackingFactory({SUBTITLE_SOURCE_ID: plugin})
     handler = ScrapeHandler(repo, factory, resource_store, HotSettings())
 
-    result = await handler.handle(
-        ScrapePayload(number="SSNI-497", media_file_id=media_id, subtitle_only=True)
-    )
+    result = await handler.handle(ScrapePayload(number="SSNI-497", media_file_id=media_id, subtitle_only=True))
 
     assert result.success is False
     assert result.error is not None
@@ -126,9 +125,7 @@ async def test_subtitle_only_fails_when_plugin_missing(
     factory = TrackingFactory({})
     handler = ScrapeHandler(repo, factory, resource_store, HotSettings())
 
-    result = await handler.handle(
-        ScrapePayload(number="SSNI-497", media_file_id=media_id, subtitle_only=True)
-    )
+    result = await handler.handle(ScrapePayload(number="SSNI-497", media_file_id=media_id, subtitle_only=True))
 
     assert result.success is False
     assert result.error is not None

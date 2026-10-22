@@ -195,6 +195,7 @@ class TestScrapeHandler:
             pipeline_config=HotSettings(),
         )
         media = await repo.create_media_file(library_id=1, path="/media/TEST-001.mp4")
+        assert media.id is not None
         # 站点明细来自 `Recorder`, 没有它时失败载荷只有 `failed_sites`.
         recorder = Recorder.begin(
             tmp_path, Task(id=91, type=TaskType.SCRAPE, status=TaskStatus.RUNNING, payload={}), HotSettings()
@@ -479,6 +480,7 @@ class TestContentRoutesFiltering:
         h = ScrapeHandler(repo=repo, factory=factory, resource_store=resource_store, pipeline_config=config)
 
         media = await repo.create_media_file(library_id=1, path="/media/FC2-1.mp4")
+        assert media.id is not None
         result = await h.handle(ScrapePayload(media_file_id=media.id, number="FC2-1", content_type=ContentType.FC2))
 
         assert result.success is False
