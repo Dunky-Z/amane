@@ -1,5 +1,5 @@
 import { Group, NumberInput, Pagination } from "@mantine/core";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNarrowViewport } from "@/hooks/use-narrow-viewport";
 
@@ -15,10 +15,6 @@ export function PosterPagination({ page, totalPages, onChange }: PosterPaginatio
   const narrow = useNarrowViewport("md");
   const [draft, setDraft] = useState(String(page));
   const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) setDraft(String(page));
-  }, [focused, page]);
 
   if (totalPages <= 1) return null;
 
@@ -45,9 +41,10 @@ export function PosterPagination({ page, totalPages, onChange }: PosterPaginatio
       />
       <NumberInput
         aria-label={t("pagination.jumpTo")}
-        value={draft}
+        value={focused ? draft : String(page)}
         onChange={(value) => setDraft(String(value))}
         onFocus={(event) => {
+          setDraft(String(page));
           setFocused(true);
           event.currentTarget.select();
         }}

@@ -184,7 +184,9 @@ function nativeHlsSupported(): boolean {
 }
 
 function preferredSubtitleIndex(tracks: PlaybackSubtitleItem[]): number {
-  const chinese = tracks.findIndex((track) => (track.language ?? "").toLowerCase().startsWith("zh"));
+  const chinese = tracks.findIndex((track) =>
+    (track.language ?? "").toLowerCase().startsWith("zh"),
+  );
   return chinese >= 0 ? chinese : 0;
 }
 

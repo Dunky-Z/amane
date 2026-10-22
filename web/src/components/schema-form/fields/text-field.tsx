@@ -97,7 +97,12 @@ export function TextField({
                 </Button>
               ) : null
             ) : nullable && field.state.value != null ? (
-              <Button type="button" variant="outline" size="compact-sm" onClick={() => field.handleChange(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="compact-sm"
+                onClick={() => field.handleChange(null)}
+              >
                 {t("actions.clear")}
               </Button>
             ) : null}

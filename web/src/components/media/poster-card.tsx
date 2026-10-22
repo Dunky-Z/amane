@@ -1,6 +1,13 @@
 import { AspectRatio, Box, Card, Center, Group, Stack, Text, UnstyledButton } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconCalendar, IconCheck, IconHeart, IconHeartFilled, IconStar, IconUser } from "@tabler/icons-react";
+import {
+  IconCalendar,
+  IconCheck,
+  IconHeart,
+  IconHeartFilled,
+  IconStar,
+  IconUser,
+} from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState, type MouseEvent } from "react";
@@ -176,7 +183,13 @@ export function PosterCard({ item, actorBirthday }: PosterCardProps) {
           )}
           <Group gap={5} wrap="nowrap" align="center" justify="space-between">
             {actorsLabel ? (
-              <Group gap={5} wrap="nowrap" align="center" title={actorsLabel} style={{ minWidth: 0, flex: 1 }}>
+              <Group
+                gap={5}
+                wrap="nowrap"
+                align="center"
+                title={actorsLabel}
+                style={{ minWidth: 0, flex: 1 }}
+              >
                 <Box
                   style={{
                     display: "flex",

@@ -276,9 +276,7 @@ export function LibraryFormFields({ value, onChange, showCreateOnly }: LibraryFo
     const text = `{${name}}`;
     const ok = await copyText(text);
     notifications.show({
-      message: ok
-        ? t("placeholders.copied", { placeholder: text })
-        : t("placeholders.copyFailed"),
+      message: ok ? t("placeholders.copied", { placeholder: text }) : t("placeholders.copyFailed"),
       color: ok ? "blue" : "red",
     });
   };

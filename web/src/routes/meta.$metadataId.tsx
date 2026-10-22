@@ -248,7 +248,9 @@ function TitleDetailPage() {
     onSuccess: (_data, variables) => {
       const deletedFiles = variables.query?.delete_files === true;
       notifications.show({
-        message: deletedFiles ? t("common:toast.sourceFilesDeleted") : t("common:toast.metadataDeleted"),
+        message: deletedFiles
+          ? t("common:toast.sourceFilesDeleted")
+          : t("common:toast.metadataDeleted"),
         color: "blue",
       });
       void queryClient.invalidateQueries({ queryKey: listMetadataQueryKey() });

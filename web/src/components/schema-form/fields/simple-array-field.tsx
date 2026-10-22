@@ -35,7 +35,8 @@ export function SimpleArrayField({
       {(field: AnyFieldApi) => {
         const value = Array.isArray(field.state.value) ? (field.state.value as string[]) : [];
 
-        const pathItems = typeof itemSchema === "object" && itemSchema !== null && isPath(itemSchema);
+        const pathItems =
+          typeof itemSchema === "object" && itemSchema !== null && isPath(itemSchema);
         const pathType =
           pathItems && typeof itemSchema === "object" && itemSchema !== null
             ? ((itemSchema["x-path-type"] as "directory" | "file" | undefined) ?? "directory")

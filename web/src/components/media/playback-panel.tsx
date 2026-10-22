@@ -391,31 +391,30 @@ export function PlaybackPanel({
 
   const playerFrameRef = useRef<HTMLDivElement>(null);
   // 评论 / URL 的 seek 优先于服务端进度; 有过显式 seek 则本面板不再自动恢复.
-  const [restoreSeek, setRestoreSeek] = useState<SeekRequest | null>(null);
+  const [restoreState, setRestoreState] = useState<{
+    metadataId: number;
+    skipRestore: boolean;
+    seek: SeekRequest | null;
+  }>({ metadataId, skipRestore: seekRequest != null, seek: null });
   const restoreNonceRef = useRef(0);
-  const skipRestoreRef = useRef(false);
   const restoreAttemptedRef = useRef(false);
-  const [progressMetaId, setProgressMetaId] = useState(metadataId);
-  if (metadataId !== progressMetaId) {
-    setProgressMetaId(metadataId);
-    skipRestoreRef.current = false;
-    restoreAttemptedRef.current = false;
-    setRestoreSeek(null);
+  if (
+    metadataId !== restoreState.metadataId ||
+    (seekRequest != null && !restoreState.skipRestore)
+  ) {
+    setRestoreState({ metadataId, skipRestore: seekRequest != null, seek: null });
   }
 
   useEffect(() => {
-    if (seekRequest != null) {
-      skipRestoreRef.current = true;
-      setRestoreSeek(null);
-    }
-  }, [seekRequest]);
+    restoreAttemptedRef.current = false;
+  }, [metadataId]);
 
   useEffect(() => {
     onCanSeekChange(canSeek);
   }, [canSeek, onCanSeekChange]);
 
   useEffect(() => {
-    if (skipRestoreRef.current || restoreAttemptedRef.current || !canSeek || metadataId <= 0) {
+    if (restoreState.skipRestore || restoreAttemptedRef.current || !canSeek || metadataId <= 0) {
       return;
     }
     let cancelled = false;
@@ -423,7 +422,7 @@ export function PlaybackPanel({
     // 若提前置位则重挂后永远不再恢复.
     void getPlaybackProgress({ path: { metadata_id: metadataId }, throwOnError: true })
       .then(({ data }) => {
-        if (cancelled || skipRestoreRef.current || seekRequest != null) {
+        if (cancelled || seekRequest != null) {
           return;
         }
         restoreAttemptedRef.current = true;
@@ -432,7 +431,8 @@ export function PlaybackPanel({
           return;
         }
         restoreNonceRef.current += 1;
-        setRestoreSeek({ seconds, nonce: restoreNonceRef.current });
+        const seek = { seconds, nonce: restoreNonceRef.current };
+        setRestoreState((previous) => ({ ...previous, seek }));
       })
       .catch(() => {
         if (!cancelled) {
@@ -442,14 +442,14 @@ export function PlaybackPanel({
     return () => {
       cancelled = true;
     };
-  }, [canSeek, metadataId, seekRequest]);
+  }, [canSeek, metadataId, seekRequest, restoreState.skipRestore]);
 
-  const effectiveSeekRequest = seekRequest ?? restoreSeek;
+  const effectiveSeekRequest = seekRequest ?? restoreState.seek;
   const handleSeekHandled = () => {
     if (seekRequest != null) {
       onSeekHandled();
     }
-    setRestoreSeek(null);
+    setRestoreState((previous) => ({ ...previous, seek: null }));
   };
 
   // 评论位于播放窗口下方, 点按时间戳通常不必移动页面: 窗口还有一部分在视野内时不滚动, 完全滑出视野时

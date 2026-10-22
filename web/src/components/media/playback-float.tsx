@@ -64,10 +64,7 @@ export function PlaybackFloat({
   const dragRef = useRef<DragState | null>(null);
   const [geom, setGeom] = useState<PanelGeom | null>(null);
 
-  useEffect(() => {
-    if (!opened || geom != null) {
-      return;
-    }
+  if (opened && geom == null) {
     const width = Math.min(DEFAULT_WIDTH, window.innerWidth - 32);
     const height = Math.min(DEFAULT_HEIGHT, window.innerHeight - 32);
     setGeom({
@@ -76,7 +73,8 @@ export function PlaybackFloat({
       width,
       height,
     });
-  }, [opened, geom]);
+  }
+  const hasGeom = geom != null;
 
   useEffect(() => {
     if (!opened) {
@@ -93,7 +91,7 @@ export function PlaybackFloat({
 
   // 用户经 CSS resize 改尺寸后, 把结果同步回 state, 供拖动边界计算使用.
   useEffect(() => {
-    if (!opened) {
+    if (!opened || !hasGeom) {
       return;
     }
     const panel = panelRef.current;
@@ -115,7 +113,7 @@ export function PlaybackFloat({
     });
     observer.observe(panel);
     return () => observer.disconnect();
-  }, [opened, geom != null]);
+  }, [opened, hasGeom]);
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
