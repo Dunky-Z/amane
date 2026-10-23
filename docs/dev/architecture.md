@@ -59,7 +59,7 @@ EventBus → 日志 → 来源插件发现 → 主 DB engine + Repository → r1
 Windows 构建与局域网镜像切换经根 `Justfile` 的 `docker-build` / `nas-*` 入口,
 由 `scripts/deploy-nas.ps1` 与 `scripts/deploy-nas.sh` 执行。
 快速部署只接受生产数据库已处于目标镜像迁移 head 的情况, 以保证失败时可仅回滚镜像；
-生产位置、授权边界与操作约定见 [nas-ops](../../skills/nas-ops/amane-media.md#windows-快速迭代)。
+生产归属与部署前检查由 NAS 端脚本核验。
 
 ## 跨切面
 

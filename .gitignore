@@ -215,3 +215,6 @@ androidapp/*.keystore
 
 # parley discussion workspaces created by tooling — never track
 .parley/
+
+# 私人运维技能在项目仓库外维护
+/skills/nas-ops/
