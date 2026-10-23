@@ -88,5 +88,5 @@ export function ProxyImage({
     );
   }
   if (!src) return placeholder;
-  return <img {...rest} src={src} loading={loading} />;
+  return <img {...rest} src={src} loading={loading} onLoad={onLoad} onError={onError} />;
 }

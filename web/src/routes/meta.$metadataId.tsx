@@ -25,6 +25,8 @@ import {
   IconExternalLink,
   IconFolders,
   IconGitMerge,
+  IconHeart,
+  IconHeartFilled,
   IconLock,
   IconLockOpen,
   IconPencil,
@@ -71,6 +73,7 @@ import { SchemaForm } from "@/components/schema-form/schema-form";
 import { extractErrorMessage } from "@/lib/api-error";
 import { USER_TAG_FACET_LIST } from "@/lib/facets";
 import { FIELD_LABEL_KEY, LOCKABLE_FIELDS } from "@/lib/media/metadata-fields";
+import { FAVORITE_USER_TAG, WATCHED_USER_TAG } from "@/lib/media/marks";
 import { proxyImageUrl } from "@/lib/utils";
 import { ProxyImage } from "@/components/media/proxy-image";
 import { CommentSection } from "@/components/media/comment-section";
@@ -161,6 +164,9 @@ function TitleDetailPage() {
   const [failedTrailerUrl, setFailedTrailerUrl] = useState<string | null>(null);
   const [thumbBroken, setThumbBroken] = useState(false);
   const [posterBroken, setPosterBroken] = useState(false);
+  const [pendingMark, setPendingMark] = useState<
+    typeof WATCHED_USER_TAG | typeof FAVORITE_USER_TAG | null
+  >(null);
   // 评论时间戳的跳转: 本地请求负责即时响应 (同一秒连点也要重新触发), 地址栏的 `t` 负责分享与刷新定位.
   const [seekRequest, setSeekRequest] = useState<SeekRequest | null>(null);
   const [canSeek, setCanSeek] = useState(false);
@@ -224,11 +230,16 @@ function TitleDetailPage() {
   });
   const hasPlaybackSources = (playbackSourcesQuery.data?.items?.length ?? 0) > 0;
 
-  const invalidateDetail = () => {
-    void queryClient.invalidateQueries({
+  const invalidateDetail = () =>
+    queryClient.invalidateQueries({
       queryKey: getMetadataQueryKey({ path: { metadata_id: id } }),
     });
-  };
+
+  const invalidateUserTags = () =>
+    Promise.all([
+      invalidateDetail(),
+      queryClient.invalidateQueries({ queryKey: listMetadataQueryKey() }),
+    ]);
 
   const scrapeMutation = useMutation({
     ...submitTaskMutation(),
@@ -378,7 +389,7 @@ function TitleDetailPage() {
         message: created > 0 ? t("common:toast.userTagCreated") : t("common:toast.userTagAttached"),
         color: "blue",
       });
-      invalidateDetail();
+      await invalidateUserTags();
     } catch (err) {
       notifications.show({
         message: extractErrorMessage(err, t("common:toast.operationFailed")),
@@ -394,7 +405,7 @@ function TitleDetailPage() {
         body: { ids: [id], user_tag_ids: tagIds, action: "detach" },
       });
       notifications.show({ message: t("common:toast.userTagDetached"), color: "blue" });
-      invalidateDetail();
+      await invalidateUserTags();
     } catch (err) {
       notifications.show({
         message: extractErrorMessage(err, t("common:toast.operationFailed")),
@@ -424,6 +435,25 @@ function TitleDetailPage() {
   }
 
   const item: MetadataResponse = data.metadata;
+  const watched = (data.user_tags ?? []).some((tag) => tag.name === WATCHED_USER_TAG);
+  const favorite = (data.user_tags ?? []).some((tag) => tag.name === FAVORITE_USER_TAG);
+  const tagsBusy =
+    pendingMark != null || ensureTagsMutation.isPending || applyTagsMutation.isPending;
+
+  async function toggleMark(name: typeof WATCHED_USER_TAG | typeof FAVORITE_USER_TAG) {
+    if (tagsBusy) return;
+    const tag = data?.user_tags?.find((candidate) => candidate.name === name);
+    setPendingMark(name);
+    try {
+      if (tag) {
+        await handleDetachTags([tag.id]);
+      } else {
+        await handleAddTags({ tagIds: [], createNames: [name] });
+      }
+    } finally {
+      setPendingMark(null);
+    }
+  }
   // 详情只展示一张主图: 优先横版封面 (thumb), 失败或不存在时回退竖版海报.
   const thumbSrc = item.thumb_url ?? item.thumb_urls?.[0] ?? null;
   const posterSrc = item.poster_url ?? item.poster_urls?.[0] ?? null;
@@ -518,8 +548,7 @@ function TitleDetailPage() {
               borderRadius: "var(--mantine-radius-md)",
               overflow: "hidden",
               background: playingTrailer ? "#000" : "var(--mantine-color-default-hover)",
-              // 无可展示封面时用 16:9 占位; 有封面则由 img 撑住尺寸, 播放不跳变.
-              ...(!coverUrl ? { aspectRatio: "16 / 9" as const } : {}),
+              aspectRatio: "3 / 2",
             }}
           >
             {coverUrl && (
@@ -532,20 +561,20 @@ function TitleDetailPage() {
                 onError={handleCoverError}
                 style={{
                   width: "100%",
-                  height: "auto",
+                  height: "100%",
                   display: "block",
-                  // 播放时保留原图占位, 避免切换到 video 后比例跳变.
+                  position: "absolute",
+                  inset: 0,
+                  objectFit: "contain",
+                  objectPosition: "center",
                   visibility: playingTrailer ? "hidden" : "visible",
                 }}
-                placeholder={<div style={{ aspectRatio: "16 / 9" }} aria-hidden />}
               />
             )}
             {!playingTrailer && <FilePhaseOverlay phase={item.file_phase} />}
 
             {playingTrailer && trailerUrl != null ? (
               <>
-                {/* 绝对定位铺满封面所在的盒子: 盒子的高度由封面撑住, 播放器不能改写它.
-                    失败提示与点播面板同形: 播放器不渲染, 黑底给出说明. */}
                 <div style={{ position: "absolute", inset: 0, background: "#000" }}>
                   {failedTrailerUrl === trailerUrl ? (
                     <div
@@ -657,6 +686,30 @@ function TitleDetailPage() {
                 {t("detail.playback")}
               </Button>
             ) : null}
+            <Button
+              size="xs"
+              variant={watched ? "filled" : "light"}
+              color="teal"
+              leftSection={<IconCheck size={14} />}
+              aria-pressed={watched}
+              loading={pendingMark === WATCHED_USER_TAG}
+              disabled={tagsBusy}
+              onClick={() => void toggleMark(WATCHED_USER_TAG)}
+            >
+              {t("detail.markWatched")}
+            </Button>
+            <Button
+              size="xs"
+              variant={favorite ? "filled" : "light"}
+              color="pink"
+              leftSection={favorite ? <IconHeartFilled size={14} /> : <IconHeart size={14} />}
+              aria-pressed={favorite}
+              loading={pendingMark === FAVORITE_USER_TAG}
+              disabled={tagsBusy}
+              onClick={() => void toggleMark(FAVORITE_USER_TAG)}
+            >
+              {t("detail.markFavorite")}
+            </Button>
             <Tooltip label={t("detail.cropPoster.noThumb")} disabled={thumbSrc != null}>
               <Box display="inline-block">
                 <Button

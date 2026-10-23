@@ -28,11 +28,8 @@ import { extractErrorMessage } from "@/lib/api-error";
 import { ageAtRelease } from "@/lib/format-birthday";
 import { formatReleaseYearMonth } from "@/lib/format-release";
 import { USER_TAG_FACET_LIST } from "@/lib/facets";
+import { FAVORITE_USER_TAG, WATCHED_USER_TAG } from "@/lib/media/marks";
 import { proxyImageUrl } from "@/lib/utils";
-
-/** 海报快捷开关写入的用户标签名 (固定中文, 便于筛选). */
-export const WATCHED_USER_TAG = "已播放";
-export const FAVORITE_USER_TAG = "收藏";
 
 interface PosterCardProps {
   item: MetadataResponse;

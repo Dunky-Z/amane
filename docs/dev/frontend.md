@@ -39,7 +39,7 @@
 
 **评论**: 排序与编辑态只在组件内, 不写地址栏. 正文按 GFM 渲染; 时间戳经 rehype 插件改写, 链接与代码内的文本不参与; 预览与正式渲染共用组件, 预览中的时间戳不响应点击; 图片直接内联. 编辑与预览按阅读态的正文高度对齐, 模式切换与保存/取消位于 header; 内容超出在正文区内滚动. 自动链接边界由 GFM 决定, 全角标点后的中文会并入地址. 影片详情与演员详情的用户标签与刮削标签分栏; 加减菜单一次提交多名, 但固定为两次请求 — 待新建的名称先经 `POST /api/facets/user_tag` 换成 id, 再与已选 id 一起交给所在页的挂载端点 (影片 `/api/metadata/batch/user-tags`, 演员 `/api/actors/batch/user-tags`), 端点语义见 [api.md](api.md). 演员浏览经由 `/api/actors`, 身份治理仍调用 `/api/facets/actor`, 筛选字段的单一事实源是 `lib/actors/browse.ts`; 演员详情出演作品的排序项与片库同源 (`lib/media/browse.ts` 的 `METADATA_SORT_OPTIONS`), 记忆落在 ui store 的 `actorWorksSort`.
 
-**播放**: 详情封面下的入口打开可拖动 / 改尺寸的浮层 (`playback-float.tsx`), 内嵌原面板逻辑; 无启用播放源时不显示入口. 面板先取来源列表 (不调用插件因此立刻渲染), 流列表按需加载; 两级选择经 `EnumToggle` 平铺, 失败信息条给出重试入口. 来源顺序由用户在插件页 `PlaybackOrderSection` 维护, 面板按它重排, **位置 0 即默认探测的来源**. 可寻址流按 `metadata_id` 读写服务端进度并自动续播; URL `?t=` 优先于已存进度. 流附带字幕时自动显示, 有中文轨道时优先中文. 详情页的预告片与点播经 `playback-player-lazy.ts` 共用同一份播放器声明. 复制时间戳经由 `lib/copy-text.ts`. 海报墙快捷开关挂载固定名用户标签 `已播放` / `收藏`, 与进度互不读写; 片库高级筛选的观看状态按同一 `已播放` 标签判已播放 / 未播放. 主机契约见 [plugins.md](plugins.md); 手势、全屏与系统音量见 `playback-player.tsx` 注释.
+**播放**: 详情封面下的入口打开可拖动 / 改尺寸的浮层 (`playback-float.tsx`), 内嵌原面板逻辑; 无启用播放源时不显示入口. 面板先取来源列表 (不调用插件因此立刻渲染), 流列表按需加载; 两级选择经 `EnumToggle` 平铺, 失败信息条给出重试入口. 来源顺序由用户在插件页 `PlaybackOrderSection` 维护, 面板按它重排, **位置 0 即默认探测的来源**. 可寻址流按 `metadata_id` 读写服务端进度并自动续播; URL `?t=` 优先于已存进度. 流附带字幕时自动显示, 有中文轨道时优先中文. 详情页的预告片与点播经 `playback-player-lazy.ts` 共用同一份播放器声明. 复制时间戳经由 `lib/copy-text.ts`. 海报墙与详情页快捷开关共用 `lib/media/marks.ts` 的 `已播放` / `收藏` 用户标签, 与进度互不读写; 详情页写入后失效详情与片库列表; 片库高级筛选的观看状态按同一 `已播放` 标签判已播放 / 未播放. 主机契约见 [plugins.md](plugins.md); 手势、全屏与系统音量见 `playback-player.tsx` 注释.
 
 ## 列表分页
 
