@@ -32,7 +32,7 @@ from ..handlers import (
     UpscaleHandler,
 )
 from ..library import InventoryStore
-from ..llm import LLMTranslator, TranslationCache, build_translator
+from ..llm import LLMTranslator, TranslationCache, TranslationCoalescer, build_translator
 from ..media.watermarks import user_watermark_dir
 from ..net.browser import BrowserPool
 from ..net.http import RateLimiters, WebClient, site_proxy_overrides
@@ -56,10 +56,6 @@ if TYPE_CHECKING:
     from .proxy_failure_cache import ProxyFailureCache
 
 logger = structlog.get_logger()
-
-
-PROXY_DOWNLOAD_CONCURRENCY = 16
-"""``GET /resources/proxy`` 的并发上限. 每个请求都起一次出站下载, 该端点由用户点击触发, 需要端点级上限."""
 
 
 @dataclass(frozen=True)
@@ -225,13 +221,13 @@ class AppRuntime:
     release_checker: ReleaseChecker
     resource_store: ResourceStore
     proxy_failure_cache: ProxyFailureCache
-    proxy_downloads: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(PROXY_DOWNLOAD_CONCURRENCY))
     watcher_service: WatcherService | None = None
     feed_service: FeedService | None = None
     safe_dirs: list[Path] | None = field(default_factory=list)
     api_token: str | None = None
     translation_cache: TranslationCache | None = None
     translator: LLMTranslator | None = None
+    translation_coalescer: TranslationCoalescer | None = None
     r18_db: R18Database | None = None
     agent_service: AgentService | None = None
     plugin_manager: PluginManager | None = None
@@ -308,6 +304,7 @@ class AppRuntime:
             hot,
             self.safe_dirs,
             self.translation_cache,
+            self.translation_coalescer,
             self.config.cold.data_dir,
             self.plugin_manager,
             library_locks=self.library_locks,
@@ -516,6 +513,7 @@ def build_handlers(
     hot: HotSettings,
     safe_dirs: Sequence[Path] | None = (),
     translation_cache: TranslationCache | None = None,
+    translation_coalescer: TranslationCoalescer | None = None,
     state_dir: Path | None = None,
     plugin_manager: PluginManager | None = None,
     library_locks: LibraryTaskLocks | None = None,
@@ -523,7 +521,7 @@ def build_handlers(
 ) -> HandlerBundle:
     # 未启用/缺密钥时 translator 为 None, ScrapeHandler 与翻译 API 均跳过/拒绝.
     # 经 _rebuild() 热重载; 代理沿用 network.proxy.
-    # 译文缓存是会话级, 热重载时复用同一实例.
+    # 译文缓存与并发合并状态是会话级, 热重载时复用同一实例.
     translator = build_translator(
         enabled=hot.llm.enabled,
         api_type=hot.llm.api_type,
@@ -535,6 +533,7 @@ def build_handlers(
         system_prompt=hot.llm.system_prompt,
         field_prompts=hot.llm.field_prompts,
         cache=translation_cache,
+        coalescer=translation_coalescer,
     )
     if library_locks is None:
         library_locks = LibraryTaskLocks()

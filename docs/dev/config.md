@@ -16,7 +16,7 @@
 
 API 鉴权是冷配置: 中间件在请求路径上, 不能在进程内 rebuild 中替换.
 
-- **未设置 (auto, 默认)**: 启动时生成随机 token 并持久化到 `data_dir/token` (0600, 重启复用). 除 `GET /api/health` 外 `/api/*` 需 `Authorization: Bearer` 或中间件下发的 HttpOnly SameSite=Lax cookie; 浏览器侧全部经由 cookie, token 不落 localStorage, 不出现在 URL 与访问日志. 启动日志打印 token, 容器从 `docker logs` 取.
+- **未设置 (auto, 默认)**: 启动时生成随机 token 并持久化到 `data_dir/token` (0600, 重启复用). 除 `middleware.py::_TOKEN_EXEMPT` 登记的路径外, `/api/*` 需 `Authorization: Bearer` 或中间件下发的 HttpOnly SameSite=Lax cookie; 浏览器侧全部经由 cookie, token 不落 localStorage, 不出现在 URL 与访问日志. 启动日志打印 token, 容器从 `docker logs` 取.
 - **`AMANE_TOKEN=off`**: 显式关闭, 仅当反代已实现等价鉴权时使用.
 - **`AMANE_TOKEN=<value>`**: 显式 token.
 
@@ -35,7 +35,7 @@ RateLimiters → WebClient → HttpClient → CrawlerFactory
 
 `logging.level` 在 rebuild 内直接修改 logger, 不依赖对象重建.
 
-**不重建的对象**: `Repository`、`EventBus`、`WatcherService`、`FeedService`、`ResourceStore`、`TranslationCache`、`ProxyFailureCache`、`AgentService` 内的 `ResultCache` — 它们的状态是会话级的 (DB 连接池、WS 客户端、watchdog observer、feed 轮询循环、资源去重表、译文缓存、负缓存、交付结果缓存), 重建会切断现有连接或丢弃缓存句柄. `_rebuild()` 只把新 `WebClient` 交给 `FeedService.set_web_client`.
+**不重建的对象**: `Repository`、`EventBus`、`WatcherService`、`FeedService`、`ResourceStore`、`TranslationCache`、`TranslationCoalescer`、`ProxyFailureCache`、`AgentService` 内的 `ResultCache` — 它们的状态是会话级的, 重建会切断连接或丢弃缓存与进行中的翻译请求. `_rebuild()` 只把新 `WebClient` 交给 `FeedService.set_web_client`.
 
 `watcher.use_polling` / `media_extensions` / `debounce_seconds` 在 `start_app` 构造时一次性注入, **不随 rebuild 更新**, 修改 TOML 后须重启; Library 级的 `automation` / `ingest` / `cloud_path` / 路径 / `trailer_pattern` 等由 libraries 路由热更新, 与这三项无关. 契约见 [watcher.md](watcher.md).
 

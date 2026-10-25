@@ -10,36 +10,33 @@ description: >-
 
 `just dev` 先 `generate` 再并行起 API 与 Vite. 后台启动. 禁止等待 Vite 的 `Local:` / `ready in` — just 并行输出经常没有这两行.
 
-## 监听地址 (NAS / 远程开发)
+## 监听地址
 
-默认对局域网可访问, 禁止改回只绑 `127.0.0.1` 后仍让用户用 NAS IP 打开页面:
+开发服务默认仅本机可访问:
 
 | 进程 | 绑定 | 配置 |
 |------|------|------|
-| API | `AMANE_HOST` (默认 `0.0.0.0`) | Justfile `_dev-uvicorn` |
-| Vite | 全部网卡 (`host: true`) | `web/vite.config.ts` (默认端口 8899) |
+| API | `AMANE_HOST` (默认 `127.0.0.1`) | Justfile `_dev-uvicorn` |
+| Vite | `127.0.0.1:8899` | `web/vite.config.ts`, 端口占用即失败 |
 
-浏览器在 Windows 等远程机上应使用 **NAS 局域网 IP**, 不是仅在 NAS 本机有效的 `127.0.0.1`.
-Vite 将 `/api` 代理到本机 uvicorn (`localhost:8000`), 前端经局域网打开时 API 请求仍走同源代理.
+Vite 将 `/api` 代理到本机 uvicorn (`127.0.0.1:${AMANE_PORT:-8000}`), 浏览器始终经同源请求.
 
-仅本机访问时可 `AMANE_HOST=127.0.0.1 just dev`.
+局域网验证使用下述构建与后端托管流程.
 
-就绪以 HTTP 为准. 探测一律用 `localhost`, 禁止 `127.0.0.1` (进程不一定监听 IPv4).
+就绪以 HTTP 为准, 使用实际监听地址探测.
 
 | 进程 | 就绪 |
 |------|------|
 | API | `GET http://localhost:${AMANE_PORT:-8000}/api/health` 返回 200; 日志 `amane service ready` 亦可 |
 | Web | `GET http://localhost:8899/` 返回 200 |
 
-已在监听则禁止再启动一份. `AMANE_PORT` 或 Vite 占用顺延时, 按实际端口写.
+已在监听则禁止再启动一份. Web 固定使用 8899, 禁止改用自动顺延的端口.
 
 ## 地址的输出
 
 **只输出 Web 地址**, 且**只以纯文本给出**, 不放进代码块 —— 代码块内的 URL 不会渲染成可点击链接, 纯文本才会.
 
 就绪后输出一行 `Web: http://localhost:8899` (行内代码只是本文件的排版, 实际回复里是裸文本).
-
-若用户在远程机 (如 Windows 连 NAS) 打开页面, 额外给出局域网 URL, 例如 `Web: http://192.168.31.220:8899`.
 
 API 地址只在探测就绪时使用, 不写给用户: 用户经浏览器访问前端, 请求由 Vite 代理到 `/api`.
 
